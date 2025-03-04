@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+    <defs>
+        <!-- Synthwave Gradients -->
+        <linearGradient id="neonPink" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#ff00cc;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#ff66ff;stop-opacity:0.8" />
+        </linearGradient>
+        <linearGradient id="electricBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#00ccff;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#0066ff;stop-opacity:0.7" />
+        </linearGradient>
+        <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" style="stop-color:#ffff00;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#ff00cc;stop-opacity:0" />
+        </radialGradient>
+        <!-- Glow Filter -->
+        <filter id="glow">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="5" />
+            <feMerge>
+                <feMergeNode />
+                <feMergeNode in="SourceGraphic" />
+            </feMerge>
+        </filter>
+    </defs>
+    
+    <!-- Background -->
+    <rect width="800" height="800" fill="#1a0d1a" />
+    
+    <!-- Flower Group -->
+    <g id="flower" transform="translate(400, 400)">
+        <!-- Core -->
+        <circle cx="0" cy="0" r="30" fill="url(#coreGlow)" filter="url(#glow)" />
+        
+        <script type="text/ecmascript">
+            <![CDATA[
+                let group = document.getElementById("flower");
+                let petals = 12; // Number of petals per layer
+                let layers = 3; // Three layers of petals
+                
+                // Create petal layers
+                for (let layer = 0; layer < layers; layer++) {
+                    let radius = 50 + layer * 60; // Increase radius per layer
+                    let size = 40 + layer * 20; // Larger petals outward
+                    for (let i = 0; i < petals; i++) {
+                        let angle = (i * 360 / petals) + (layer * 15); // Offset layers
+                        let x = radius * Math.cos(angle * Math.PI / 180);
+                        let y = radius * Math.sin(angle * Math.PI / 180);
+                        let petal = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                        petal.setAttribute("d", `M0,0 Q${size/2},${-size} ${size},0 Q${size/2},${size} 0,0 Z`);
+                        petal.setAttribute("fill", layer % 2 === 0 ? "url(#neonPink)" : "url(#electricBlue)");
+                        petal.setAttribute("opacity", 0.7 - layer * 0.1);
+                        petal.setAttribute("transform", `translate(${x}, ${y}) rotate(${angle} 0 0)`);
+                        petal.setAttribute("filter", "url(#glow)");
+                        petal.setAttribute("data-angle", angle);
+                        group.appendChild(petal);
+                    }
+                }
+                
+                // Animation
+                let time = 0;
+                function animate() {
+                    time += 0.03;
+                    let core = group.getElementsByTagName("circle")[0];
+                    core.setAttribute("r", 30 + Math.sin(time) * 5); // Pulsing core
+                    
+                    let petals = group.getElementsByTagName("path");
+                    for (let i = 0; i < petals.length; i++) {
+                        let baseAngle = parseFloat(petals[i].getAttribute("data-angle"));
+                        let sway = Math.sin(time + i * 0.2) * 5; // Gentle petal sway
+                        let [x, y] = petals[i].getAttribute("transform")
+                            .match(/translate\(([^,]+),([^)]+)\)/)
+                            .slice(1, 3)
+                            .map(parseFloat);
+                        petals[i].setAttribute("transform", 
+                            `translate(${x}, ${y}) rotate(${baseAngle + sway} 0 0)`);
+                    }
+                    requestAnimationFrame(animate);
+                }
+                animate();
+            ]]>
+        </script>
+    </g>
+</svg>
