@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyberpunk Flower</title>
+    <style>
+        html, body {margin:0;padding:0;height:100%;background:#1a0d1a;overflow:hidden}
+        .svg-container {display:flex;justify-content:center;align-items:center;height:100vh;width:100vw}
+        svg {width:100%;height:100%;max-width:100vw;max-height:100vh;display:block}
+    </style>
+</head>
+<body>
+    <div class="svg-container">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+            <defs>
+                <linearGradient id="neonPink" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#ff00cc;stop-opacity:1"/>
+                    <stop offset="100%" style="stop-color:#ff66ff;stop-opacity:0.8"/>
+                </linearGradient>
+                <linearGradient id="electricBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#00ccff;stop-opacity:1"/>
+                    <stop offset="100%" style="stop-color:#0066ff;stop-opacity:0.7"/>
+                </linearGradient>
+                <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" style="stop-color:#ffff00;stop-opacity:1"/>
+                    <stop offset="100%" style="stop-color:#ff00cc;stop-opacity:0"/>
+                </radialGradient>
+                <filter id="glow">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="5"/>
+                    <feMerge>
+                        <feMergeNode/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+            <rect width="100%" height="100%" fill="#1a0d1a"/>
+            <g id="flower" transform="translate(400,400)">
+                <circle cx="0" cy="0" r="30" fill="url(#coreGlow)" filter="url(#glow)"/>
+                <script type="text/ecmascript">
+                    <![CDATA[
+                        let g=document.getElementById("flower"),p=12,l=3;
+                        for(let r=0;r<l;r++){
+                            let d=50+r*60,s=40+r*20;
+                            for(let i=0;i<p;i++){
+                                let a=i*360/p+r*15,x=d*Math.cos(a*Math.PI/180),y=d*Math.sin(a*Math.PI/180),
+                                    e=document.createElementNS("http://www.w3.org/2000/svg","path");
+                                e.setAttribute("d",`M0,0 Q${s/2},${-s} ${s},0 Q${s/2},${s} 0,0 Z`);
+                                e.setAttribute("fill",r%2?"url(#electricBlue)":"url(#neonPink)");
+                                e.setAttribute("opacity",0.7-r*0.1);
+                                e.setAttribute("transform",`translate(${x},${y}) rotate(${a} 0 0)`);
+                                e.setAttribute("filter","url(#glow)");
+                                e.setAttribute("data-angle",a);
+                                g.appendChild(e)
+                            }
+                        }
+                        let t=0;
+                        function n(){
+                            t+=.03;
+                            let c=g.getElementsByTagName("circle")[0];
+                            c.setAttribute("r",30+Math.sin(t)*5);
+                            let e=g.getElementsByTagName("path");
+                            for(let i=0;i<e.length;i++){
+                                let a=+e[i].getAttribute("data-angle"),w=Math.sin(t+i*.2)*5,
+                                    [x,y]=e[i].getAttribute("transform").match(/translate\(([^,]+),([^)]+)\)/).slice(1,3).map(parseFloat);
+                                e[i].setAttribute("transform",`translate(${x},${y}) rotate(${a+w} 0 0)`)
+                            }
+                            requestAnimationFrame(n)
+                        }
+                        n()
+                    ]]>
+                </script>
+            </g>
+        </svg>
+    </div>
+</body>
+</html>
