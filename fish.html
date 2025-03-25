@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lively Nvidia Aquarium</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script>
+        let fishes = [];
+        let foodPellets = [];
+        let bubbles = [];
+        let particles = [];
+        let nvidiaGreen;
+        let nvidiaBlack;
+        let nvidiaGray;
+        let simpleBgColor; // Reverted to simple background
+
+        const NUM_FISH = 25;
+        const FOOD_DROP_COUNT = 6;
+        const BUBBLE_SPAWN_RATE = 0.055; // Increased spawn rate
+        const PARTICLE_COUNT = 150;
+
+        // Continuous feeding variables
+        let lastFeedTime = 0;
+        const FEED_DELAY = 300;
+        const FEED_SPREAD = 60;
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            nvidiaGreen = color(118, 185, 0);
+            nvidiaBlack = color(10, 10, 10);
+            nvidiaGray = color(119, 119, 119);
+            simpleBgColor = color(8, 12, 10); // Define the simple background color
+
+            noStroke();
+
+            // Initialize Fish
+            for (let i = 0; i < NUM_FISH; i++) {
+                let sz = random(20, 55);
+                let baseCol = random() < 0.7 ? nvidiaGreen : nvidiaGray;
+                let col = lerpColor(baseCol, color(10), random(0.2, 0.5));
+                 if(random() < 0.1) col = color(235, 230, 220);
+                fishes.push(new Fish(random(width), random(height), sz, col));
+            }
+
+             // Initialize Particles
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                particles.push(new Particle(random(width), random(height)));
+            }
+        }
+
+        function draw() {
+            // 1. Simple Background with Motion Blur Effect
+            fill(simpleBgColor.levels[0], simpleBgColor.levels[1], simpleBgColor.levels[2], 150); // Alpha for trails
+            rect(0, 0, width, height);
+
+            // --- Continuous Feeding Check ---
+            if (mouseIsPressed && millis() - lastFeedTime > FEED_DELAY) {
+                for (let i = 0; i < FOOD_DROP_COUNT; i++) {
+                    let spawnX = mouseX + random(-FEED_SPREAD, FEED_SPREAD);
+                    let spawnY = mouseY + random(-FEED_SPREAD * 0.5, FEED_SPREAD * 0.5);
+                    foodPellets.push(new Food(spawnX, spawnY));
+                }
+                lastFeedTime = millis();
+            }
+            // -------------------------------
+
+            // 2. Particles (Dust/Plankton)
+             for (let p of particles) {
+                p.update();
+                p.display();
+            }
+
+            // 3. Bubbles (More lively)
+            if (random(1) < BUBBLE_SPAWN_RATE) {
+                bubbles.push(new Bubble());
+            }
+            for (let i = bubbles.length - 1; i >= 0; i--) {
+                bubbles[i].update();
+                bubbles[i].display();
+                if (bubbles[i].isOffScreen()) {
+                    bubbles.splice(i, 1);
+                }
+            }
+
+            // 4. Food (No Halo)
+            for (let i = foodPellets.length - 1; i >= 0; i--) {
+                foodPellets[i].update();
+                foodPellets[i].display();
+                if (foodPellets[i].isOffScreen()) {
+                    foodPellets.splice(i, 1);
+                }
+            }
+
+            // 5. Fish (More active movement)
+            for (let f of fishes) {
+                f.behaviors(foodPellets);
+                f.update();
+                f.display();
+                f.edges();
+            }
+        }
+
+
+        // --- Input and Resize ---
+         function windowResized() {
+           resizeCanvas(windowWidth, windowHeight);
+         }
+
+        // ===================
+        // Particle Class (Dust/Plankton) - Kept Subtle
+        // ===================
+        class Particle {
+             constructor(x, y) {
+                this.pos = createVector(x, y);
+                this.vel = createVector(random(-0.05, 0.05), random(-0.05, 0.05));
+                this.size = random(0.6, 1.8);
+                this.opacity = random(5, 35);
+                this.baseOpacity = this.opacity;
+                this.noiseOffset = random(1000);
+             }
+            update() {
+                 let noiseFactor = 0.01; let noiseSpeed = 0.002;
+                 let dx = map(noise(this.noiseOffset + millis() * noiseSpeed), 0, 1, -noiseFactor, noiseFactor);
+                 let dy = map(noise(this.noiseOffset + 500 + millis() * noiseSpeed), 0, 1, -noiseFactor, noiseFactor);
+                 this.vel.add(dx, dy); this.vel.limit(0.1);
+                 this.pos.add(this.vel);
+                 this.opacity = this.baseOpacity * (0.9 + noise(this.noiseOffset + 1000 + millis()*noiseSpeed*1.2)*0.2);
+                 if (this.pos.x < -this.size) this.pos.x = width + this.size; if (this.pos.x > width + this.size) this.pos.x = -this.size;
+                 if (this.pos.y < -this.size) this.pos.y = height + this.size; if (this.pos.y > height + this.size) this.pos.y = -this.size;
+            }
+            display() { fill(140, 150, 145, this.opacity); ellipse(this.pos.x, this.pos.y, this.size, this.size); }
+        }
+
+        // ===================
+        // Bubble Class - Increased Size, Speed, Variety
+        // ===================
+        class Bubble {
+             constructor() {
+                this.pos = createVector(random(width * 0.05, width * 0.95), height + random(20, 80)); // Wider spawn
+                this.size = random(1, 8); // Increased max size significantly
+                this.vel = createVector(0, random(-0.7, -2.8)); // Increased max speed
+                this.baseX = this.pos.x;
+                this.wobbleTime = random(1000);
+                // Wobble magnitude scales more with size, increased range
+                this.wobbleMagnitude = random(this.size * 0.2, this.size * 0.9);
+                this.opacity = random(60, 180); // Slightly higher potential max opacity
+                this.initialSize = this.size;
+            }
+
+            update() {
+                this.pos.add(this.vel);
+                this.pos.x = this.baseX + sin(millis() * 0.003 + this.wobbleTime) * this.wobbleMagnitude; // Slightly faster wobble freq
+                // Size increase can be more pronounced for larger bubbles
+                this.size = lerp(this.initialSize, this.initialSize * 1.25, map(this.pos.y, height, 0, 0, 1));
+                this.opacity *= 0.996; // Slightly faster fade to compensate for more bubbles
+            }
+
+            display() { // Same display logic, but applied to more varied bubbles
+                let op = this.opacity; noStroke();
+                // Outer Glow
+                fill(170, 200, 255, op * 0.18); ellipse(this.pos.x, this.pos.y, this.size * 1.5, this.size * 1.5);
+                // Main Body Gradient
+                fill(80, 120, 190, op * 0.45); arc(this.pos.x, this.pos.y, this.size, this.size, 0.05 * PI, 0.95 * PI);
+                fill(180, 210, 255, op * 0.65); arc(this.pos.x, this.pos.y, this.size, this.size, 1.05 * PI, 1.95 * PI);
+                // Highlights
+                let highlightOffsetX = map(sin(millis() * 0.003 + this.wobbleTime), -1, 1, -0.15, 0.3); // Dynamic X offset range wider
+                fill(235, 250, 255, op * 0.95); ellipse(this.pos.x + this.size * highlightOffsetX, this.pos.y - this.size * 0.2, this.size * 0.38, this.size * 0.38);
+                fill(190, 215, 255, op * 0.4); ellipse(this.pos.x - this.size * 0.15, this.pos.y + this.size * 0.15, this.size * 0.25, this.size * 0.25);
+                // Edge Reflection (Optional)
+                // noFill(); strokeWeight(max(0.5, this.size * 0.03)); stroke(150, 180, 230, op * 0.25); arc(this.pos.x, this.pos.y, this.size * 0.95, this.size * 0.95, 0.4 * PI, 0.6 * PI); noStroke();
+            }
+
+            isOffScreen() { return this.pos.y < -this.size * 2 || this.opacity < 1; }
+        }
+
+
+        // ===================
+        // Fish Class - More Active Movement Tuning
+        // ===================
+        class Fish {
+            constructor(x, y, size, col) {
+                this.pos = createVector(x, y);
+                this.vel = p5.Vector.random2D().mult(random(0.2, 0.8)); // Increased initial speed range
+                this.acc = createVector(0, 0);
+                this.size = size;
+                this.width = size * random(0.4, 0.6);
+                this.color = col;
+                this.maxSpeed = random(0.6, 1.5); // Increased max speed
+                this.maxForce = random(0.02, 0.055); // Increased steering force range
+                this.perception = random(70, 150); // Moderate perception
+                this.wanderTheta = random(TWO_PI);
+                this.targetFood = null;
+                this.maxSize = this.size * random(1.4, 2.2);
+                this.maxWidth = this.width * random(1.3, 1.7);
+                this.growthRateSize = random(0.08, 0.25);
+                this.growthRateWidth = this.growthRateSize * (this.maxWidth / this.maxSize);
+
+                this.angle = this.vel.heading() + PI / 2;
+                this.angleLerpFactor = 0.055; // Slightly faster rotation lerp
+                this.currentWanderStrength = 1.0;
+                this.tailWiggleOffset = random(TWO_PI);
+                this.finFlutterOffset = random(TWO_PI);
+
+                // Colors - Kept from previous detailed version
+                this.highlightColor = lerpColor(this.color, color(255), 0.25);
+                this.shadowColor = lerpColor(this.color, color(0), 0.4);
+                this.underbellyColor = lerpColor(this.color, color(20, 15, 10), 0.3);
+                this.finColor = lerpColor(this.color, color(20, 60, 30, 180), 0.5);
+                this.scaleColor = color(red(this.color) + 15, green(this.color) + 15, blue(this.color) + 15, 30);
+            }
+
+             applyForce(force) { this.acc.add(force); }
+
+             seek(target) {
+                 let desired = p5.Vector.sub(target, this.pos);
+                 let d = desired.mag();
+                 let speed = this.maxSpeed;
+                 // Slightly smaller slowdown radius than before, but still present
+                 if (d < 100) {
+                     speed = map(d, 0, 100, this.maxSpeed * 0.15, this.maxSpeed); // Start faster at edge of radius
+                 }
+                 desired.setMag(max(speed, 0.1)); // Ensure a decent minimum speed when seeking
+                 let steer = p5.Vector.sub(desired, this.vel);
+                 steer.limit(this.maxForce);
+                 return steer;
+             }
+
+             eat(foodList) { // No changes needed here
+                 let record = Infinity; let closestFood = null; let ateFood = false;
+                 for (let i = foodList.length - 1; i >= 0; i--) {
+                    let d = p5.Vector.dist(this.pos, foodList[i].pos);
+                    if (d < (this.width / 2 + foodList[i].size / 2) * 1.2) {
+                        foodList.splice(i, 1);
+                        if (this.size < this.maxSize) {
+                             this.size += this.growthRateSize; this.width += this.growthRateWidth;
+                        }
+                        ateFood = true; this.vel.mult(1.02); this.vel.limit(this.maxSpeed * 1.1);
+                    } else if (d < this.perception && d < record) { record = d; closestFood = foodList[i]; }
+                 }
+                 this.targetFood = closestFood; return ateFood;
+             }
+
+            wander() {
+                 // More active wander parameters
+                 let wanderRadius = 18; // Larger radius
+                 let wanderDistance = 40; // Look further ahead
+                 let change = 0.12; // Allow slightly faster direction changes
+                 this.wanderTheta += random(-change, change);
+                 // Ensure wander strength doesn't drop too low
+                 this.currentWanderStrength = lerp(this.currentWanderStrength, random(0.4, 1.1), 0.01); // Higher minimum strength
+                 let circlePos = this.vel.copy();
+                  // Use a default forward vector if velocity is near zero to prevent stall
+                 if (circlePos.magSq() < 0.01) {
+                     circlePos = p5.Vector.fromAngle(this.angle - PI/2);
+                     circlePos.setMag(0.5); // Give it some magnitude
+                 }
+                 circlePos.setMag(wanderDistance);
+                 circlePos.add(this.pos);
+                 let h = circlePos.heading(); // Use projected position heading
+                 let circleOffset = createVector(wanderRadius * cos(this.wanderTheta + h), wanderRadius * sin(this.wanderTheta + h));
+                 let target = p5.Vector.add(circlePos, circleOffset);
+                 let wanderForce = this.seek(target); // Use seek to calculate force towards wander target
+                 wanderForce.mult(this.currentWanderStrength);
+                 return wanderForce;
+            }
+
+             behaviors(foodList) {
+                 let ate = this.eat(foodList);
+                 let steerForce;
+                 if (this.targetFood) {
+                     steerForce = this.seek(this.targetFood.pos);
+                     steerForce.mult(1.3); // Moderate seeking multiplier
+                     this.applyForce(steerForce);
+                 } else {
+                     let wanderForce = this.wander();
+                     this.applyForce(wanderForce);
+                 }
+                 // Reduced drag to allow more coasting
+                 this.vel.mult(0.99);
+             }
+
+            update() {
+                this.vel.add(this.acc);
+                this.vel.limit(this.maxSpeed);
+                // Move even if velocity is very small, prevents getting stuck
+                if (this.vel.magSq() > 0.00001 || this.acc.magSq() > 0) {
+                    this.pos.add(this.vel);
+                }
+                this.acc.mult(0);
+
+                // Update angle based on velocity, using slightly faster lerp
+                if (this.vel.magSq() > 0.001) { // Only update if moving noticeably
+                    let targetAngle = this.vel.heading() + PI / 2;
+                    let diff = atan2(sin(targetAngle - this.angle), cos(targetAngle - this.angle));
+                    this.angle += diff * this.angleLerpFactor;
+                 }
+            }
+
+            display() { // Using the detailed display from previous version
+                push();
+                translate(this.pos.x, this.pos.y);
+                rotate(this.angle);
+
+                let bodyLength = this.size; let bodyWidth = this.width;
+                let speedFactor = map(this.vel.mag(), 0, this.maxSpeed, 0.6, 1.6);
+                let tailWiggle = sin(millis() * 0.009 * speedFactor + this.tailWiggleOffset) * (this.vel.mag() * 1.1);
+                let finFlutter = sin(millis() * 0.018 * speedFactor + this.finFlutterOffset);
+
+                noStroke();
+                fill(this.underbellyColor); ellipse(0, bodyLength * 0.1, bodyWidth * 0.95, bodyLength * 0.9);
+                fill(this.shadowColor); ellipse(0, bodyLength * 0.02, bodyWidth * 1.05, bodyLength * 1.02);
+                fill(this.color); ellipse(0, 0, bodyWidth, bodyLength);
+
+                fill(this.scaleColor);
+                let scaleSize = bodyWidth * 0.1;
+                for (let y = -bodyLength * 0.4; y < bodyLength * 0.4; y += scaleSize * 0.8) {
+                    for (let x = -bodyWidth * 0.4; x < bodyWidth * 0.4; x += scaleSize * 0.8) {
+                         if (sq(x / (bodyWidth * 0.5)) + sq(y / (bodyLength * 0.5)) < 0.8) {
+                             let noiseFactor = noise(this.pos.x * 0.1 + x * 0.2, this.pos.y * 0.1 + y * 0.2) * 0.5;
+                             ellipse(x + noiseFactor * scaleSize, y + noiseFactor * scaleSize, scaleSize * (0.5 + noiseFactor), scaleSize * (0.5 + noiseFactor));
+                         }
+                    }
+                }
+
+                fill(this.highlightColor); ellipse(0, -bodyLength * 0.1, bodyWidth * 0.7, bodyLength * 0.7);
+
+                fill(this.finColor); stroke(red(this.finColor) + 20, green(this.finColor) + 20, blue(this.finColor) + 20, 100); strokeWeight(max(0.5, bodyWidth * 0.01));
+
+                let tailBaseY = bodyLength * 0.48; let tailTipY = bodyLength * 0.85; let tailControlX = bodyWidth * 0.7 + tailWiggle * 4;
+                let tailControlY = bodyLength * 0.65; let tailTipXWiggle = tailWiggle * 6;
+                beginShape(); vertex(0, tailBaseY); quadraticVertex(-tailControlX, tailControlY, tailTipXWiggle - bodyWidth*0.1, tailTipY);
+                quadraticVertex(-tailControlX * 0.8, tailControlY * 1.1, tailTipXWiggle + bodyWidth*0.1, tailTipY); quadraticVertex( tailControlX, tailControlY, 0, tailBaseY); endShape(CLOSE);
+                line(0, tailBaseY, tailTipXWiggle, tailTipY); line(0, tailBaseY, -tailControlX * 0.5 + tailTipXWiggle*0.5, tailControlY * 0.8 + tailTipY * 0.2); line(0, tailBaseY, tailControlX * 0.5 + tailTipXWiggle*0.5, tailControlY * 0.8 + tailTipY * 0.2);
+
+                beginShape(); vertex(-bodyWidth * 0.15, -bodyLength * 0.1); quadraticVertex(0, -bodyLength * 0.35, bodyWidth * 0.15, -bodyLength * 0.1); endShape(CLOSE); line(0, -bodyLength * 0.3, 0, -bodyLength * 0.1);
+
+                let finY = bodyLength * 0.08; let finBaseX = bodyWidth * 0.35; let finLength = bodyWidth * 0.45;
+                let flutterAngle = finFlutter * PI * 0.08; let finTipX = finBaseX + cos(flutterAngle) * finLength; let finTipY = finY + sin(flutterAngle) * finLength + bodyWidth * 0.1;
+                beginShape(); vertex(-finBaseX, finY); quadraticVertex(-finBaseX * 1.1, finY - bodyWidth*0.1, -finTipX, finTipY); vertex(-finBaseX, finY); endShape(CLOSE); line(-finBaseX, finY, -finTipX, finTipY);
+                beginShape(); vertex(finBaseX, finY); quadraticVertex(finBaseX * 1.1, finY - bodyWidth*0.1, finTipX, finTipY); vertex(finBaseX, finY); endShape(CLOSE); line(finBaseX, finY, finTipX, finTipY);
+
+                noStroke();
+                stroke(this.shadowColor.levels[0], this.shadowColor.levels[1], this.shadowColor.levels[2], 100); strokeWeight(max(1, bodyWidth * 0.02));
+                let gillY = -bodyLength * 0.15; let gillX = bodyWidth * 0.35; arc(0, gillY, gillX * 1.5, bodyLength * 0.3, HALF_PI - 0.3, HALF_PI + 0.3); noStroke();
+
+                let eyeY = -bodyLength * 0.3; let eyeSize = max(3, bodyWidth * 0.16); fill(240, 240, 245); ellipse(0, eyeY, eyeSize, eyeSize * 1.05);
+                let pupilOffset = p5.Vector.fromAngle(this.vel.heading()).mult(eyeSize * 0.1); fill(40, 40, 50); ellipse(pupilOffset.x, eyeY + pupilOffset.y, eyeSize * 0.5, eyeSize * 0.5);
+                fill(255, 255, 255, 200); ellipse(pupilOffset.x + eyeSize * 0.1, eyeY + pupilOffset.y - eyeSize * 0.15, eyeSize * 0.2, eyeSize * 0.2);
+
+                pop();
+            }
+
+            edges() { // Slightly reduced repel force/buffer, increased wrap buffer
+                let buffer = this.size * 1.2; // Smaller buffer for repel
+                let repelForce = 0.04;
+                let steer = createVector(0, 0);
+
+                if (this.pos.x < buffer) steer.add(createVector(this.maxSpeed, 0));
+                else if (this.pos.x > width - buffer) steer.add(createVector(-this.maxSpeed, 0));
+                if (this.pos.y < buffer) steer.add(createVector(0, this.maxSpeed));
+                else if (this.pos.y > height - buffer) steer.add(createVector(0, -this.maxSpeed));
+
+                 if (steer.magSq() > 0) {
+                     steer.setMag(this.maxSpeed);
+                     steer.sub(this.vel);
+                     steer.limit(this.maxForce * 1.1); // Gentler edge repel multiplier
+                     this.applyForce(steer);
+                 }
+
+                // Wrap around with larger buffer
+                let wrapBuffer = this.size * 2.5;
+                if (this.pos.x > width + wrapBuffer) this.pos.x = -wrapBuffer;
+                if (this.pos.x < -wrapBuffer) this.pos.x = width + wrapBuffer;
+                if (this.pos.y > height + wrapBuffer) this.pos.y = -wrapBuffer;
+                if (this.pos.y < -wrapBuffer) this.pos.y = height + wrapBuffer;
+            }
+        }
+
+        // ===================
+        // Food Class - No Halo
+        // ===================
+        class Food { // Kept simple, no halo
+            constructor(x, y) {
+                this.pos = createVector(x, y);
+                this.vel = createVector(random(-0.1, 0.1), random(0.15, 0.6));
+                this.size = random(4, 7);
+                this.color = lerpColor(nvidiaGreen, color(240, 240, 210), 0.8);
+                this.opacity = 255;
+            }
+            update() {
+                this.pos.add(this.vel); this.vel.y *= 0.994;
+                this.vel.x += map(noise(this.pos.x * 0.08, this.pos.y * 0.08, millis() * 0.0008), 0, 1, -0.008, 0.008);
+                this.vel.limit(0.6); if(this.vel.y < 0.05 && this.pos.y < height - 30) this.vel.y = 0.05;
+                this.opacity = max(0, this.opacity - 0.35);
+            }
+            display() {
+                let op = this.opacity; noStroke();
+                fill(this.color.levels[0], this.color.levels[1], this.color.levels[2], op);
+                ellipse(this.pos.x, this.pos.y, this.size, this.size);
+                fill(255, 255, 240, op * 0.4); // Subtle inner highlight
+                ellipse(this.pos.x + this.size*0.1, this.pos.y - this.size*0.1, this.size * 0.4, this.size * 0.4);
+            }
+            isOffScreen() { return this.pos.y > height + this.size * 5 || this.opacity <= 0; }
+        }
+    </script>
+</body>
+</html>
