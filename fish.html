@@ -1,414 +1,1020 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lively Nvidia Aquarium</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
-        canvas { display: block; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aquarium</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; background-color: #000; }
+    canvas { display: block; } /* Ensures canvas takes up block space */
+    html, body { height: 100%; } /* Ensure html and body take full height */
+  </style>
 </head>
 <body>
-    <script>
-        let fishes = [];
-        let foodPellets = [];
-        let bubbles = [];
-        let particles = [];
-        let nvidiaGreen;
-        let nvidiaBlack;
-        let nvidiaGray;
-        let simpleBgColor; // Reverted to simple background
+  <script>
+    let fishes = [];
+    let foodPellets = [];
+    let bubbles = [];
+    let particles = [];
+    let splashes = [];
+    let paths = []; // Array to hold the invisible paths
+    let nvGreen;
+    let nvBlack;
+    let nvGray;
+    let simpleBgColor;
 
-        const NUM_FISH = 25;
-        const FOOD_DROP_COUNT = 6;
-        const BUBBLE_SPAWN_RATE = 0.055; // Increased spawn rate
-        const PARTICLE_COUNT = 150;
+    let lastFeedPosition = null;
+    let lastFeedTimestamp = -Infinity;
 
-        // Continuous feeding variables
-        let lastFeedTime = 0;
-        const FEED_DELAY = 300;
-        const FEED_SPREAD = 60;
+    // --- Constants ---
+    const NUM_FISH = 25;
+    const FOOD_DROP_COUNT = 8;
+    const BUBBLE_SPAWN_RATE = 0.075;
+    const PARTICLE_COUNT = 200;
+    const GROWTH_GLOW_DURATION = 120;
+    const EAT_PARTICLE_COUNT = 45;
 
-        function setup() {
-            createCanvas(windowWidth, windowHeight);
-            nvidiaGreen = color(118, 185, 0);
-            nvidiaBlack = color(10, 10, 10);
-            nvidiaGray = color(119, 119, 119);
-            simpleBgColor = color(8, 12, 10); // Define the simple background color
+    let lastManualFeedTime = 0;
+    const FEED_DELAY = 250;
+    const FEED_SPREAD = 80;
 
-            noStroke();
+    // Behavior Weights
+    const SEPARATION_WEIGHT = 10.0;
+    const ALIGNMENT_WEIGHT = 0.8;
+    const COHESION_WEIGHT = 0.6;
+    const WANDER_WEIGHT = 0.3;
+    const SEEK_FOOD_WEIGHT = 2.2;
+    const SEEK_LAST_FEED_WEIGHT = 1.5;
+    const EDGE_AVOID_WEIGHT = 1.2;
+    const CORNER_AVOID_MULT = 2.5;
+    const NOMAD_WEIGHT = 0.12;
+    const PATH_FOLLOWING_WEIGHT = 1.5; // Weight for path following force
+    const FLOCKING_PERCEPTION_FACTOR = 0.6;
 
-            // Initialize Fish
-            for (let i = 0; i < NUM_FISH; i++) {
-                let sz = random(20, 55);
-                let baseCol = random() < 0.7 ? nvidiaGreen : nvidiaGray;
-                let col = lerpColor(baseCol, color(10), random(0.2, 0.5));
-                 if(random() < 0.1) col = color(235, 230, 220);
-                fishes.push(new Fish(random(width), random(height), sz, col));
+    // Path Following Constants
+    const NUM_PATHS = 6; // Number of distinct paths
+    const PATH_WAYPOINTS = 60; // Number of points per path
+    const WAYPOINT_ADVANCE_DISTANCE_FACTOR = 2.5; // How close to get before advancing (factor of fish size)
+
+    // Other Constants
+    const LAST_FEED_ATTRACTION_DURATION = 1500;
+    const COLLISION_RADIUS_FACTOR = 1.0;
+    const GRAVITY = 0.0072;
+    const FOOD_SINK_DRAG = 0.999;
+    const FOOD_NOISE_INFLUENCE = 0.006;
+    const MIN_FISH_SIZE = 18;
+    const MAX_FISH_SIZE = 60;
+    const MIN_MAX_SPEED = 0.7;
+    const MAX_MAX_SPEED = 2.8;
+    const MIN_MAX_FORCE = 0.025;
+    const MAX_MAX_FORCE = 0.085;
+    const MIN_PERCEPTION = 150;
+    const MAX_PERCEPTION = 350;
+    const MIN_SIZE_MULT = 1.3;
+    const MAX_SIZE_MULT = 2.8;
+    const MIN_GROWTH_RATE = 0.05;
+    const MAX_GROWTH_RATE = 0.35;
+    const SEPARATION_DISTANCE_FACTOR = 0.75; // No change needed here
+
+    // --- Setup ---
+    function setup() {
+      createCanvas(windowWidth, windowHeight);
+      nvGreen = color(118, 185, 0);
+      nvBlack = color(10, 10, 10);
+      nvGray = color(119, 119, 119);
+      simpleBgColor = color(8, 12, 10);
+
+      drawingContext.shadowOffsetX = 0;
+      drawingContext.shadowOffsetY = 0;
+      drawingContext.shadowBlur = 0;
+
+      noStroke();
+
+      generatePaths(); // Create the invisible paths
+
+      for (let i = 0; i < NUM_FISH; i++) {
+        let sz = random(MIN_FISH_SIZE, MAX_FISH_SIZE);
+        let baseCol = random() < 0.7 ? nvGreen : nvGray;
+        let col = lerpColor(baseCol, color(10), random(0.2, 0.5));
+        if (random() < 0.1) col = color(235, 230, 220);
+        // Assign a path index to each fish
+        let pathIndex = i % NUM_PATHS;
+        // Start fish near the first waypoint of their path
+        let startPos = paths[pathIndex][0].copy().add(random(-50, 50), random(-50, 50));
+        startPos.x = constrain(startPos.x, 0, width);
+        startPos.y = constrain(startPos.y, 0, height);
+        fishes.push(new Fish(startPos.x, startPos.y, sz, col, pathIndex));
+      }
+
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        particles.push(new Particle(random(width), random(height)));
+      }
+    }
+
+    // --- Path Generation ---
+    function generatePaths() {
+        paths = []; // Clear existing paths
+        let margin = 100; // Margin from screen edges
+        for (let i = 0; i < NUM_PATHS; i++) {
+            let path = [];
+            let centerX = random(margin, width - margin);
+            let centerY = random(margin, height - margin);
+            let radiusX = random(width * 0.15, width * 0.35);
+            let radiusY = random(height * 0.15, height * 0.35);
+            let angleOffset = random(TWO_PI); // Start angle
+            let rotation = random(-PI / 4, PI / 4); // Path rotation
+            let direction = random() > 0.5 ? 1 : -1; // Clockwise or counter-clockwise
+
+            for (let j = 0; j < PATH_WAYPOINTS; j++) {
+                let angle = map(j, 0, PATH_WAYPOINTS, 0, TWO_PI * direction) + angleOffset;
+                // Ellipse points
+                let x = cos(angle) * radiusX;
+                let y = sin(angle) * radiusY;
+                // Apply rotation
+                let rotatedX = x * cos(rotation) - y * sin(rotation);
+                let rotatedY = x * sin(rotation) + y * cos(rotation);
+                // Add center offset and constrain within bounds slightly
+                let finalX = constrain(centerX + rotatedX, margin * 0.5, width - margin * 0.5);
+                let finalY = constrain(centerY + rotatedY, margin * 0.5, height - margin * 0.5);
+
+                path.push(createVector(finalX, finalY));
             }
-
-             // Initialize Particles
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                particles.push(new Particle(random(width), random(height)));
-            }
+            paths.push(path);
         }
+    }
 
-        function draw() {
-            // 1. Simple Background with Motion Blur Effect
-            fill(simpleBgColor.levels[0], simpleBgColor.levels[1], simpleBgColor.levels[2], 150); // Alpha for trails
-            rect(0, 0, width, height);
+    // --- Draw Loop ---
+    function draw() {
+      // Semi-transparent background for trails
+      fill(simpleBgColor.levels[0], simpleBgColor.levels[1], simpleBgColor.levels[2], 80);
+      rect(0, 0, width, height);
 
-            // --- Continuous Feeding Check ---
-            if (mouseIsPressed && millis() - lastFeedTime > FEED_DELAY) {
-                for (let i = 0; i < FOOD_DROP_COUNT; i++) {
-                    let spawnX = mouseX + random(-FEED_SPREAD, FEED_SPREAD);
-                    let spawnY = mouseY + random(-FEED_SPREAD * 0.5, FEED_SPREAD * 0.5);
-                    foodPellets.push(new Food(spawnX, spawnY));
-                }
-                lastFeedTime = millis();
-            }
-            // -------------------------------
+      drawingContext.shadowBlur = 0;
+      drawingContext.shadowColor = 'rgba(0,0,0,0)';
 
-            // 2. Particles (Dust/Plankton)
-             for (let p of particles) {
-                p.update();
-                p.display();
-            }
+      // --- Feed Handling ---
+      if (mouseIsPressed && millis() - lastManualFeedTime > FEED_DELAY) {
+        let feedCenterX = mouseX;
+        let feedCenterY = mouseY;
 
-            // 3. Bubbles (More lively)
-            if (random(1) < BUBBLE_SPAWN_RATE) {
-                bubbles.push(new Bubble());
-            }
-            for (let i = bubbles.length - 1; i >= 0; i--) {
-                bubbles[i].update();
-                bubbles[i].display();
-                if (bubbles[i].isOffScreen()) {
-                    bubbles.splice(i, 1);
-                }
-            }
+        lastFeedPosition = createVector(feedCenterX, feedCenterY);
+        lastFeedTimestamp = millis();
 
-            // 4. Food (No Halo)
-            for (let i = foodPellets.length - 1; i >= 0; i--) {
-                foodPellets[i].update();
-                foodPellets[i].display();
-                if (foodPellets[i].isOffScreen()) {
-                    foodPellets.splice(i, 1);
-                }
-            }
-
-            // 5. Fish (More active movement)
-            for (let f of fishes) {
-                f.behaviors(foodPellets);
-                f.update();
-                f.display();
-                f.edges();
-            }
+        for (let i = 0; i < FOOD_DROP_COUNT; i++) {
+          let spawnX = feedCenterX + random(-FEED_SPREAD, FEED_SPREAD);
+          let spawnY = feedCenterY + random(-FEED_SPREAD * 0.5, FEED_SPREAD * 0.5);
+          spawnX = constrain(spawnX, 0, width);
+          spawnY = constrain(spawnY, 0, height * 0.9); // Don't spawn too low
+          foodPellets.push(new Food(spawnX, spawnY));
         }
+        splashes.push(new Splash(feedCenterX, feedCenterY));
+        lastManualFeedTime = millis();
+      }
 
+      // --- Update and Display Elements ---
+      // Splashes
+      for (let i = splashes.length - 1; i >= 0; i--) {
+        splashes[i].update();
+        splashes[i].display();
+        if (splashes[i].isFinished()) {
+          splashes.splice(i, 1);
+        }
+      }
 
-        // --- Input and Resize ---
-         function windowResized() {
-           resizeCanvas(windowWidth, windowHeight);
+      // Background Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        particles[i].display();
+        if (particles[i].isFinished()) { // Only food particles finish
+          particles.splice(i, 1);
+        }
+      }
+       // Ensure background particle count
+       while (particles.filter(p => !p.isFoodParticle).length < PARTICLE_COUNT) {
+         particles.push(new Particle(random(width), random(height)));
+       }
+
+      // Bubbles
+      if (random(1) < BUBBLE_SPAWN_RATE) {
+        bubbles.push(new Bubble());
+      }
+      for (let i = bubbles.length - 1; i >= 0; i--) {
+        bubbles[i].update();
+        bubbles[i].display();
+        if (bubbles[i].isOffScreen()) {
+          bubbles.splice(i, 1);
+        }
+      }
+
+      // Food Pellets
+      for (let i = foodPellets.length - 1; i >= 0; i--) {
+        foodPellets[i].update();
+        foodPellets[i].display();
+        if (foodPellets[i].isOffScreen()) {
+          foodPellets.splice(i, 1);
+        }
+      }
+
+      // Fish
+      for (let f of fishes) {
+        f.findClosestFood(foodPellets); // Fish sense food
+        f.behaviors(fishes, foodPellets); // Decide behavior (path follow or seek food)
+        f.update(); // Apply physics
+        f.edges(); // Handle screen boundaries
+        f.eat(foodPellets); // Attempt to eat if close to target food
+        f.display(); // Draw the fish
+      }
+
+      // --- DEBUG: Draw Paths (Optional) ---
+      /*
+      push();
+      noFill();
+      stroke(255, 0, 0, 50); // Red, semi-transparent
+      strokeWeight(1);
+      for (const path of paths) {
+          beginShape();
+          for (const pt of path) {
+              vertex(pt.x, pt.y);
+          }
+          endShape(CLOSE); // Close the shape for ellipses
+          // Draw waypoints
+          // fill(0, 255, 0, 100);
+          // noStroke();
+          // for (const pt of path) {
+          //     ellipse(pt.x, pt.y, 5, 5);
+          // }
+      }
+      pop();
+      */
+      // --- END DEBUG ---
+    }
+
+    // --- Window Resize ---
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+      // Regenerate paths for the new size
+      generatePaths();
+      // Reset fish waypoint index to avoid errors if path length changes (though it shouldn't here)
+      // and reposition fish slightly if they end up off-screen (less critical with edge avoidance)
+      for (let fish of fishes) {
+          fish.currentWaypointIndex = 0; // Reset progress on path
+          fish.pos.x = constrain(fish.pos.x, 0, width);
+          fish.pos.y = constrain(fish.pos.y, 0, height);
+      }
+      // Clear non-food particles and regenerate
+      particles = particles.filter(p => p.isFoodParticle);
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        particles.push(new Particle(random(width), random(height)));
+      }
+      // Invalidate last feed position if it's now off-screen
+      if (lastFeedPosition && (lastFeedPosition.x > width || lastFeedPosition.y > height)) {
+          lastFeedPosition = null;
+          lastFeedTimestamp = -Infinity;
+      }
+    }
+
+    // --- Splash Class (No changes) ---
+    class Splash {
+      constructor(x, y) {
+        this.pos = createVector(x, y);
+        this.radius = 15;
+        this.maxRadius = 80;
+        this.opacity = 255;
+        this.lineCount = 20;
+        this.lineWidth = 2;
+      }
+      update() {
+        this.radius += 3;
+        this.opacity -= 6;
+        this.lineWidth = max(0.5, this.lineWidth * 0.95);
+      }
+      display() {
+        if (this.opacity <= 0) return;
+        push();
+        noFill();
+        strokeWeight(this.lineWidth);
+        stroke(255, min(this.opacity * 0.8, 25.5)); // Faint white splash lines
+        for(let i = 0; i < this.lineCount; i++) {
+          let angle = random(TWO_PI);
+          let len = random(10, 30);
+          let startRadius = this.radius;
+          let endRadius = this.radius + len;
+          line(
+            this.pos.x + cos(angle) * startRadius,
+            this.pos.y + sin(angle) * startRadius,
+            this.pos.x + cos(angle) * endRadius,
+            this.pos.y + sin(angle) * endRadius
+          );
+        }
+        pop();
+      }
+      isFinished() {
+        return this.opacity <= 0;
+      }
+    }
+
+    // --- Particle Class (No changes) ---
+    class Particle {
+       constructor(x, y, isFoodParticle = false) {
+        this.pos = createVector(x, y);
+        this.isFoodParticle = isFoodParticle;
+        this.noiseOffset = random(1000);
+        if(this.isFoodParticle) {
+          // Food explosion particles
+          this.color = color(255, 240, 180);
+          this.size = random(2, 4);
+          this.vel = p5.Vector.random2D().mult(random(2.5, 5.5));
+          this.life = 255; // Lifespan
+          this.drag = 0.92;
+          this.sizeDecay = 0.96;
+        } else {
+          // Background ambient particles
+          this.vel = createVector(random(-0.05, 0.05), random(-0.05, 0.05));
+          this.size = random(0.6, 1.8);
+          this.baseOpacity = random(5, 35);
+          this.opacity = this.baseOpacity;
+          this.life = Infinity; // Live forever
+        }
+      }
+      update() {
+        if(this.isFoodParticle) {
+          this.pos.add(this.vel);
+          this.vel.mult(this.drag);
+          this.life -= 8;
+          this.size *= this.sizeDecay;
+        } else {
+          // Gentle noise-driven drift for background particles
+          let noiseFactor = 0.01;
+          let noiseSpeed = 0.002;
+          let dx = map(noise(this.noiseOffset + millis() * noiseSpeed), 0, 1, -noiseFactor, noiseFactor);
+          let dy = map(noise(this.noiseOffset + 500 + millis() * noiseSpeed), 0, 1, -noiseFactor, noiseFactor);
+          this.vel.add(dx, dy);
+          this.vel.limit(0.1);
+          this.pos.add(this.vel);
+          // Flicker opacity slightly
+          this.opacity = this.baseOpacity * (0.9 + noise(this.noiseOffset + 1000 + millis()*noiseSpeed*1.2)*0.2);
+          // Wrap around screen edges
+          if (this.pos.x < -this.size) this.pos.x = width + this.size;
+          if (this.pos.x > width + this.size) this.pos.x = -this.size;
+          if (this.pos.y < -this.size) this.pos.y = height + this.size;
+          if (this.pos.y > height + this.size) this.pos.y = -this.size;
+        }
+      }
+      display() {
+        push();
+        noStroke();
+        if(this.isFoodParticle) {
+          if (this.life > 0 && this.size > 0.1) {
+            fill(red(this.color), green(this.color), blue(this.color), this.life);
+            ellipse(this.pos.x, this.pos.y, this.size);
+          }
+        } else {
+          fill(140, 150, 145, this.opacity); // Dim greenish-gray
+          ellipse(this.pos.x, this.pos.y, this.size, this.size);
+        }
+        pop();
+      }
+      isFinished() {
+        // Only food particles expire
+        return this.isFoodParticle && this.life <= 0;
+      }
+    }
+
+    // --- Bubble Class (No changes) ---
+    class Bubble {
+      constructor() {
+        this.pos = createVector(random(width * 0.05, width * 0.95), height + random(20, 80));
+        this.size = random(1, 8);
+        this.initialSize = this.size;
+        this.vel = createVector(0, random(-0.7, -2.8)); // Rise speed
+        this.baseX = this.pos.x;
+        this.wobbleTime = random(1000);
+        this.wobbleMagnitude = random(this.size * 0.2, this.size * 0.9);
+        this.opacity = random(60, 180);
+        this.opacityDecay = 0.996; // Fade out slowly
+      }
+      update() {
+        this.pos.add(this.vel);
+        // Wobble side to side
+        this.pos.x = this.baseX + sin(millis() * 0.003 + this.wobbleTime) * this.wobbleMagnitude;
+        // Grow slightly as it rises (pressure decrease)
+        this.size = lerp(this.initialSize, this.initialSize * 1.25, map(this.pos.y, height, 0, 0, 1));
+        this.opacity *= this.opacityDecay;
+      }
+      display() {
+        if (this.opacity < 1) return;
+        push();
+        noStroke();
+        let op = this.opacity;
+        // Layered ellipses for a pseudo-3D look
+        fill(200, 230, 255, op * 0.1); // Outer glow
+        ellipse(this.pos.x, this.pos.y, this.size * 2.5);
+        fill(170, 200, 255, op * 0.18); // Inner glow
+        ellipse(this.pos.x, this.pos.y, this.size * 1.5, this.size * 1.5);
+        // Main bubble body with shading
+        fill(80, 120, 190, op * 0.45); // Bottom shade
+        arc(this.pos.x, this.pos.y, this.size, this.size, 0.05 * PI, 0.95 * PI);
+        fill(180, 210, 255, op * 0.65); // Top shade
+        arc(this.pos.x, this.pos.y, this.size, this.size, 1.05 * PI, 1.95 * PI);
+        // Highlights
+        let highlightOffsetX = map(sin(millis() * 0.003 + this.wobbleTime), -1, 1, -0.15, 0.3);
+        fill(235, 250, 255, op * 0.95); // Main highlight
+        ellipse(
+          this.pos.x + this.size * highlightOffsetX,
+          this.pos.y - this.size * 0.2,
+          this.size * 0.38,
+          this.size * 0.38
+        );
+        fill(190, 215, 255, op * 0.4); // Secondary highlight
+        ellipse(
+          this.pos.x - this.size * 0.15,
+          this.pos.y + this.size * 0.15,
+          this.size * 0.25,
+          this.size * 0.25
+        );
+        pop();
+      }
+      isOffScreen() {
+        return this.pos.y < -this.size * 2 || this.opacity < 1;
+      }
+    }
+
+    // --- Fish Class (Modified) ---
+    class Fish {
+      constructor(x, y, size, col, pathIndex) { // Added pathIndex
+        this.pos = createVector(x, y);
+        this.vel = p5.Vector.random2D().mult(random(0.3, 0.9));
+        this.acc = createVector(0, 0);
+        this.size = size; // Length
+        this.width = size * random(0.4, 0.6); // Width
+        this.originalColor = col;
+        this.color = col;
+        this.maxSpeed = random(MIN_MAX_SPEED, MAX_MAX_SPEED);
+        this.maxForce = random(MIN_MAX_FORCE, MAX_MAX_FORCE);
+        this.perception = random(MIN_PERCEPTION, MAX_PERCEPTION); // Food perception
+        this.flockingPerception = this.perception * FLOCKING_PERCEPTION_FACTOR; // Perception for flocking
+        this.maxSize = this.size * random(MIN_SIZE_MULT, MAX_SIZE_MULT);
+        this.maxWidth = this.width * random(MIN_SIZE_MULT, MAX_SIZE_MULT);
+        this.growthRateSize = random(MIN_GROWTH_RATE, MAX_GROWTH_RATE);
+        this.growthRateWidth = this.growthRateSize * (this.maxWidth / this.maxSize);
+        this.updateCollisionRadius();
+        this.wanderTheta = random(TWO_PI);
+        this.targetFood = null;
+        this.angle = this.vel.heading() + PI / 2;
+        this.angleLerpFactor = 0.06; // Smoothing for turning
+        this.currentWanderStrength = 1.0;
+        this.tailWiggleOffset = random(TWO_PI);
+        this.finFlutterOffset = random(TWO_PI);
+        this.glowTimer = 0; // For post-eating glow
+        this.nomadNoiseSeedX = random(10000);
+        this.nomadNoiseSeedY = random(20000);
+        this.highlightColor = lerpColor(this.color, color(255), 0.25);
+        this.shadowColor = lerpColor(this.color, color(0), 0.4);
+        this.underbellyColor = lerpColor(this.color, color(20, 15, 10), 0.3);
+        this.finColor = lerpColor(this.color, color(20, 60, 30, 180), 0.5);
+        this.idleBehaviorBias = random(0.7, 1.5); // Personality factor (less relevant now)
+
+        // Path following properties
+        this.pathIndex = pathIndex;
+        this.currentWaypointIndex = 0; // Start at the beginning of the path
+      }
+
+      updateCollisionRadius() {
+          let avgHalfDim = (this.size * 0.5 + this.width * 0.5) / 2;
+          this.collisionRadius = avgHalfDim * COLLISION_RADIUS_FACTOR;
+      }
+
+      applyForce(force) {
+        // Ensure force is a valid vector before applying
+        if (force instanceof p5.Vector && !isNaN(force.x) && !isNaN(force.y)) {
+            this.acc.add(force);
+        } else {
+            // console.warn("Attempted to apply invalid force:", force);
+        }
+      }
+
+      // Calculates steering force towards a target
+      steer(desired) {
+        let steer = p5.Vector.sub(desired, this.vel);
+        steer.limit(this.maxForce);
+        return steer;
+      }
+
+      // Calculates force to seek a target position
+      seek(target) {
+        if (!target) return createVector(0,0);
+        let desired = p5.Vector.sub(target, this.pos);
+        let d = desired.mag();
+        let speed = this.maxSpeed;
+        // Slow down when approaching target
+        if (d < 100) {
+          speed = map(d, 0, 100, this.maxSpeed * 0.1, this.maxSpeed);
+        }
+        if (d > 0.001) { // Avoid division by zero or tiny magnitude issues
+            desired.setMag(speed);
+        } else {
+            desired.mult(0); // Already at target
+        }
+        return this.steer(desired);
+      }
+
+      // Find the closest food pellet within perception range
+      findClosestFood(foodList) {
+         let closestFood = null;
+         let record = Infinity;
+         for (let i = foodList.length - 1; i >= 0; i--) {
+           let food = foodList[i];
+           if (!food || !food.pos) continue; // Basic check
+           let d = p5.Vector.dist(this.pos, food.pos);
+           if (d < this.perception && d < record) {
+             record = d;
+             closestFood = food;
+           }
          }
+         this.targetFood = closestFood; // Update the fish's target
+       }
 
-        // ===================
-        // Particle Class (Dust/Plankton) - Kept Subtle
-        // ===================
-        class Particle {
-             constructor(x, y) {
-                this.pos = createVector(x, y);
-                this.vel = createVector(random(-0.05, 0.05), random(-0.05, 0.05));
-                this.size = random(0.6, 1.8);
-                this.opacity = random(5, 35);
-                this.baseOpacity = this.opacity;
-                this.noiseOffset = random(1000);
-             }
-            update() {
-                 let noiseFactor = 0.01; let noiseSpeed = 0.002;
-                 let dx = map(noise(this.noiseOffset + millis() * noiseSpeed), 0, 1, -noiseFactor, noiseFactor);
-                 let dy = map(noise(this.noiseOffset + 500 + millis() * noiseSpeed), 0, 1, -noiseFactor, noiseFactor);
-                 this.vel.add(dx, dy); this.vel.limit(0.1);
-                 this.pos.add(this.vel);
-                 this.opacity = this.baseOpacity * (0.9 + noise(this.noiseOffset + 1000 + millis()*noiseSpeed*1.2)*0.2);
-                 if (this.pos.x < -this.size) this.pos.x = width + this.size; if (this.pos.x > width + this.size) this.pos.x = -this.size;
-                 if (this.pos.y < -this.size) this.pos.y = height + this.size; if (this.pos.y > height + this.size) this.pos.y = -this.size;
+      // Attempt to eat food pellets
+      eat(foodList) {
+           if (this.targetFood && this.targetFood.pos) {
+               let d = p5.Vector.dist(this.pos, this.targetFood.pos);
+               // Check if close enough to eat
+               if (d < (this.width / 2 + this.targetFood.size / 2) * 1.2) { // Slightly larger eat radius
+                   const foodIndex = foodList.indexOf(this.targetFood);
+                   if (foodIndex > -1) { // Make sure the food still exists
+                       // Create particle burst on eating
+                       for (let j = 0; j < EAT_PARTICLE_COUNT; j++) {
+                           particles.push(new Particle(
+                               this.targetFood.pos.x,
+                               this.targetFood.pos.y,
+                               true // Mark as food particle
+                           ));
+                       }
+                       foodList.splice(foodIndex, 1); // Remove food
+                       this.glowTimer = GROWTH_GLOW_DURATION; // Start glowing
+                       // Grow if not max size
+                       if (this.size < this.maxSize) {
+                           this.size = min(this.size + this.growthRateSize, this.maxSize);
+                           this.width = min(this.width + this.growthRateWidth, this.maxWidth);
+                           this.updateCollisionRadius();
+                       }
+                       this.vel.mult(1.10); // Small speed boost after eating
+                       this.vel.limit(this.maxSpeed * 1.25);
+                       this.targetFood = null; // Stop targeting this food
+                       return true; // Successfully ate
+                   } else {
+                       // Food was likely eaten by another fish, clear target
+                       this.targetFood = null;
+                   }
+               }
+           }
+           return false; // Did not eat
+       }
+
+      // --- Path Following Logic ---
+      followPath() {
+          if (!paths[this.pathIndex] || paths[this.pathIndex].length === 0) {
+              // console.warn(`Fish ${this.pathIndex} has invalid path.`);
+              return createVector(0, 0); // No path assigned or path is empty
+          }
+
+          let path = paths[this.pathIndex];
+          let targetWaypoint = path[this.currentWaypointIndex];
+
+          // Check distance to the current target waypoint
+          let distance = p5.Vector.dist(this.pos, targetWaypoint);
+
+          // If close enough, advance to the next waypoint
+          let advanceDistance = this.size * WAYPOINT_ADVANCE_DISTANCE_FACTOR;
+          if (distance < advanceDistance) {
+              this.currentWaypointIndex = (this.currentWaypointIndex + 1) % path.length; // Loop back to start
+          }
+
+          // Seek the current target waypoint
+          // For smoother following, we can also predict ahead slightly, but simple seek is fine for now
+          let seekForce = this.seek(targetWaypoint);
+          return seekForce;
+      }
+
+      // --- Original Behaviors (Wander, Separate, Align, Cohere, Nomad) ---
+      // These are kept but their application is controlled in the main behaviors() method
+      wander() {
+        let wanderRadius = 16;
+        let wanderDistance = 35;
+        let change = 0.1;
+        this.wanderTheta += random(-change, change);
+        this.currentWanderStrength = lerp(this.currentWanderStrength, random(0.5, 1.0), 0.01);
+        let wanderDirection = this.vel.copy();
+        if (wanderDirection.magSq() < 0.001) { // If velocity is near zero, use current angle
+            wanderDirection = p5.Vector.fromAngle(this.angle - PI / 2);
+        }
+        wanderDirection.setMag(wanderDistance);
+        let circleCenter = p5.Vector.add(this.pos, wanderDirection);
+        let wanderTargetOffset = p5.Vector.fromAngle(this.wanderTheta + wanderDirection.heading());
+        wanderTargetOffset.setMag(wanderRadius);
+        let target = p5.Vector.add(circleCenter, wanderTargetOffset);
+        let wanderForce = this.seek(target);
+        if (wanderForce instanceof p5.Vector) {
+            wanderForce.mult(this.currentWanderStrength);
+            return wanderForce;
+        }
+        return createVector(0,0);
+      }
+
+      separate(others) {
+        let sum = createVector();
+        let count = 0;
+        for (let other of others) {
+          if (other !== this) {
+            let d = p5.Vector.dist(this.pos, other.pos);
+            let combinedCollisionRadius = this.collisionRadius + other.collisionRadius;
+            // Use a slightly larger radius for separation calculation than strict collision
+            let separationDist = combinedCollisionRadius * (SEPARATION_DISTANCE_FACTOR + 1.0);
+            if (d > 0 && d < separationDist) {
+              let diff = p5.Vector.sub(this.pos, other.pos);
+              if (d > 0.001) {
+                  diff.normalize();
+                  diff.div(d); // Weight by distance (stronger force when closer)
+                  sum.add(diff);
+                  count++;
+              }
             }
-            display() { fill(140, 150, 145, this.opacity); ellipse(this.pos.x, this.pos.y, this.size, this.size); }
+          }
+        }
+        if (count > 0) {
+          sum.div(count);
+          if (sum.magSq() > 0) {
+            sum.setMag(this.maxSpeed);
+            return this.steer(sum);
+          }
+        }
+        return createVector(0, 0);
+      }
+
+      align(others) {
+        let sum = createVector();
+        let count = 0;
+        for (let other of others) {
+          if (other !== this) {
+            let d = p5.Vector.dist(this.pos, other.pos);
+            if (d > 0 && d < this.flockingPerception) {
+              sum.add(other.vel);
+              count++;
+            }
+          }
+        }
+        if (count > 0) {
+          sum.div(count);
+           if (sum.magSq() > 0) {
+               sum.setMag(this.maxSpeed);
+               return this.steer(sum);
+           }
+        }
+        return createVector(0, 0);
+      }
+
+      cohere(others) {
+        let sum = createVector();
+        let count = 0;
+        for (let other of others) {
+          if (other !== this) {
+            let d = p5.Vector.dist(this.pos, other.pos);
+            if (d > 0 && d < this.flockingPerception) {
+              sum.add(other.pos); // Steer towards average position
+              count++;
+            }
+          }
+        }
+        if (count > 0) {
+          sum.div(count);
+          return this.seek(sum); // Seek the center of the local flockmates
+        }
+        return createVector(0, 0);
+      }
+
+      nomad() {
+          let nomadTimeScale = 0.00005;
+          let screenMargin = 0.1; // Target points can be slightly outside screen
+          let targetX = noise(this.nomadNoiseSeedX + millis() * nomadTimeScale) * width * (1 + screenMargin*2) - width * screenMargin;
+          let targetY = noise(this.nomadNoiseSeedY + millis() * nomadTimeScale) * height* (1 + screenMargin*2) - height* screenMargin;
+          let nomadTargetPos = createVector(targetX, targetY);
+          let nomadForce = this.seek(nomadTargetPos);
+          return nomadForce instanceof p5.Vector ? nomadForce : createVector(0,0);
+      }
+
+      // --- Main Behavior Logic ---
+      behaviors(allFish, foodList) {
+          // Calculate all potential forces
+          let separationForce = this.separate(allFish);
+          let alignmentForce = this.align(allFish);
+          let cohesionForce = this.cohere(allFish);
+          let wanderForce = this.wander();
+          let nomadForce = this.nomad();
+          let pathFollowingForce = createVector(0, 0); // Initialize
+          let seekFoodForce = createVector(0, 0);
+          let seekLastFeedForce = createVector(0, 0);
+
+          // Determine current state
+          let isSeekingLastFeed = lastFeedPosition && (millis() - lastFeedTimestamp < LAST_FEED_ATTRACTION_DURATION);
+          let isSeekingSpecificFood = this.targetFood != null; // Check if targeting a specific pellet
+          let isIdle = !isSeekingLastFeed && !isSeekingSpecificFood; // Idle if not seeking food
+
+          // --- Set Weights Based on State ---
+          let currentSeparationWeight = SEPARATION_WEIGHT;
+          let currentAlignmentWeight = ALIGNMENT_WEIGHT;
+          let currentCohesionWeight = COHESION_WEIGHT;
+          let currentWanderWeight = WANDER_WEIGHT;
+          let currentNomadWeight = NOMAD_WEIGHT;
+          let currentPathFollowingWeight = 0; // Default to 0
+          let currentSeekFoodWeight = 0;
+          let currentSeekLastFeedWeight = 0;
+
+          if (isIdle) {
+              // --- IDLE STATE: Follow Path ---
+              pathFollowingForce = this.followPath(); // Calculate path force
+              currentPathFollowingWeight = PATH_FOLLOWING_WEIGHT;
+
+              // Reduce other movement behaviors significantly when path following
+              currentWanderWeight = WANDER_WEIGHT * 0.05; // Very low wander
+              currentNomadWeight = NOMAD_WEIGHT * 0.05;   // Very low nomad
+              // Allow weak flocking to keep them somewhat grouped on paths
+              currentAlignmentWeight = ALIGNMENT_WEIGHT * 0.2;
+              currentCohesionWeight = COHESION_WEIGHT * 0.15;
+              // Keep separation high to avoid collisions on the path
+              currentSeparationWeight = SEPARATION_WEIGHT * 1.0;
+
+          } else if (isSeekingLastFeed) {
+              // --- SEEKING FEED ZONE STATE ---
+              seekLastFeedForce = this.seek(lastFeedPosition);
+              currentSeekLastFeedWeight = SEEK_LAST_FEED_WEIGHT;
+
+              let distToFeedZone = p5.Vector.dist(this.pos, lastFeedPosition);
+              // Reduce flocking/wandering based on distance to feed zone
+              let reductionFactor = constrain(map(distToFeedZone, this.width, this.perception * 1.5, 0.1, 1.0), 0.1, 1.0);
+              currentAlignmentWeight *= reductionFactor * 0.3;
+              currentCohesionWeight *= reductionFactor * 0.2;
+              currentWanderWeight *= reductionFactor * 0.1;
+              currentNomadWeight *= reductionFactor * 0.1;
+              currentSeekFoodWeight = SEEK_FOOD_WEIGHT * 0.5; // Still look for specific food nearby
+              if(this.targetFood) seekFoodForce = this.seek(this.targetFood.pos); // Calculate seek food force too
+              currentSeparationWeight *= map(reductionFactor, 0.1, 1.0, 0.8, 1.0); // Keep separation strong
+
+          } else if (isSeekingSpecificFood) {
+              // --- SEEKING SPECIFIC FOOD STATE ---
+              seekFoodForce = this.seek(this.targetFood.pos);
+              currentSeekFoodWeight = SEEK_FOOD_WEIGHT;
+
+              let distToFood = max(this.width, p5.Vector.dist(this.pos, this.targetFood.pos));
+              // Reduce other behaviors less aggressively when homing on specific food
+              let reductionFactor = constrain(map(distToFood, this.width, this.flockingPerception, 0.2, 1.0), 0.2, 1.0);
+              currentAlignmentWeight *= reductionFactor * 0.5;
+              currentCohesionWeight *= reductionFactor * 0.4;
+              currentWanderWeight *= reductionFactor * 0.2;
+              currentNomadWeight *= reductionFactor * 0.2;
+              currentSeparationWeight *= map(reductionFactor, 0.2, 1.0, 0.85, 1.0); // Keep separation strong
+          }
+
+          // --- Apply Forces with Weights ---
+          this.applyForce(separationForce.mult(currentSeparationWeight));
+          this.applyForce(alignmentForce.mult(currentAlignmentWeight));
+          this.applyForce(cohesionForce.mult(currentCohesionWeight));
+          this.applyForce(wanderForce.mult(currentWanderWeight));
+          this.applyForce(nomadForce.mult(currentNomadWeight));
+          this.applyForce(pathFollowingForce.mult(currentPathFollowingWeight)); // Only non-zero when idle
+          this.applyForce(seekLastFeedForce.mult(currentSeekLastFeedWeight)); // Only non-zero when seeking feed zone
+          this.applyForce(seekFoodForce.mult(currentSeekFoodWeight)); // Only non-zero when seeking food
+
+          // Apply general drag
+          this.vel.mult(0.992);
+      }
+
+
+      // Update position based on velocity and acceleration
+      update() {
+        this.vel.add(this.acc);
+        this.vel.limit(this.maxSpeed);
+        if (this.vel.magSq() > 0.00001) { // Avoid adding zero vector
+            this.pos.add(this.vel);
+        }
+        this.acc.mult(0); // Reset acceleration each frame
+
+        // Smoothly update angle towards velocity direction
+        if (this.vel.magSq() > 0.001) { // Only update angle if moving significantly
+            let targetAngle = this.vel.heading() + PI / 2; // p5 heading is horizontal right, fish points up
+            // Calculate shortest angle difference
+            let diff = atan2(sin(targetAngle - this.angle), cos(targetAngle - this.angle));
+            this.angle += diff * this.angleLerpFactor; // Lerp angle
         }
 
-        // ===================
-        // Bubble Class - Increased Size, Speed, Variety
-        // ===================
-        class Bubble {
-             constructor() {
-                this.pos = createVector(random(width * 0.05, width * 0.95), height + random(20, 80)); // Wider spawn
-                this.size = random(1, 8); // Increased max size significantly
-                this.vel = createVector(0, random(-0.7, -2.8)); // Increased max speed
-                this.baseX = this.pos.x;
-                this.wobbleTime = random(1000);
-                // Wobble magnitude scales more with size, increased range
-                this.wobbleMagnitude = random(this.size * 0.2, this.size * 0.9);
-                this.opacity = random(60, 180); // Slightly higher potential max opacity
-                this.initialSize = this.size;
-            }
+        // Decrease glow timer
+        if (this.glowTimer > 0) {
+          this.glowTimer--;
+        }
+      }
 
-            update() {
-                this.pos.add(this.vel);
-                this.pos.x = this.baseX + sin(millis() * 0.003 + this.wobbleTime) * this.wobbleMagnitude; // Slightly faster wobble freq
-                // Size increase can be more pronounced for larger bubbles
-                this.size = lerp(this.initialSize, this.initialSize * 1.25, map(this.pos.y, height, 0, 0, 1));
-                this.opacity *= 0.996; // Slightly faster fade to compensate for more bubbles
-            }
+      // Display the fish
+      display() {
+        push();
+        translate(this.pos.x, this.pos.y);
+        rotate(this.angle);
 
-            display() { // Same display logic, but applied to more varied bubbles
-                let op = this.opacity; noStroke();
-                // Outer Glow
-                fill(170, 200, 255, op * 0.18); ellipse(this.pos.x, this.pos.y, this.size * 1.5, this.size * 1.5);
-                // Main Body Gradient
-                fill(80, 120, 190, op * 0.45); arc(this.pos.x, this.pos.y, this.size, this.size, 0.05 * PI, 0.95 * PI);
-                fill(180, 210, 255, op * 0.65); arc(this.pos.x, this.pos.y, this.size, this.size, 1.05 * PI, 1.95 * PI);
-                // Highlights
-                let highlightOffsetX = map(sin(millis() * 0.003 + this.wobbleTime), -1, 1, -0.15, 0.3); // Dynamic X offset range wider
-                fill(235, 250, 255, op * 0.95); ellipse(this.pos.x + this.size * highlightOffsetX, this.pos.y - this.size * 0.2, this.size * 0.38, this.size * 0.38);
-                fill(190, 215, 255, op * 0.4); ellipse(this.pos.x - this.size * 0.15, this.pos.y + this.size * 0.15, this.size * 0.25, this.size * 0.25);
-                // Edge Reflection (Optional)
-                // noFill(); strokeWeight(max(0.5, this.size * 0.03)); stroke(150, 180, 230, op * 0.25); arc(this.pos.x, this.pos.y, this.size * 0.95, this.size * 0.95, 0.4 * PI, 0.6 * PI); noStroke();
-            }
+        let bodyLength = this.size;
+        let bodyWidth = this.width;
 
-            isOffScreen() { return this.pos.y < -this.size * 2 || this.opacity < 1; }
+        // Animation based on speed
+        let speedFactor = map(this.vel.mag(), 0, this.maxSpeed, 0.6, 1.6);
+        let tailWiggle = sin(millis() * 0.009 * speedFactor + this.tailWiggleOffset) * (this.vel.mag() * 1.1);
+        let finFlutter = sin(millis() * 0.018 * speedFactor + this.finFlutterOffset);
+
+        // Apply glow effect if timer is active
+        if (this.glowTimer > 0) {
+          let glowAlpha = map(this.glowTimer, 0, GROWTH_GLOW_DURATION, 0, 25.5); // Faint glow
+          drawingContext.shadowColor = `rgba(255, 240, 150, ${glowAlpha / 255})`;
+          drawingContext.shadowBlur = 20;
+        } else {
+           drawingContext.shadowBlur = 0; // Turn off shadow if not glowing
+           drawingContext.shadowColor = 'rgba(0,0,0,0)';
         }
 
+        noStroke();
 
-        // ===================
-        // Fish Class - More Active Movement Tuning
-        // ===================
-        class Fish {
-            constructor(x, y, size, col) {
-                this.pos = createVector(x, y);
-                this.vel = p5.Vector.random2D().mult(random(0.2, 0.8)); // Increased initial speed range
-                this.acc = createVector(0, 0);
-                this.size = size;
-                this.width = size * random(0.4, 0.6);
-                this.color = col;
-                this.maxSpeed = random(0.6, 1.5); // Increased max speed
-                this.maxForce = random(0.02, 0.055); // Increased steering force range
-                this.perception = random(70, 150); // Moderate perception
-                this.wanderTheta = random(TWO_PI);
-                this.targetFood = null;
-                this.maxSize = this.size * random(1.4, 2.2);
-                this.maxWidth = this.width * random(1.3, 1.7);
-                this.growthRateSize = random(0.08, 0.25);
-                this.growthRateWidth = this.growthRateSize * (this.maxWidth / this.maxSize);
+        // Body layers for shading/highlighting
+        fill(this.underbellyColor);
+        ellipse(0, bodyLength * 0.1, bodyWidth * 0.95, bodyLength * 0.9); // Underbelly slightly visible
+        fill(this.shadowColor);
+        ellipse(0, bodyLength * 0.02, bodyWidth * 1.05, bodyLength * 1.02); // Shadow layer
+        fill(this.color);
+        ellipse(0, 0, bodyWidth, bodyLength); // Main body shape
+        // Highlights
+        fill(255, 200, 150, 80); // Faint warm highlight
+        ellipse(0, -bodyLength * 0.2, bodyWidth * 0.6, bodyLength * 0.3);
+        fill(this.highlightColor); // Main highlight
+        ellipse(0, -bodyLength * 0.1, bodyWidth * 0.7, bodyLength * 0.7);
 
-                this.angle = this.vel.heading() + PI / 2;
-                this.angleLerpFactor = 0.055; // Slightly faster rotation lerp
-                this.currentWanderStrength = 1.0;
-                this.tailWiggleOffset = random(TWO_PI);
-                this.finFlutterOffset = random(TWO_PI);
+        // Fins and Tail
+        fill(this.finColor);
+        stroke(red(this.finColor) + 20, green(this.finColor) + 20, blue(this.finColor) + 20, 100); // Fin outline
+        strokeWeight(max(0.5, bodyWidth * 0.01));
 
-                // Colors - Kept from previous detailed version
-                this.highlightColor = lerpColor(this.color, color(255), 0.25);
-                this.shadowColor = lerpColor(this.color, color(0), 0.4);
-                this.underbellyColor = lerpColor(this.color, color(20, 15, 10), 0.3);
-                this.finColor = lerpColor(this.color, color(20, 60, 30, 180), 0.5);
-                this.scaleColor = color(red(this.color) + 15, green(this.color) + 15, blue(this.color) + 15, 30);
-            }
+        // Tail (Wiggles)
+        let tailBaseY = bodyLength * 0.48;
+        let tailTipY = bodyLength * 0.85;
+        let tailControlX = bodyWidth * 0.7 + tailWiggle * 4; // Control point influenced by wiggle
+        let tailControlY = bodyLength * 0.65;
+        let tailTipXWiggle = tailWiggle * 6; // Tip moves more
+        beginShape();
+        vertex(0, tailBaseY);
+        quadraticVertex(-tailControlX, tailControlY, tailTipXWiggle - bodyWidth*0.1, tailTipY); // Left lobe
+        quadraticVertex(-tailControlX * 0.8, tailControlY * 1.1, tailTipXWiggle + bodyWidth*0.1, tailTipY); // Indent
+        quadraticVertex(tailControlX, tailControlY, 0, tailBaseY); // Right lobe
+        endShape(CLOSE);
 
-             applyForce(force) { this.acc.add(force); }
+        // Dorsal Fin
+        beginShape();
+        vertex(-bodyWidth * 0.15, -bodyLength * 0.1);
+        quadraticVertex(0, -bodyLength * 0.35, bodyWidth * 0.15, -bodyLength * 0.1);
+        endShape(CLOSE);
+        line(0, -bodyLength * 0.3, 0, -bodyLength * 0.1); // Fin line
 
-             seek(target) {
-                 let desired = p5.Vector.sub(target, this.pos);
-                 let d = desired.mag();
-                 let speed = this.maxSpeed;
-                 // Slightly smaller slowdown radius than before, but still present
-                 if (d < 100) {
-                     speed = map(d, 0, 100, this.maxSpeed * 0.15, this.maxSpeed); // Start faster at edge of radius
-                 }
-                 desired.setMag(max(speed, 0.1)); // Ensure a decent minimum speed when seeking
-                 let steer = p5.Vector.sub(desired, this.vel);
-                 steer.limit(this.maxForce);
-                 return steer;
-             }
+        // Pectoral Fins (Flutter)
+        let finY = bodyLength * 0.08;
+        let finBaseX = bodyWidth * 0.35;
+        let finLength = bodyWidth * 0.45;
+        let flutterAngle = finFlutter * PI * 0.08; // Small flutter angle
+        let finTipX = finBaseX + cos(flutterAngle) * finLength;
+        let finTipY = finY + sin(flutterAngle) * finLength + bodyWidth * 0.1; // Tip position
 
-             eat(foodList) { // No changes needed here
-                 let record = Infinity; let closestFood = null; let ateFood = false;
-                 for (let i = foodList.length - 1; i >= 0; i--) {
-                    let d = p5.Vector.dist(this.pos, foodList[i].pos);
-                    if (d < (this.width / 2 + foodList[i].size / 2) * 1.2) {
-                        foodList.splice(i, 1);
-                        if (this.size < this.maxSize) {
-                             this.size += this.growthRateSize; this.width += this.growthRateWidth;
-                        }
-                        ateFood = true; this.vel.mult(1.02); this.vel.limit(this.maxSpeed * 1.1);
-                    } else if (d < this.perception && d < record) { record = d; closestFood = foodList[i]; }
-                 }
-                 this.targetFood = closestFood; return ateFood;
-             }
+        // Left Fin
+        beginShape();
+        vertex(-finBaseX, finY);
+        quadraticVertex(-finBaseX * 1.1, finY - bodyWidth*0.1, -finTipX, finTipY);
+        vertex(-finBaseX, finY);
+        endShape(CLOSE);
+        line(-finBaseX, finY, -finTipX, finTipY); // Fin line
 
-            wander() {
-                 // More active wander parameters
-                 let wanderRadius = 18; // Larger radius
-                 let wanderDistance = 40; // Look further ahead
-                 let change = 0.12; // Allow slightly faster direction changes
-                 this.wanderTheta += random(-change, change);
-                 // Ensure wander strength doesn't drop too low
-                 this.currentWanderStrength = lerp(this.currentWanderStrength, random(0.4, 1.1), 0.01); // Higher minimum strength
-                 let circlePos = this.vel.copy();
-                  // Use a default forward vector if velocity is near zero to prevent stall
-                 if (circlePos.magSq() < 0.01) {
-                     circlePos = p5.Vector.fromAngle(this.angle - PI/2);
-                     circlePos.setMag(0.5); // Give it some magnitude
-                 }
-                 circlePos.setMag(wanderDistance);
-                 circlePos.add(this.pos);
-                 let h = circlePos.heading(); // Use projected position heading
-                 let circleOffset = createVector(wanderRadius * cos(this.wanderTheta + h), wanderRadius * sin(this.wanderTheta + h));
-                 let target = p5.Vector.add(circlePos, circleOffset);
-                 let wanderForce = this.seek(target); // Use seek to calculate force towards wander target
-                 wanderForce.mult(this.currentWanderStrength);
-                 return wanderForce;
-            }
+        // Right Fin
+        beginShape();
+        vertex(finBaseX, finY);
+        quadraticVertex(finBaseX * 1.1, finY - bodyWidth*0.1, finTipX, finTipY);
+        vertex(finBaseX, finY);
+        endShape(CLOSE);
+        line(finBaseX, finY, finTipX, finTipY); // Fin line
 
-             behaviors(foodList) {
-                 let ate = this.eat(foodList);
-                 let steerForce;
-                 if (this.targetFood) {
-                     steerForce = this.seek(this.targetFood.pos);
-                     steerForce.mult(1.3); // Moderate seeking multiplier
-                     this.applyForce(steerForce);
-                 } else {
-                     let wanderForce = this.wander();
-                     this.applyForce(wanderForce);
-                 }
-                 // Reduced drag to allow more coasting
-                 this.vel.mult(0.99);
-             }
+        // Details: Gills
+        noFill();
+        stroke(this.shadowColor.levels[0], this.shadowColor.levels[1], this.shadowColor.levels[2], 100);
+        strokeWeight(max(1, bodyWidth * 0.02));
+        let gillY = -bodyLength * 0.15;
+        let gillX = bodyWidth * 0.35;
+        arc(0, gillY, gillX * 1.5, bodyLength * 0.3, HALF_PI - 0.3, HALF_PI + 0.3); // Gill slit arc
 
-            update() {
-                this.vel.add(this.acc);
-                this.vel.limit(this.maxSpeed);
-                // Move even if velocity is very small, prevents getting stuck
-                if (this.vel.magSq() > 0.00001 || this.acc.magSq() > 0) {
-                    this.pos.add(this.vel);
-                }
-                this.acc.mult(0);
+        // Details: Eyes
+        noStroke();
+        let eyeY = -bodyLength * 0.3;
+        let eyeSize = max(3, bodyWidth * 0.16);
+        fill(240, 240, 245); // Eye white
+        ellipse(0, eyeY, eyeSize, eyeSize * 1.05);
+        // Pupil follows velocity direction slightly
+        let pupilOffset = this.vel.copy().setMag(eyeSize * 0.1);
+        fill(40, 40, 50); // Pupil
+        ellipse(pupilOffset.x, eyeY + pupilOffset.y, eyeSize * 0.5, eyeSize * 0.5);
+        fill(255, 255, 255, 200); // Eye highlight
+        ellipse(
+          pupilOffset.x + eyeSize * 0.1,
+          eyeY + pupilOffset.y - eyeSize * 0.15,
+          eyeSize * 0.2,
+          eyeSize * 0.2
+        );
 
-                // Update angle based on velocity, using slightly faster lerp
-                if (this.vel.magSq() > 0.001) { // Only update if moving noticeably
-                    let targetAngle = this.vel.heading() + PI / 2;
-                    let diff = atan2(sin(targetAngle - this.angle), cos(targetAngle - this.angle));
-                    this.angle += diff * this.angleLerpFactor;
-                 }
-            }
+        pop(); // Restore drawing state
 
-            display() { // Using the detailed display from previous version
-                push();
-                translate(this.pos.x, this.pos.y);
-                rotate(this.angle);
+        // IMPORTANT: Reset shadow context for next draw calls outside this fish
+        drawingContext.shadowBlur = 0;
+        drawingContext.shadowColor = 'rgba(0,0,0,0)';
+      }
 
-                let bodyLength = this.size; let bodyWidth = this.width;
-                let speedFactor = map(this.vel.mag(), 0, this.maxSpeed, 0.6, 1.6);
-                let tailWiggle = sin(millis() * 0.009 * speedFactor + this.tailWiggleOffset) * (this.vel.mag() * 1.1);
-                let finFlutter = sin(millis() * 0.018 * speedFactor + this.finFlutterOffset);
+      // Handle screen edges - apply steering force away from edges
+      edges() {
+        let buffer = this.size * 1.5; // Distance from edge to start turning
+        let steer = createVector(0, 0);
+        let forceMultiplier = 1.0;
 
-                noStroke();
-                fill(this.underbellyColor); ellipse(0, bodyLength * 0.1, bodyWidth * 0.95, bodyLength * 0.9);
-                fill(this.shadowColor); ellipse(0, bodyLength * 0.02, bodyWidth * 1.05, bodyLength * 1.02);
-                fill(this.color); ellipse(0, 0, bodyWidth, bodyLength);
+        // Check each edge
+        if (this.pos.x < buffer) steer.add(createVector(this.maxSpeed, 0));
+        if (this.pos.x > width - buffer) steer.add(createVector(-this.maxSpeed, 0));
+        if (this.pos.y < buffer) steer.add(createVector(0, this.maxSpeed));
+        if (this.pos.y > height - buffer) steer.add(createVector(0, -this.maxSpeed));
 
-                fill(this.scaleColor);
-                let scaleSize = bodyWidth * 0.1;
-                for (let y = -bodyLength * 0.4; y < bodyLength * 0.4; y += scaleSize * 0.8) {
-                    for (let x = -bodyWidth * 0.4; x < bodyWidth * 0.4; x += scaleSize * 0.8) {
-                         if (sq(x / (bodyWidth * 0.5)) + sq(y / (bodyLength * 0.5)) < 0.8) {
-                             let noiseFactor = noise(this.pos.x * 0.1 + x * 0.2, this.pos.y * 0.1 + y * 0.2) * 0.5;
-                             ellipse(x + noiseFactor * scaleSize, y + noiseFactor * scaleSize, scaleSize * (0.5 + noiseFactor), scaleSize * (0.5 + noiseFactor));
-                         }
-                    }
-                }
-
-                fill(this.highlightColor); ellipse(0, -bodyLength * 0.1, bodyWidth * 0.7, bodyLength * 0.7);
-
-                fill(this.finColor); stroke(red(this.finColor) + 20, green(this.finColor) + 20, blue(this.finColor) + 20, 100); strokeWeight(max(0.5, bodyWidth * 0.01));
-
-                let tailBaseY = bodyLength * 0.48; let tailTipY = bodyLength * 0.85; let tailControlX = bodyWidth * 0.7 + tailWiggle * 4;
-                let tailControlY = bodyLength * 0.65; let tailTipXWiggle = tailWiggle * 6;
-                beginShape(); vertex(0, tailBaseY); quadraticVertex(-tailControlX, tailControlY, tailTipXWiggle - bodyWidth*0.1, tailTipY);
-                quadraticVertex(-tailControlX * 0.8, tailControlY * 1.1, tailTipXWiggle + bodyWidth*0.1, tailTipY); quadraticVertex( tailControlX, tailControlY, 0, tailBaseY); endShape(CLOSE);
-                line(0, tailBaseY, tailTipXWiggle, tailTipY); line(0, tailBaseY, -tailControlX * 0.5 + tailTipXWiggle*0.5, tailControlY * 0.8 + tailTipY * 0.2); line(0, tailBaseY, tailControlX * 0.5 + tailTipXWiggle*0.5, tailControlY * 0.8 + tailTipY * 0.2);
-
-                beginShape(); vertex(-bodyWidth * 0.15, -bodyLength * 0.1); quadraticVertex(0, -bodyLength * 0.35, bodyWidth * 0.15, -bodyLength * 0.1); endShape(CLOSE); line(0, -bodyLength * 0.3, 0, -bodyLength * 0.1);
-
-                let finY = bodyLength * 0.08; let finBaseX = bodyWidth * 0.35; let finLength = bodyWidth * 0.45;
-                let flutterAngle = finFlutter * PI * 0.08; let finTipX = finBaseX + cos(flutterAngle) * finLength; let finTipY = finY + sin(flutterAngle) * finLength + bodyWidth * 0.1;
-                beginShape(); vertex(-finBaseX, finY); quadraticVertex(-finBaseX * 1.1, finY - bodyWidth*0.1, -finTipX, finTipY); vertex(-finBaseX, finY); endShape(CLOSE); line(-finBaseX, finY, -finTipX, finTipY);
-                beginShape(); vertex(finBaseX, finY); quadraticVertex(finBaseX * 1.1, finY - bodyWidth*0.1, finTipX, finTipY); vertex(finBaseX, finY); endShape(CLOSE); line(finBaseX, finY, finTipX, finTipY);
-
-                noStroke();
-                stroke(this.shadowColor.levels[0], this.shadowColor.levels[1], this.shadowColor.levels[2], 100); strokeWeight(max(1, bodyWidth * 0.02));
-                let gillY = -bodyLength * 0.15; let gillX = bodyWidth * 0.35; arc(0, gillY, gillX * 1.5, bodyLength * 0.3, HALF_PI - 0.3, HALF_PI + 0.3); noStroke();
-
-                let eyeY = -bodyLength * 0.3; let eyeSize = max(3, bodyWidth * 0.16); fill(240, 240, 245); ellipse(0, eyeY, eyeSize, eyeSize * 1.05);
-                let pupilOffset = p5.Vector.fromAngle(this.vel.heading()).mult(eyeSize * 0.1); fill(40, 40, 50); ellipse(pupilOffset.x, eyeY + pupilOffset.y, eyeSize * 0.5, eyeSize * 0.5);
-                fill(255, 255, 255, 200); ellipse(pupilOffset.x + eyeSize * 0.1, eyeY + pupilOffset.y - eyeSize * 0.15, eyeSize * 0.2, eyeSize * 0.2);
-
-                pop();
-            }
-
-            edges() { // Slightly reduced repel force/buffer, increased wrap buffer
-                let buffer = this.size * 1.2; // Smaller buffer for repel
-                let repelForce = 0.04;
-                let steer = createVector(0, 0);
-
-                if (this.pos.x < buffer) steer.add(createVector(this.maxSpeed, 0));
-                else if (this.pos.x > width - buffer) steer.add(createVector(-this.maxSpeed, 0));
-                if (this.pos.y < buffer) steer.add(createVector(0, this.maxSpeed));
-                else if (this.pos.y > height - buffer) steer.add(createVector(0, -this.maxSpeed));
-
-                 if (steer.magSq() > 0) {
-                     steer.setMag(this.maxSpeed);
-                     steer.sub(this.vel);
-                     steer.limit(this.maxForce * 1.1); // Gentler edge repel multiplier
-                     this.applyForce(steer);
-                 }
-
-                // Wrap around with larger buffer
-                let wrapBuffer = this.size * 2.5;
-                if (this.pos.x > width + wrapBuffer) this.pos.x = -wrapBuffer;
-                if (this.pos.x < -wrapBuffer) this.pos.x = width + wrapBuffer;
-                if (this.pos.y > height + wrapBuffer) this.pos.y = -wrapBuffer;
-                if (this.pos.y < -wrapBuffer) this.pos.y = height + wrapBuffer;
-            }
+        // Increase force multiplier if near a corner
+        if ((this.pos.x < buffer || this.pos.x > width - buffer) &&
+            (this.pos.y < buffer || this.pos.y > height - buffer)) {
+          forceMultiplier = CORNER_AVOID_MULT;
         }
 
-        // ===================
-        // Food Class - No Halo
-        // ===================
-        class Food { // Kept simple, no halo
-            constructor(x, y) {
-                this.pos = createVector(x, y);
-                this.vel = createVector(random(-0.1, 0.1), random(0.15, 0.6));
-                this.size = random(4, 7);
-                this.color = lerpColor(nvidiaGreen, color(240, 240, 210), 0.8);
-                this.opacity = 255;
-            }
-            update() {
-                this.pos.add(this.vel); this.vel.y *= 0.994;
-                this.vel.x += map(noise(this.pos.x * 0.08, this.pos.y * 0.08, millis() * 0.0008), 0, 1, -0.008, 0.008);
-                this.vel.limit(0.6); if(this.vel.y < 0.05 && this.pos.y < height - 30) this.vel.y = 0.05;
-                this.opacity = max(0, this.opacity - 0.35);
-            }
-            display() {
-                let op = this.opacity; noStroke();
-                fill(this.color.levels[0], this.color.levels[1], this.color.levels[2], op);
-                ellipse(this.pos.x, this.pos.y, this.size, this.size);
-                fill(255, 255, 240, op * 0.4); // Subtle inner highlight
-                ellipse(this.pos.x + this.size*0.1, this.pos.y - this.size*0.1, this.size * 0.4, this.size * 0.4);
-            }
-            isOffScreen() { return this.pos.y > height + this.size * 5 || this.opacity <= 0; }
+        // If any edge force is needed
+        if (steer.magSq() > 0) {
+          steer.setMag(this.maxSpeed); // Desired velocity is away from edge
+          let edgeSteerForce = p5.Vector.sub(steer, this.vel); // Calculate steering force
+          edgeSteerForce.limit(this.maxForce * forceMultiplier); // Limit the force
+          this.applyForce(edgeSteerForce.mult(EDGE_AVOID_WEIGHT)); // Apply weighted force
         }
-    </script>
+
+        // --- Screen Wrapping (Backup) ---
+        // If fish go way off screen, wrap them around. Edge avoidance should prevent this mostly.
+        let wrapBuffer = this.size * 3.5;
+        if (this.pos.x > width + wrapBuffer) this.pos.x = -wrapBuffer;
+        if (this.pos.x < -wrapBuffer) this.pos.x = width + wrapBuffer;
+        if (this.pos.y > height + wrapBuffer) this.pos.y = -wrapBuffer;
+        if (this.pos.y < -wrapBuffer) this.pos.y = height + wrapBuffer;
+      }
+    } // End Fish Class
+
+    // --- Food Class (No changes) ---
+    class Food {
+      constructor(x, y) {
+        this.pos = createVector(x, y);
+        this.vel = createVector(random(-0.1, 0.1), random(0.05, 0.2)); // Initial slight spread
+        this.size = random(4, 7);
+        this.color = lerpColor(nvGreen, color(240, 240, 210), 0.8); // nv-ish green/yellow
+        this.opacity = 255;
+        this.opacityDecay = 0.35; // How fast it fades/dissolves if not eaten
+      }
+      update() {
+        this.vel.y += GRAVITY; // Sink
+        this.vel.mult(FOOD_SINK_DRAG); // Water resistance
+        // Add slight horizontal drift based on noise
+        this.vel.x += map(noise(this.pos.x * 0.08, this.pos.y * 0.08, millis() * 0.0008), 0, 1, -FOOD_NOISE_INFLUENCE, FOOD_NOISE_INFLUENCE);
+        this.vel.limit(0.9); // Terminal velocity
+        this.pos.add(this.vel);
+        this.opacity = max(0, this.opacity - this.opacityDecay); // Fade out
+      }
+      display() {
+         if (this.opacity <= 0) return;
+         push();
+         let op = this.opacity;
+         // Add glow when fresh
+         if (op > 150) {
+           drawingContext.shadowColor = color(255, 240, 180, op * 0.3);
+           drawingContext.shadowBlur = 8;
+         }
+         noStroke();
+         fill(this.color.levels[0], this.color.levels[1], this.color.levels[2], op);
+         ellipse(this.pos.x, this.pos.y, this.size, this.size);
+         // Small highlight
+         fill(255, 255, 240, op * 0.4);
+         ellipse(this.pos.x + this.size * 0.1, this.pos.y - this.size * 0.1, this.size * 0.4, this.size * 0.4);
+         pop();
+         // Reset shadow context
+         drawingContext.shadowBlur = 0;
+         drawingContext.shadowColor = 'rgba(0,0,0,0)';
+       }
+      isOffScreen() {
+        // Remove if sunk off bottom or fully faded
+        return this.pos.y > height + this.size * 5 || this.opacity <= 0;
+      }
+    } // End Food Class
+
+  </script>
 </body>
 </html>
