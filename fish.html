@@ -25,13 +25,13 @@
     let simpleBgColor;
     let lastFeedPosition = null;
     let lastFeedTimestamp = -Infinity;
+    let lastManualFeedTime = 0;
     const NUM_FISH = 25;
     const FOOD_DROP_COUNT = 8;
     const BUBBLE_SPAWN_RATE = 0.075;
     const PARTICLE_COUNT = 200;
     const GROWTH_GLOW_DURATION = 120;
     const EAT_PARTICLE_COUNT = 45;
-    let lastManualFeedTime = 0;
     const FEED_DELAY = 250;
     const FEED_SPREAD = 80;
     const SEPARATION_WEIGHT = 10.0;
@@ -48,10 +48,10 @@
     const NUM_PATHS = 6;
     const PATH_WAYPOINTS = 60;
     const WAYPOINT_ADVANCE_DISTANCE_FACTOR = 2.5;
-    const LAST_FEED_ATTRACTION_DURATION = 1500;
+    const LAST_FEED_ATTRACTION_DURATION = 3000;
     const COLLISION_RADIUS_FACTOR = 1.0;
     const GRAVITY = 0.0072;
-    const FOOD_SINK_DRAG = 0.999;
+    const FOOD_SINK_DRAG = 0.995;
     const FOOD_NOISE_INFLUENCE = 0.006;
     const MIN_FISH_SIZE = 18;
     const MAX_FISH_SIZE = 60;
@@ -65,7 +65,7 @@
     const MAX_SIZE_MULT = 2.8;
     const MIN_GROWTH_RATE = 0.05;
     const MAX_GROWTH_RATE = 0.35;
-    const SEPARATION_DISTANCE_FACTOR = 0.75;
+    const SEPARATION_DISTANCE_FACTOR = 0.55;
 
     function setup() {
       createCanvas(windowWidth, windowHeight);
