@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyberpunk Plinko</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        :root {
+            --background-color: #0a0a1f;
+            --primary-neon: #00ffff; /* Cyan */
+            --secondary-neon: #ff00ff; /* Magenta */
+            --tertiary-neon: #ffff00; /* Yellow */
+            --peg-color: #222255;
+            --peg-glow: #6666ff;
+            --peg-hit-glow: #ffffff;
+            --ball-color: var(--tertiary-neon);
+            --divider-color: var(--secondary-neon);
+            --bucket-text-color: var(--primary-neon);
+            --button-bg: var(--secondary-neon);
+            --button-text: var(--background-color);
+            --score-color: var(--tertiary-neon);
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--primary-neon);
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            text-shadow: 0 0 5px var(--primary-neon);
+        }
+
+        #ui-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 10;
+        }
+
+        #drop-button {
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            border: 2px solid var(--button-bg);
+            padding: 10px 25px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2em;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            box-shadow: 0 0 10px var(--button-bg), 0 0 20px var(--button-bg);
+            transition: all 0.3s ease;
+        }
+
+        #drop-button:hover:not(:disabled) {
+            box-shadow: 0 0 15px var(--button-bg), 0 0 30px var(--button-bg), 0 0 5px #fff;
+            transform: translateY(-2px);
+        }
+
+        #drop-button:disabled {
+            background-color: #555;
+            border-color: #777;
+            color: #aaa;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        #score-display {
+            font-size: 1.8em;
+            color: var(--score-color);
+            text-shadow: 0 0 8px var(--score-color);
+        }
+
+        #last-win-display {
+            font-size: 1em;
+            margin-top: 5px;
+            min-height: 1.2em;
+            color: var(--primary-neon);
+             text-shadow: 0 0 5px var(--primary-neon);
+             transition: opacity 0.5s ease-out;
+             opacity: 1;
+        }
+         #last-win-display.fade-out {
+            opacity: 0;
+        }
+
+
+        #game-container {
+            position: relative;
+            width: 90vw;
+            max-width: 600px;
+            height: 75vh;
+            max-height: 800px;
+            background: radial-gradient(circle, rgba(10, 10, 31, 0.8) 0%, rgba(10, 10, 31, 0.95) 70%, var(--background-color) 100%);
+            border: 2px solid var(--primary-neon);
+            box-shadow: 0 0 15px var(--primary-neon), inset 0 0 10px rgba(0, 255, 255, 0.5);
+            overflow: hidden; /* Crucial for keeping elements contained */
+        }
+
+        .physics-object {
+            position: absolute;
+            background-color: grey; /* Default, should be overridden */
+            box-sizing: border-box;
+        }
+
+        .ball {
+            background-color: var(--ball-color);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--ball-color), 0 0 15px var(--ball-color);
+            z-index: 5;
+            transition: opacity 0.3s ease-out;
+        }
+         .ball.removing {
+            opacity: 0;
+        }
+
+
+        .peg {
+            background-color: var(--peg-color);
+            border: 1px solid var(--peg-glow);
+            border-radius: 50%;
+            box-shadow: 0 0 5px var(--peg-glow);
+            transition: box-shadow 0.1s ease-out, background-color 0.1s ease-out, transform 0.1s ease-out;
+            z-index: 1;
+        }
+
+        .peg-hit {
+            background-color: var(--primary-neon);
+            box-shadow: 0 0 10px var(--peg-hit-glow), 0 0 20px var(--primary-neon);
+            transform: scale(1.1);
+        }
+
+        .divider {
+            background-color: var(--divider-color);
+            box-shadow: 0 0 7px var(--divider-color);
+            z-index: 1;
+        }
+
+        .bucket-label {
+            position: absolute;
+            bottom: 5px;
+            width: 10%; /* Adjust based on number of buckets */
+            text-align: center;
+            font-size: clamp(0.6rem, 2vw, 0.9rem);
+            color: var(--bucket-text-color);
+            text-shadow: 0 0 5px var(--bucket-text-color);
+            z-index: 2;
+            pointer-events: none; /* Prevent interference with physics */
+        }
+        .bucket-label.multiplier {
+             color: var(--tertiary-neon);
+             font-weight: bold;
+             text-shadow: 0 0 7px var(--tertiary-neon);
+        }
+
+         @media (max-width: 600px) {
+            #game-container {
+                height: 70vh;
+            }
+            #score-display {
+                 font-size: 1.5em;
+            }
+             #drop-button {
+                font-size: 1em;
+                padding: 8px 20px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <button id="drop-button">Drop Chip</button>
+        <div id="score-display">Score: 0</div>
+        <div id="last-win-display"></div>
+    </div>
+    <div id="game-container">
+        <!-- Physics elements will be added here by JavaScript -->
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const { Engine, Runner, Bodies, Composite, Events, Body, Vector } = Matter; // Added Vector
+
+            const gameContainer = document.getElementById('game-container');
+            const dropButton = document.getElementById('drop-button');
+            const scoreDisplay = document.getElementById('score-display');
+            const lastWinDisplay = document.getElementById('last-win-display');
+
+            let containerWidth = gameContainer.clientWidth;
+            let containerHeight = gameContainer.clientHeight;
+
+            const engine = Engine.create({
+                gravity: { x: 0, y: 1.1 },
+                enableSleeping: true
+            });
+            const world = engine.world;
+
+            const runner = Runner.create();
+
+            // --- Game Variables ---
+            let currentScore = 0;
+            let ball = null; // Store the current ball body
+            let isBallInPlay = false;
+            let ballRemovalTimeout = null; // Timeout for removing the ball
+
+            // --- Dynamic Sizing ---
+            let pegRadius = Math.min(containerWidth * 0.012, 6);
+            let ballRadius = Math.min(containerWidth * 0.02, 10);
+            const numRows = 10;
+            const numCols = 11; // Must be odd for a center column
+            let horizontalSpacing = containerWidth / (numCols + 1);
+            let verticalSpacing = (containerHeight * 0.65) / numRows;
+            const startYOffset = containerHeight * 0.1;
+
+            const bucketValues = [5000, 10000, 25000, 50000, 100000, 50000, 25000, 10000, 5000];
+            const numBuckets = bucketValues.length;
+            let bucketWidth = containerWidth / numBuckets;
+            const bucketHeight = containerHeight * 0.1;
+            let dividerHeight = bucketHeight * 1.2;
+            let dividerWidth = Math.max(2, containerWidth * 0.005);
+            const bucketBaseY = containerHeight - bucketHeight / 2; // Center Y of bucket dividers
+            const bucketTriggerY = containerHeight - bucketHeight * 1.1; // Y position to check for bucket entry
+            const centerBucketIndex = Math.floor(numBuckets / 2);
+
+             // Map to store peg bodies and their DOM elements for quick lookup
+            const pegMap = new Map();
+
+            // --- Create DOM Element Function ---
+            function createDOMElement(body) {
+                const div = document.createElement('div');
+                div.classList.add('physics-object');
+                // div.style.position = 'absolute'; // Position is absolute by default for physics objects
+
+                if (body.label === 'ball') {
+                    div.classList.add('ball');
+                    div.style.width = `${ballRadius * 2}px`;
+                    div.style.height = `${ballRadius * 2}px`;
+                } else if (body.label === 'peg') {
+                    div.classList.add('peg');
+                    div.style.width = `${pegRadius * 2}px`;
+                    div.style.height = `${pegRadius * 2}px`;
+                    pegMap.set(body.id, div); // Store peg DOM element in map
+                } else if (body.label === 'divider') {
+                    div.classList.add('divider');
+                    // Width/height set during syncDOM
+                } else if (body.label === 'wall') {
+                     div.style.backgroundColor = 'transparent'; // Invisible walls
+                     // Width/height set during syncDOM
+                }
+
+                gameContainer.appendChild(div);
+                body.domElement = div; // Link DOM element to physics body
+                syncDOM(body); // Initial positioning
+                return div;
+            }
+
+             // --- Sync Physics Body with DOM Element ---
+            function syncDOM(body) {
+                if (!body.domElement) return;
+
+                const pos = body.position;
+                const angle = body.angle;
+                const element = body.domElement;
+
+                // Matter.js position is center, CSS top/left is top-left corner
+                let width, height;
+                if (body.label === 'ball') {
+                    width = height = ballRadius * 2;
+                } else if (body.label === 'peg') {
+                    width = height = pegRadius * 2;
+                } else if (body.label === 'divider' || body.label === 'wall') {
+                    // For rectangles, get dimensions from bounds
+                    width = body.bounds.max.x - body.bounds.min.x;
+                    height = body.bounds.max.y - body.bounds.min.y;
+                } else {
+                     // Default or unknown - might not be needed
+                     width = element.offsetWidth;
+                     height = element.offsetHeight;
+                }
+
+                element.style.transform = `translate(${pos.x - width / 2}px, ${pos.y - height / 2}px) rotate(${angle}rad)`;
+
+                 // Ensure width/height are set for walls/dividers if not set initially
+                 if ((body.label === 'divider' || body.label === 'wall') && (!element.style.width || !element.style.height)) {
+                     element.style.width = `${width}px`;
+                     element.style.height = `${height}px`;
+                 }
+            }
+
+            // --- Create Pegs ---
+            function createPegs() {
+                Composite.remove(world, world.bodies.filter(body => body.label === 'peg')); // Clear existing pegs if any
+                pegMap.clear(); // Clear the map
+                 // Remove existing peg DOM elements
+                 gameContainer.querySelectorAll('.peg').forEach(el => el.remove());
+
+                const pegs = [];
+                for (let row = 0; row < numRows; row++) {
+                    const colsInRow = numCols + (row % 2 === 0 ? 0 : -1);
+                    const rowOffsetY = startYOffset + row * verticalSpacing;
+                    const rowOffsetX = (containerWidth - (colsInRow -1) * horizontalSpacing) / 2;
+
+                    for (let col = 0; col < colsInRow; col++) {
+                        const x = rowOffsetX + col * horizontalSpacing;
+                        const y = rowOffsetY;
+                        const peg = Bodies.circle(x, y, pegRadius, {
+                            isStatic: true,
+                            label: 'peg',
+                            friction: 0.1,
+                            restitution: 0.6,
+                            render: { visible: false }
+                        });
+                        pegs.push(peg);
+                        createDOMElement(peg);
+                    }
+                }
+                Composite.add(world, pegs);
+            }
+
+
+            // --- Create Dividers and Walls ---
+             function createBoundaries() {
+                 // Clear existing boundaries
+                Composite.remove(world, world.bodies.filter(body => body.label === 'divider' || body.label === 'wall'));
+                gameContainer.querySelectorAll('.divider').forEach(el => el.remove());
+                gameContainer.querySelectorAll('.bucket-label').forEach(el => el.remove());
+
+
+                 // --- Create Bucket Dividers ---
+                const dividers = [];
+                for (let i = 0; i <= numBuckets; i++) {
+                    const x = i * bucketWidth;
+                    // Ensure dividers are centered vertically at the base line
+                    const y = containerHeight - dividerHeight / 2;
+                    const divider = Bodies.rectangle(x, y, dividerWidth, dividerHeight, {
+                        isStatic: true,
+                        label: 'divider',
+                        friction: 0.5,
+                        render: { visible: false }
+                    });
+                    dividers.push(divider);
+                     if (i > 0 && i < numBuckets) { // Only create visible DOM for inner dividers
+                         createDOMElement(divider);
+                     }
+                }
+                Composite.add(world, dividers);
+
+                // --- Create Bucket Labels ---
+                for (let i = 0; i < numBuckets; i++) {
+                    const label = document.createElement('div');
+                    label.classList.add('bucket-label');
+                    let labelText = (bucketValues[i] / 1000) + 'k';
+                    if (bucketValues[i] >= 1000000) {
+                        labelText = (bucketValues[i] / 1000000) + 'm';
+                    }
+
+                    if(i === centerBucketIndex) {
+                        labelText += " [2x]"; // Use brackets for clarity
+                        label.classList.add('multiplier');
+                    }
+
+                    label.textContent = labelText;
+                    label.style.left = `${i * bucketWidth}px`;
+                    label.style.width = `${bucketWidth}px`;
+                    label.style.bottom = `${(bucketHeight - 20) / 2}px`; // Try to center vertically in bucket space
+                    gameContainer.appendChild(label);
+                }
+
+                 // --- Create Walls ---
+                 const wallThickness = 50;
+                 Composite.add(world, [
+                     // Floor (below dividers to catch stray balls)
+                     Bodies.rectangle(containerWidth / 2, containerHeight + wallThickness / 2 - 5 , containerWidth + wallThickness*2 , wallThickness, { isStatic: true, label: 'wall', render: { visible: false } }),
+                     // Left wall
+                     Bodies.rectangle(-wallThickness / 2, containerHeight / 2, wallThickness, containerHeight * 2, { isStatic: true, label: 'wall', render: { visible: false } }), // Make taller
+                     // Right wall
+                     Bodies.rectangle(containerWidth + wallThickness / 2, containerHeight / 2, wallThickness, containerHeight*2, { isStatic: true, label: 'wall', render: { visible: false } })
+                 ]);
+             }
+
+            // --- Remove Ball Function ---
+            function removeBall(ballBody, immediate = false) {
+                if (!ballBody) return;
+
+                clearTimeout(ballRemovalTimeout); // Clear any existing removal timer
+
+                if (ballBody.domElement) {
+                    if (immediate) {
+                        ballBody.domElement.remove();
+                        Composite.remove(world, ballBody);
+                         if (ball === ballBody) { // Ensure we clear the global reference if it's the current ball
+                             ball = null;
+                        }
+                    } else {
+                         // Fade out and then remove
+                        ballBody.domElement.classList.add('removing');
+                         // Set timeout to remove after fade
+                        ballRemovalTimeout = setTimeout(() => {
+                             if (ballBody.domElement) ballBody.domElement.remove();
+                             Composite.remove(world, ballBody);
+                             if (ball === ballBody) {
+                                ball = null;
+                            }
+                        }, 300); // Match CSS transition duration
+                    }
+                } else {
+                    // If no DOM element somehow, just remove from world
+                    Composite.remove(world, ballBody);
+                     if (ball === ballBody) {
+                        ball = null;
+                     }
+                }
+
+                 // Reset state if this was the active ball being removed after scoring/going out of bounds
+                 if (!immediate && isBallInPlay) { // Only reset if it was the active game ball
+                    isBallInPlay = false;
+                    dropButton.disabled = false;
+                 }
+            }
+
+
+            // --- Drop Ball Function ---
+            function dropBall() {
+                if (isBallInPlay) return;
+
+                isBallInPlay = true;
+                dropButton.disabled = true;
+                lastWinDisplay.textContent = ''; // Clear previous win
+                lastWinDisplay.classList.remove('fade-out');
+
+                // Small random horizontal offset at the start
+                const randomOffsetX = (Math.random() - 0.5) * horizontalSpacing * 0.5;
+                const startX = containerWidth / 2 + randomOffsetX;
+                const startY = startYOffset * 0.5; // Start slightly above the first row
+
+                ball = Bodies.circle(startX, startY, ballRadius, {
+                    label: 'ball',
+                    friction: 0.05,
+                    restitution: 0.3, // Less bouncy ball
+                    density: 0.0015, // Slightly heavier ball
+                    sleepThreshold: 60, // Allow sleeping if it gets stuck briefly
+                    render: { visible: false }
+                });
+
+                createDOMElement(ball);
+                Composite.add(world, ball);
+
+                // Failsafe: Remove ball if it gets stuck or takes too long
+                ballRemovalTimeout = setTimeout(() => {
+                    if (isBallInPlay && ball) { // Only if the ball is still the active one
+                        console.warn("Ball removed due to timeout (stuck or out of bounds?)");
+                        lastWinDisplay.textContent = "Chip Lost";
+                        lastWinDisplay.classList.remove('fade-out');
+                        removeBall(ball); // This will re-enable the button
+                    }
+                }, 15000); // 15 seconds timeout
+            }
+
+            // --- Handle Peg Hit VFX ---
+            function handlePegHit(pegBody) {
+                 const pegElement = pegMap.get(pegBody.id);
+                 if (pegElement && !pegElement.classList.contains('peg-hit')) {
+                    pegElement.classList.add('peg-hit');
+                    // Simple sound effect (optional)
+                    // const hitSound = new Audio('path/to/hit.wav'); // Add a sound file if desired
+                    // hitSound.play();
+                    setTimeout(() => {
+                        pegElement.classList.remove('peg-hit');
+                    }, 150); // Duration of the glow effect
+                 }
+            }
+
+            // --- Update Score ---
+            function updateScore(amount) {
+                currentScore += amount;
+                scoreDisplay.textContent = `Score: ${currentScore.toLocaleString()}`;
+                lastWinDisplay.textContent = `+${amount.toLocaleString()}`;
+                lastWinDisplay.classList.remove('fade-out');
+                // Optional: Add a class for win animation
+            }
+
+             // --- Resize Handler ---
+             function handleResize() {
+                containerWidth = gameContainer.clientWidth;
+                containerHeight = gameContainer.clientHeight;
+
+                // Update physics parameters based on new size
+                pegRadius = Math.min(containerWidth * 0.012, 6);
+                ballRadius = Math.min(containerWidth * 0.02, 10);
+                horizontalSpacing = containerWidth / (numCols + 1);
+                verticalSpacing = (containerHeight * 0.65) / numRows;
+                bucketWidth = containerWidth / numBuckets;
+                dividerWidth = Math.max(2, containerWidth * 0.005);
+                dividerHeight = bucketHeight * 1.2;
+
+                // Remove current ball if resizing mid-drop (simplest approach)
+                if(ball) removeBall(ball, true);
+                isBallInPlay = false;
+                dropButton.disabled = false;
+
+
+                // Recreate pegs and boundaries
+                createPegs();
+                createBoundaries();
+
+
+                 // Re-sync existing DOM elements just in case (though recreating is safer)
+                Composite.allBodies(world).forEach(body => {
+                    if (body.domElement) {
+                         syncDOM(body); // Might need adjustments if positions changed drastically
+                    }
+                });
+
+                 console.log("Resized and rebuilt scene");
+             }
+
+            // --- Initialization ---
+            createPegs();
+            createBoundaries();
+
+
+            // --- Physics Update Loop (Render Loop) ---
+            Events.on(runner, 'tick', () => {
+                const bodies = Composite.allBodies(world);
+                for (let i = 0; i < bodies.length; i++) {
+                    syncDOM(bodies[i]); // Sync all bodies with their DOM elements
+                }
+
+                // --- Bucket Detection ---
+                if (ball && isBallInPlay && ball.position.y > bucketTriggerY && ball.velocity.y > 0.1) {
+                    const ballX = ball.position.x;
+
+                     // Check if the ball is actually settling (low velocity) near the bottom
+                    const speed = Vector.magnitude(ball.velocity);
+                    const isSettling = speed < 0.5 && ball.position.y > (containerHeight - bucketHeight * 0.8);
+
+
+                    if (ballX >= 0 && ballX <= containerWidth) { // Ensure ball is within horizontal bounds
+                         const bucketIndex = Math.floor(ballX / bucketWidth);
+
+                         if (bucketIndex >= 0 && bucketIndex < numBuckets) {
+                            let scoreValue = bucketValues[bucketIndex];
+                            let multiplier = 1;
+
+                            if (bucketIndex === centerBucketIndex) {
+                                multiplier = 2;
+                            }
+                            const finalScore = scoreValue * multiplier;
+
+                            console.log(`Ball landed in bucket ${bucketIndex}, Value: ${scoreValue}, Multiplier: ${multiplier}`);
+                            updateScore(finalScore);
+                            removeBall(ball); // This also sets isBallInPlay = false and enables button
+
+                            // Fade out win display after a delay
+                             setTimeout(() => lastWinDisplay.classList.add('fade-out'), 2000);
+                         } else if(isSettling) {
+                             // Ball is settling outside defined buckets but within bounds - treat as loss or stuck
+                             console.warn("Ball settled outside bucket areas.");
+                             lastWinDisplay.textContent = "Chip Lost";
+                             lastWinDisplay.classList.remove('fade-out');
+                             removeBall(ball);
+                         }
+
+                    } else if (isSettling) {
+                         // Ball is settling out of horizontal bounds
+                         console.warn("Ball settled out of bounds.");
+                         lastWinDisplay.textContent = "Chip Lost";
+                         lastWinDisplay.classList.remove('fade-out');
+                         removeBall(ball);
+                    }
+                }
+                // Failsafe: if ball somehow falls completely out of the bottom
+                else if (ball && isBallInPlay && ball.position.y > containerHeight + ballRadius * 2) {
+                     console.warn("Ball fell out of the bottom.");
+                     lastWinDisplay.textContent = "Chip Lost";
+                     lastWinDisplay.classList.remove('fade-out');
+                     removeBall(ball);
+                }
+            });
+
+            // --- Collision Handling ---
+            Events.on(engine, 'collisionStart', (event) => {
+                const pairs = event.pairs;
+
+                for (let i = 0; i < pairs.length; i++) {
+                    const pair = pairs[i];
+                    let pegBody = null;
+
+                    if (pair.bodyA.label === 'ball' && pair.bodyB.label === 'peg') {
+                        pegBody = pair.bodyB;
+                    } else if (pair.bodyB.label === 'ball' && pair.bodyA.label === 'peg') {
+                        pegBody = pair.bodyA;
+                    }
+
+                    if (pegBody) {
+                        handlePegHit(pegBody);
+                        // Optional: Wake the ball up if it was sleeping
+                        if (pair.bodyA.label === 'ball') Body.setSleeping(pair.bodyA, false);
+                        else Body.setSleeping(pair.bodyB, false);
+                    }
+                }
+            });
+
+            // --- Event Listeners ---
+            dropButton.addEventListener('click', dropBall);
+            window.addEventListener('resize', handleResize); // Add resize listener
+
+            // --- Start the Engine ---
+            Runner.run(runner, engine);
+            console.log("Cyberpunk Plinko Initialized");
+            console.log(`Container: ${containerWidth}x${containerHeight}`);
+        });
+    </script>
+
+</body>
+</html>
