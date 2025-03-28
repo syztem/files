@@ -370,8 +370,10 @@
             let containerHeight = gameContainer.clientHeight;
 
             const engine = Engine.create({
-                gravity: { x: 0, y: 0.6 },
-                enableSleeping: true
+                gravity: { x: 0, y: 0.7 },
+                enableSleeping: true,
+                positionIterations: 8,
+                velocityIterations: 6
             });
             const world = engine.world;
             const runner = Runner.create();
@@ -382,6 +384,11 @@
             let activeBallCount = 0;
             let scorePopupTimeout = null;
             let nextBallColorIndex = 0;
+
+            const STUCK_SPEED_THRESHOLD = 0.07;
+            const ANGULAR_VELOCITY_THRESHOLD = 0.04;
+            const STUCK_TIME_MS = 700;
+            const STUCK_NUDGE_FORCE = 0.00035;
 
             const createShadow = (colorVar) => `0 0 10px var(${colorVar}), 0 0 20px var(${colorVar}), inset 0 0 5px rgba(255,255,255,0.65)`;
 
@@ -439,18 +446,22 @@
 
             function playTone(frequency, type = 'triangle', duration = 0.1, volume = 0.3, delay = 0) {
                 if (!audioContext || audioContext.state === 'suspended') return;
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                const now = audioContext.currentTime + delay;
-                oscillator.type = type;
-                oscillator.frequency.setValueAtTime(frequency, now);
-                gainNode.gain.setValueAtTime(0, now);
-                gainNode.gain.linearRampToValueAtTime(volume, now + 0.01);
-                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                oscillator.start(now);
-                oscillator.stop(now + duration);
+                try {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    const now = audioContext.currentTime + delay;
+                    oscillator.type = type;
+                    oscillator.frequency.setValueAtTime(frequency, now);
+                    gainNode.gain.setValueAtTime(0, now);
+                    gainNode.gain.linearRampToValueAtTime(volume, now + 0.01);
+                    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    oscillator.start(now);
+                    oscillator.stop(now + duration);
+                } catch (e) {
+                    console.error("Error playing tone:", e);
+                }
             }
 
             function playDropSound() { playTone(150, 'sine', 0.3, 0.4); }
@@ -496,7 +507,7 @@
             }
 
             function syncDOM(body) {
-                if (!body.domElement) return;
+                if (!body.domElement || !body.domElement.parentNode) return;
                 const pos = body.position;
                 const angle = body.angle;
                 const element = body.domElement;
@@ -534,8 +545,8 @@
                         const y = rowOffsetY;
                         const peg = Bodies.circle(x, y, pegRadius, {
                             isStatic: true, label: 'peg',
-                            friction: 0.05,
-                            restitution: 0.4,
+                            friction: 0.015,
+                            restitution: 0.55,
                             render: { visible: false }
                         });
                         pegs.push(peg);
@@ -557,7 +568,8 @@
                      const divider = Bodies.rectangle(x, y, dividerWidth, dividerHeight, {
                          isStatic: true,
                          label: isEdge ? 'wall' : 'divider',
-                         friction: 0.3,
+                         friction: 0.1,
+                         restitution: 0.1,
                          render: { visible: false }
                      });
                      staticBodies.push(divider);
@@ -604,12 +616,14 @@
              }
 
             function removeBall(ballBody, immediate = false) {
-                if (!ballBody) return;
+                if (!ballBody || ballBody.isRemoving) return;
+                ballBody.isRemoving = true;
+
                 clearTimeout(ballBody.removalTimeout);
                 const index = activeBalls.findIndex(b => b.id === ballBody.id);
                 if (index > -1) {
                     activeBalls.splice(index, 1);
-                    activeBallCount--;
+                    activeBallCount = activeBalls.length;
                 } else {
                      activeBallCount = activeBalls.length;
                 }
@@ -617,15 +631,17 @@
                 if (ballBody.domElement) {
                     if (immediate) {
                          if (ballBody.domElement.parentNode) ballBody.domElement.remove();
+                         ballBody.domElement = null;
                     } else {
                         ballBody.domElement.classList.add('removing');
                         setTimeout(() => {
                              if (ballBody.domElement && ballBody.domElement.parentNode) ballBody.domElement.remove();
+                             ballBody.domElement = null;
                         }, 300);
                     }
                 }
 
-                const removalDelay = immediate ? 0 : 300;
+                const removalDelay = immediate ? 0 : 350;
                  setTimeout(() => {
                      if (world.bodies.includes(ballBody)) {
                          Composite.remove(world, ballBody);
@@ -636,14 +652,17 @@
             }
 
             function showScorePopup(amount, x, y) {
+                 if (!scorePopup) return;
                  scorePopup.textContent = typeof amount === 'number' ? `+${amount.toLocaleString()}!` : `${amount}!`;
                  scorePopup.style.left = `${x}px`;
                  scorePopup.style.top = `${y - 30}px`;
                  scorePopup.classList.add('show');
                  clearTimeout(scorePopupTimeout);
                  scorePopupTimeout = setTimeout(() => {
-                     scorePopup.classList.remove('show');
-                     scorePopup.textContent = '';
+                    if (scorePopup) {
+                        scorePopup.classList.remove('show');
+                        scorePopup.textContent = '';
+                    }
                  }, 1500);
             }
 
@@ -664,15 +683,17 @@
 
                  const newBall = Bodies.circle(startX, startY, ballRadius, {
                      label: 'ball',
-                     friction: 0.01,
-                     frictionAir: 0.005,
-                     restitution: 0.35,
+                     friction: 0.004,
+                     frictionAir: 0.003,
+                     restitution: 0.5,
                      density: 0.0018,
-                     sleepThreshold: 80,
+                     sleepThreshold: 100,
                      render: { visible: false },
                      ballColor: colorInfo,
                      removalTimeout: null,
-                     trailCounter: 0
+                     trailCounter: 0,
+                     lastSlowTime: null,
+                     isRemoving: false
                  });
 
                  createDOMElement(newBall);
@@ -680,11 +701,12 @@
                  activeBalls.push(newBall);
 
                  newBall.removalTimeout = setTimeout(() => {
-                     if (activeBalls.includes(newBall)) {
+                     if (activeBalls.includes(newBall) && !newBall.isRemoving) {
+                         console.warn(`Ball ${newBall.id} removed due to timeout.`);
                          showScorePopup("Lost", containerWidth / 2, containerHeight * 0.8);
                          removeBall(newBall);
                      }
-                 }, 25000);
+                 }, 15000);
 
                 return newBall;
             }
@@ -708,18 +730,20 @@
                         particle.style.animation = 'burst-out 0.5s ease-out forwards';
                         particle.style.width = '6px';
                         particle.style.height = '6px';
-                        gameContainer.appendChild(particle);
-                        setTimeout(() => particle.remove(), 500);
+                        if (gameContainer && gameContainer.parentNode) {
+                           gameContainer.appendChild(particle);
+                           setTimeout(() => particle.remove(), 500);
+                        }
                     }
                 }
             }
 
              function triggerEndParticles(x, y, value) {
-                 const baseCount = 25;
+                 const baseCount = 20;
                  const valueFactor = Math.log10(value / 1000 + 1);
-                 const count = baseCount + Math.floor(valueFactor * 12);
-                 const spread = 180 + valueFactor * 40;
-                 const upwardVelocity = -220 - valueFactor * 80;
+                 const count = baseCount + Math.floor(valueFactor * 10);
+                 const spread = 180 + valueFactor * 35;
+                 const upwardVelocity = -220 - valueFactor * 70;
                  const duration = 0.9 + valueFactor * 0.3;
                  const primaryColor = value > 40000 ? 'var(--primary-neon)' : 'var(--tertiary-neon)';
                  const secondaryColor = 'var(--secondary-neon)';
@@ -727,6 +751,7 @@
                  playBucketSound(value);
 
                  setTimeout(() => {
+                     if (!gameWrapper || !gameWrapper.parentNode) return;
                      for (let i = 0; i < count; i++) {
                          const particle = document.createElement('div');
                          particle.classList.add('particle');
@@ -786,57 +811,99 @@
             createBoundaries();
             updateButtonStates();
 
-            Events.on(runner, 'tick', () => {
-                activeBalls.forEach(ballBody => {
-                    syncDOM(ballBody);
+            Events.on(runner, 'tick', (event) => {
+                const currentTime = event.timestamp;
 
-                    ballBody.trailCounter = (ballBody.trailCounter || 0) + 1;
-                     if (ballBody.trailCounter >= 2) {
-                         ballBody.trailCounter = 0;
-                         const particle = document.createElement('div');
-                         particle.classList.add('trail-particle');
-                         particle.style.left = `${ballBody.position.x - 2.5}px`;
-                         particle.style.top = `${ballBody.position.y - 2.5}px`;
-                         particle.style.background = ballBody.ballColor.color;
-                         gameContainer.appendChild(particle);
-                         setTimeout(() => particle.remove(), 400);
-                     }
-
-                    if (ballBody.position.y > bucketTriggerY && !ballBody.isSleeping) {
-                        const ballX = ballBody.position.x;
-                        const speed = Vector.magnitude(ballBody.velocity);
-                        const isSettling = speed < 0.1 && Math.abs(ballBody.velocity.y) < 0.05 && ballBody.position.y > (containerHeight - bucketHeight * 0.8);
-
-                        if (isSettling) {
-                            if (ballX >= 0 && ballX <= containerWidth) {
-                                const bucketIndex = Math.floor(ballX / bucketWidth);
-                                if (bucketIndex >= 0 && bucketIndex < numBuckets) {
-                                    const scoreValue = bucketValues[bucketIndex];
-                                    const bucketCenterX = (bucketIndex + 0.5) * bucketWidth;
-                                    const bucketEffectY = containerHeight - bucketHeight * 0.3;
-
-                                    triggerEndParticles(bucketCenterX, bucketEffectY, scoreValue);
-                                    currentScore += scoreValue;
-                                    scoreDisplay.textContent = `Score: ${currentScore.toLocaleString()}`;
-                                    scoreDisplay.classList.add('score-update');
-                                    setTimeout(() => scoreDisplay.classList.remove('score-update'), 300);
-                                    showScorePopup(scoreValue, bucketCenterX, bucketEffectY);
-                                    removeBall(ballBody);
-                                } else {
-                                     showScorePopup("Lost", containerWidth / 2, containerHeight * 0.8);
-                                     removeBall(ballBody);
-                                }
-                            } else {
-                                showScorePopup("Lost", containerWidth / 2, containerHeight * 0.8);
-                                removeBall(ballBody);
-                            }
-                        }
-                    } else if (ballBody.position.y > containerHeight + ballRadius * 5) {
-                         showScorePopup("Lost", containerWidth / 2, containerHeight * 0.8);
-                         removeBall(ballBody);
+                for (let i = activeBalls.length - 1; i >= 0; i--) {
+                    const ballBody = activeBalls[i];
+                    if (!ballBody || ballBody.isRemoving || !world.bodies.includes(ballBody)) {
+                        continue;
                     }
-                });
 
+                    try {
+                        syncDOM(ballBody);
+
+                        ballBody.trailCounter = (ballBody.trailCounter || 0) + 1;
+                         if (ballBody.trailCounter >= 2) {
+                             ballBody.trailCounter = 0;
+                             const particle = document.createElement('div');
+                             particle.classList.add('trail-particle');
+                             particle.style.left = `${ballBody.position.x - 2.5}px`;
+                             particle.style.top = `${ballBody.position.y - 2.5}px`;
+                             particle.style.background = ballBody.ballColor.color;
+                             if (gameContainer && gameContainer.parentNode) {
+                                gameContainer.appendChild(particle);
+                                setTimeout(() => particle.remove(), 400);
+                             }
+                         }
+
+                        if (ballBody.position.y > bucketTriggerY && !ballBody.isSleeping) {
+                            const ballX = ballBody.position.x;
+                            const speed = Vector.magnitude(ballBody.velocity);
+                            const isSettling = speed < 0.1 && Math.abs(ballBody.velocity.y) < 0.05 && ballBody.position.y > (containerHeight - bucketHeight * 0.8);
+
+                            if (isSettling) {
+                                if (ballX >= 0 && ballX <= containerWidth) {
+                                    const bucketIndex = Math.floor(ballX / bucketWidth);
+                                    if (bucketIndex >= 0 && bucketIndex < numBuckets) {
+                                        const scoreValue = bucketValues[bucketIndex];
+                                        const bucketCenterX = (bucketIndex + 0.5) * bucketWidth;
+                                        const bucketEffectY = containerHeight - bucketHeight * 0.3;
+
+                                        triggerEndParticles(bucketCenterX, bucketEffectY, scoreValue);
+                                        currentScore += scoreValue;
+                                        scoreDisplay.textContent = `Score: ${currentScore.toLocaleString()}`;
+                                        scoreDisplay.classList.add('score-update');
+                                        setTimeout(() => scoreDisplay.classList.remove('score-update'), 300);
+                                        showScorePopup(scoreValue, bucketCenterX, bucketEffectY);
+                                        removeBall(ballBody);
+                                    } else {
+                                         showScorePopup("Lost", containerWidth / 2, containerHeight * 0.8);
+                                         removeBall(ballBody);
+                                    }
+                                } else {
+                                    showScorePopup("Lost", containerWidth / 2, containerHeight * 0.8);
+                                    removeBall(ballBody);
+                                }
+                                ballBody.lastSlowTime = null;
+                            }
+                        } else if (ballBody.position.y > containerHeight + ballRadius * 5) {
+                             showScorePopup("Lost", containerWidth / 2, containerHeight * 0.8);
+                             removeBall(ballBody);
+                             ballBody.lastSlowTime = null;
+                        } else {
+                             const speed = Vector.magnitude(ballBody.velocity);
+                             const angularSpeed = Math.abs(ballBody.angularVelocity);
+                             const isStuckCandidate = (speed < STUCK_SPEED_THRESHOLD && angularSpeed < ANGULAR_VELOCITY_THRESHOLD && ballBody.position.y < bucketTriggerY);
+                             const isSleepingAboveBuckets = (ballBody.isSleeping && ballBody.position.y < bucketTriggerY);
+
+                             if (isStuckCandidate || isSleepingAboveBuckets) {
+                                if (ballBody.lastSlowTime === null) {
+                                    ballBody.lastSlowTime = currentTime;
+                                } else {
+                                    if (currentTime - ballBody.lastSlowTime > STUCK_TIME_MS) {
+                                        console.log(`Nudging potentially stuck/sleeping ball ${ballBody.id}`);
+                                        Body.setSleeping(ballBody, false);
+
+                                        const nudgeForceMagnitude = STUCK_NUDGE_FORCE * ballBody.mass;
+                                        const nudge = {
+                                            x: (Math.random() - 0.5) * 0.5 * nudgeForceMagnitude,
+                                            y: (1.0 + Math.random() * 0.5) * nudgeForceMagnitude
+                                        };
+
+                                        Body.applyForce(ballBody, ballBody.position, nudge);
+                                        ballBody.lastSlowTime = null;
+                                    }
+                                }
+                             } else {
+                                 ballBody.lastSlowTime = null;
+                             }
+                        }
+                    } catch (e) {
+                         console.error("Error processing ball in tick:", ballBody?.id, e);
+                         removeBall(ballBody, true); // Remove problematic ball immediately
+                    }
+                }
             });
 
             Events.on(engine, 'collisionStart', (event) => {
@@ -844,20 +911,37 @@
                 for (let i = 0; i < pairs.length; i++) {
                     const pair = pairs[i];
                     let pegBody = null;
-                    let ballBody = null;
+                    let ballBodyA = null;
+                    let ballBodyB = null;
 
-                    if (pair.bodyA.label === 'ball' && pair.bodyB.label === 'peg') {
-                        ballBody = pair.bodyA;
-                        pegBody = pair.bodyB;
-                    } else if (pair.bodyB.label === 'ball' && pair.bodyA.label === 'peg') {
-                        ballBody = pair.bodyB;
-                        pegBody = pair.bodyA;
-                    }
+                    if (pair.bodyA.label === 'ball') ballBodyA = pair.bodyA;
+                    if (pair.bodyB.label === 'ball') ballBodyB = pair.bodyB;
+                    if (pair.bodyA.label === 'peg') pegBody = pair.bodyA;
+                    if (pair.bodyB.label === 'peg') pegBody = pair.bodyB;
 
-                    if (pegBody && ballBody && activeBalls.includes(ballBody)) {
+
+                    if (pegBody && ballBodyA && activeBalls.includes(ballBodyA)) {
                         handlePegHit(pegBody);
-                        if (ballBody.isSleeping) Body.setSleeping(ballBody, false);
+                        ballBodyA.lastSlowTime = null;
+                        if (ballBodyA.isSleeping) Body.setSleeping(ballBodyA, false);
                     }
+                     if (pegBody && ballBodyB && activeBalls.includes(ballBodyB)) {
+                        handlePegHit(pegBody);
+                        ballBodyB.lastSlowTime = null;
+                        if (ballBodyB.isSleeping) Body.setSleeping(ballBodyB, false);
+                    }
+
+
+                     if (ballBodyA && ballBodyB) {
+                         if(activeBalls.includes(ballBodyA)) {
+                            ballBodyA.lastSlowTime = null;
+                            if (ballBodyA.isSleeping) Body.setSleeping(ballBodyA, false);
+                         }
+                         if(activeBalls.includes(ballBodyB)) {
+                             ballBodyB.lastSlowTime = null;
+                            if (ballBodyB.isSleeping) Body.setSleeping(ballBodyB, false);
+                         }
+                     }
                 }
             });
 
@@ -872,13 +956,15 @@
                  initAudio();
                  let droppedCount = 0;
                  const maxToDrop = Math.min(5, maxBalls - activeBallCount);
+                 if (maxToDrop <= 0) return;
+
                  for (let i = 0; i < maxToDrop; i++) {
-                      if(dropSingleBall()) {
-                          droppedCount++;
-                      }
-                 }
-                 if (droppedCount > 0) {
-                     playDropSound();
+                     setTimeout(() => {
+                         if(dropSingleBall()) {
+                             if (droppedCount === 0) playDropSound(); // Play sound only for the first of the batch
+                             droppedCount++;
+                         }
+                     }, i * 100); // Stagger drops slightly
                  }
             });
 
@@ -886,6 +972,36 @@
 
             Runner.run(runner, engine);
             handleResize();
+
+            // Add a failsafe mechanism: Periodically check for balls that might be truly stuck
+            // despite the nudge logic (e.g., stuck between multiple elements).
+            setInterval(() => {
+                const currentTime = engine.timing.timestamp;
+                activeBalls.forEach(ballBody => {
+                    if (ballBody.isRemoving || !world.bodies.includes(ballBody)) return;
+
+                    // If a ball hasn't moved significantly for a longer period, consider it truly stuck
+                    const longStuckTime = STUCK_TIME_MS * 5;
+                    const speed = Vector.magnitude(ballBody.velocity);
+                    const angularSpeed = Math.abs(ballBody.angularVelocity);
+
+                    if (ballBody.position.y < bucketTriggerY && (speed < 0.01 && angularSpeed < 0.01)) {
+                         if (ballBody.lastVerySlowTime === null || ballBody.lastVerySlowTime === undefined) {
+                             ballBody.lastVerySlowTime = currentTime;
+                         } else {
+                              if (currentTime - ballBody.lastVerySlowTime > longStuckTime) {
+                                   console.warn(`Failsafe: Removing potentially permanently stuck ball ${ballBody.id}`);
+                                   showScorePopup("Lost", ballBody.position.x, ballBody.position.y - 20);
+                                   removeBall(ballBody, true); // Remove immediately
+                              }
+                         }
+                    } else {
+                         ballBody.lastVerySlowTime = null;
+                    }
+                });
+            }, 2000); // Check every 2 seconds
+
+
         });
     </script>
 </body>
