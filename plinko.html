@@ -901,7 +901,7 @@
                         }
                     } catch (e) {
                          console.error("Error processing ball in tick:", ballBody?.id, e);
-                         removeBall(ballBody, true); // Remove problematic ball immediately
+                         removeBall(ballBody, true); 
                     }
                 }
             });
@@ -961,30 +961,24 @@
                  for (let i = 0; i < maxToDrop; i++) {
                      setTimeout(() => {
                          if(dropSingleBall()) {
-                             if (droppedCount === 0) playDropSound(); // Play sound only for the first of the batch
+                             if (droppedCount === 0) playDropSound();
                              droppedCount++;
                          }
-                     }, i * 100); // Stagger drops slightly
+                     }, i * 100); 
                  }
             });
 
             window.addEventListener('resize', handleResize);
 
             Runner.run(runner, engine);
-            handleResize();
-
-            // Add a failsafe mechanism: Periodically check for balls that might be truly stuck
-            // despite the nudge logic (e.g., stuck between multiple elements).
+            handleResize(); 
             setInterval(() => {
                 const currentTime = engine.timing.timestamp;
                 activeBalls.forEach(ballBody => {
                     if (ballBody.isRemoving || !world.bodies.includes(ballBody)) return;
-
-                    // If a ball hasn't moved significantly for a longer period, consider it truly stuck
                     const longStuckTime = STUCK_TIME_MS * 5;
                     const speed = Vector.magnitude(ballBody.velocity);
                     const angularSpeed = Math.abs(ballBody.angularVelocity);
-
                     if (ballBody.position.y < bucketTriggerY && (speed < 0.01 && angularSpeed < 0.01)) {
                          if (ballBody.lastVerySlowTime === null || ballBody.lastVerySlowTime === undefined) {
                              ballBody.lastVerySlowTime = currentTime;
@@ -992,14 +986,14 @@
                               if (currentTime - ballBody.lastVerySlowTime > longStuckTime) {
                                    console.warn(`Failsafe: Removing potentially permanently stuck ball ${ballBody.id}`);
                                    showScorePopup("Lost", ballBody.position.x, ballBody.position.y - 20);
-                                   removeBall(ballBody, true); // Remove immediately
+                                   removeBall(ballBody, true); 
                               }
                          }
                     } else {
                          ballBody.lastVerySlowTime = null;
                     }
                 });
-            }, 2000); // Check every 2 seconds
+            }, 2000); 
 
 
         });
