@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plinko Extreme++ Ultra</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;700&display=swap');
+
+        :root {
+            --background-color: #1c082a;
+            --background-glow-1: rgba(74, 20, 140, 0.4);
+            --background-glow-2: rgba(171, 71, 188, 0.3);
+            --primary-neon: #ff00ff; /* Magenta */
+            --secondary-neon: #00ffff; /* Cyan */
+            --tertiary-neon: #f7ff00; /* Yellow */
+            --quaternary-neon: #39ff14; /* Lime Green */
+            --quinary-neon: #ff8000; /* Orange */
+            /* New ball colors defined in JS, but base neon colors used elsewhere */
+            --peg-color: #4a148c;
+            --peg-glow: #e040fb;
+            --peg-hit-glow: #ffffff;
+            --divider-color: var(--primary-neon);
+            --bucket-text-color: var(--quaternary-neon);
+            --button-bg: var(--primary-neon);
+            --button-text: #1a0a2a;
+            --button-multi-bg: var(--secondary-neon); /* Cyan for multi button */
+            --button-multi-hover: #00e0e0;
+            --score-color: var(--tertiary-neon);
+            --particle-color: var(--primary-neon);
+            --score-popup-color: var(--tertiary-neon);
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--primary-neon);
+            font-family: 'Rajdhani', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding-top: 15px; /* Reduced padding */
+            overflow: hidden;
+            text-shadow: 0 0 7px var(--primary-neon);
+            position: relative;
+        }
+
+        body::before, body::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        body::before {
+            background:
+                radial-gradient(circle at 15% 25%, var(--background-glow-1) 0%, transparent 55%),
+                radial-gradient(circle at 85% 75%, var(--background-glow-2) 0%, transparent 55%);
+            animation: backgroundGlow 25s ease-in-out infinite alternate;
+        }
+
+        body::after {
+             background:
+                url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><path d="M0 0 L40 0 M0 0 L0 40" stroke="%23ff00ff" stroke-width="0.3" opacity="0.08" /></svg>'),
+                linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px);
+             background-size: 20px 20px, 5px 5px, 5px 5px;
+             animation: backgroundSubtleMove 40s linear infinite;
+        }
+
+        @keyframes backgroundGlow {
+            0% { opacity: 0.7; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.1); }
+        }
+
+         @keyframes backgroundSubtleMove {
+            0% { background-position: 0 0, 0 0, 0 0; }
+            100% { background-position: 80px 80px, 5px 5px, 5px 5px; }
+        }
+
+        #ui-container {
+            display: flex;
+            /* flex-direction: column; */ /* Side by side buttons now */
+            justify-content: center; /* Center buttons */
+            align-items: center;
+            margin-bottom: 8px; /* Reduced margin */
+            position: relative;
+            z-index: 10;
+            gap: 15px; /* Space between buttons */
+        }
+
+        .drop-btn { /* Common button styles */
+            color: var(--button-text);
+            border: 2px solid; /* Border color set individually */
+            padding: 11px 28px; /* Slightly smaller padding */
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.3em; /* Slightly smaller font */
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-radius: 6px;
+            box-shadow: 0 0 10px, 0 0 20px, inset 0 0 5px rgba(255,255,255,0.4); /* Adjusted shadow */
+            transition: all 0.25s ease;
+        }
+
+        #drop-button {
+            background: linear-gradient(145deg, var(--primary-neon), #c000c0);
+            border-color: var(--primary-neon);
+            box-shadow: 0 0 10px var(--button-bg), 0 0 20px var(--button-bg), inset 0 0 5px rgba(255,255,255,0.4);
+        }
+
+         #drop-multi-button {
+            background: linear-gradient(145deg, var(--secondary-neon), #00b0b0); /* Cyan gradient */
+            border-color: var(--secondary-neon);
+            box-shadow: 0 0 10px var(--button-multi-bg), 0 0 20px var(--button-multi-bg), inset 0 0 5px rgba(255,255,255,0.4);
+        }
+
+
+        .drop-btn:hover:not(:disabled) {
+            box-shadow: 0 0 15px, 0 0 35px, 0 0 8px #fff, inset 0 0 7px rgba(255,255,255,0.6); /* Enhanced hover shadow */
+            transform: translateY(-2px) scale(1.02);
+            filter: brightness(1.15);
+        }
+        #drop-button:hover:not(:disabled) { box-shadow: 0 0 15px var(--button-bg), 0 0 35px var(--button-bg), 0 0 8px #fff, inset 0 0 7px rgba(255,255,255,0.6); }
+        #drop-multi-button:hover:not(:disabled) { box-shadow: 0 0 15px var(--button-multi-bg), 0 0 35px var(--button-multi-bg), 0 0 8px #fff, inset 0 0 7px rgba(255,255,255,0.6); }
+
+
+        .drop-btn:active:not(:disabled) {
+            transform: translateY(1px) scale(1.01);
+            box-shadow: 0 0 6px, 0 0 12px, inset 0 0 5px rgba(0,0,0,0.3); /* Adjusted active shadow */
+            filter: brightness(1.05);
+        }
+         #drop-button:active:not(:disabled) { box-shadow: 0 0 6px var(--button-bg), 0 0 12px var(--button-bg), inset 0 0 5px rgba(0,0,0,0.3); }
+         #drop-multi-button:active:not(:disabled) { box-shadow: 0 0 6px var(--button-multi-bg), 0 0 12px var(--button-multi-bg), inset 0 0 5px rgba(0,0,0,0.3); }
+
+
+        .drop-btn:disabled {
+            background: #444;
+            border-color: #666;
+            color: #999;
+            cursor: not-allowed;
+            box-shadow: none;
+            filter: brightness(0.7);
+        }
+
+        #score-display {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.6em; /* Slightly smaller */
+            color: var(--score-color);
+            text-shadow: 0 0 10px var(--score-color), 0 0 20px var(--score-color);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), text-shadow 0.3s ease;
+             margin-bottom: 5px; /* Reduced margin */
+        }
+
+        #score-display.score-update {
+            transform: scale(1.15);
+            text-shadow: 0 0 15px var(--score-color), 0 0 30px var(--score-color), 0 0 8px #fff;
+        }
+
+        #game-wrapper {
+             position: relative;
+             width: 96vw; /* Slightly Wider */
+             max-width: 1200px; /* Increased max width */
+             height: calc(90vh - 100px); /* Taller - Adjust based on button/score height */
+             max-height: 1000px; /* Increased max height */
+             overflow: visible;
+             margin-top: 5px;
+        }
+
+        #game-container {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, rgba(42, 10, 58, 0.8) 0%, rgba(42, 10, 58, 0.95) 70%, var(--background-color) 100%);
+            border: 3px solid var(--primary-neon);
+            border-radius: 10px;
+            box-shadow: 0 0 25px var(--primary-neon), inset 0 0 18px rgba(255, 0, 255, 0.65);
+            overflow: hidden;
+        }
+
+        #score-popup {
+            position: absolute;
+            z-index: 15;
+            pointer-events: none;
+            opacity: 0;
+            font-family: 'Orbitron', sans-serif;
+            color: var(--score-popup-color);
+            text-align: center;
+            font-size: clamp(2em, 5vw, 3.2em); /* Slightly smaller max */
+            font-weight: 700;
+            text-shadow: 0 0 10px var(--score-popup-color), 0 0 20px var(--score-popup-color), 0 0 4px #fff;
+            transform: translate(-50%, -50%) scale(0.5);
+        }
+
+        #score-popup.show {
+            animation: scorePopupAnimation 1.5s ease-out forwards;
+        }
+
+        @keyframes scorePopupAnimation {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(0.7); }
+            25% { transform: translate(-50%, -65%) scale(1.1); }
+             50% { transform: translate(-50%, -70%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -150%) scale(0.8); }
+        }
+
+        .physics-object {
+            position: absolute;
+            box-sizing: border-box;
+            transform-origin: center center;
+        }
+
+        .ball {
+            border-radius: 50%;
+            z-index: 5;
+            transition: opacity 0.3s ease-out;
+        }
+
+        .ball.removing {
+            opacity: 0;
+        }
+
+        .peg {
+            background: radial-gradient(circle, var(--peg-glow), var(--peg-color));
+            border: 1px solid var(--peg-glow);
+            border-radius: 50%;
+            box-shadow: 0 0 7px var(--peg-glow); /* Slightly smaller glow */
+            transition: box-shadow 0.1s ease-out, background 0.1s ease-out, transform 0.1s ease-out;
+            z-index: 1;
+        }
+
+        .peg-hit {
+            background: radial-gradient(circle, var(--peg-hit-glow), var(--secondary-neon));
+            box-shadow: 0 0 12px var(--peg-hit-glow), 0 0 25px var(--secondary-neon);
+            transform: scale(1.2); /* Slightly smaller hit scale */
+        }
+
+        .divider {
+            background-color: var(--divider-color);
+            box-shadow: 0 0 7px var(--divider-color), 0 0 12px var(--divider-color);
+            border-radius: 2px;
+            z-index: 1;
+        }
+
+        .bucket-label {
+            position: absolute;
+            bottom: 5px;
+            text-align: center;
+            font-size: clamp(0.6rem, 1.6vw, 0.95rem); /* Adjusted for potentially more buckets/width */
+            font-weight: 700;
+            color: var(--bucket-text-color);
+            text-shadow: 0 0 6px var(--bucket-text-color), 0 0 10px rgba(57, 255, 20, 0.7);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 8px; /* Slightly smaller */
+            height: 8px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 16;
+            animation: burst 0.8s ease-out forwards;
+        }
+
+        @keyframes burst {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx, 0), var(--ty, -100px)) scale(0); opacity: 0; }
+        }
+
+        .trail-particle {
+            position: absolute;
+            width: 4px; /* Slightly smaller */
+            height: 4px;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: fade-out 0.4s ease-out forwards;
+            z-index: 4;
+            opacity: 0.8;
+        }
+
+        @keyframes fade-out {
+            0% { opacity: 0.8; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.3); }
+        }
+
+        @keyframes burst-out {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+
+        /* Adjusted breakpoints */
+        @media (max-width: 800px) {
+            #game-wrapper { height: calc(90vh - 90px); max-width: 96vw; }
+            #score-display { font-size: 2.1em; }
+            .drop-btn { font-size: 1.1em; padding: 10px 24px; }
+            .particle { width: 6px; height: 6px; }
+            .trail-particle { width: 3px; height: 3px; }
+             #score-popup { font-size: clamp(1.6em, 4.5vw, 2.8em); }
+             .bucket-label { font-size: clamp(0.55rem, 1.4vw, 0.85rem); }
+        }
+         @media (max-height: 750px) { /* Adjusted height breakpoint */
+              #game-wrapper { height: calc(88vh - 85px); }
+         }
+
+    </style>
+</head>
+<body>
+    <div id="ui-container">
+        <button id="drop-button" class="drop-btn">Drop Chip</button>
+        <button id="drop-multi-button" class="drop-btn">Drop 5</button> <!-- New Button -->
+    </div>
+    <div id="score-display">Score: 0</div>
+
+
+    <div id="game-wrapper">
+        <div id="game-container"></div>
+        <div id="score-popup"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const { Engine, Runner, Bodies, Composite, Events, Body, Vector } = Matter;
+
+            const gameWrapper = document.getElementById('game-wrapper');
+            const gameContainer = document.getElementById('game-container');
+            const dropButton = document.getElementById('drop-button');
+            const dropMultiButton = document.getElementById('drop-multi-button'); // Get new button
+            const scoreDisplay = document.getElementById('score-display');
+            const scorePopup = document.getElementById('score-popup');
+
+            let containerWidth = gameContainer.clientWidth;
+            let containerHeight = gameContainer.clientHeight;
+
+            const engine = Engine.create({
+                gravity: { x: 0, y: 0.6 },
+                enableSleeping: true,
+                positionIterations: 8, // Increased iterations to potentially help with stacking/sticking
+                velocityIterations: 6 // Default is 4, slight increase might help too
+            });
+            const world = engine.world;
+            const runner = Runner.create();
+
+            let currentScore = 0;
+            const MAX_BALLS = 10; // Increased ball count
+            const balls = new Set();
+
+            // --- Updated Ball Colors (10 total) ---
+            const ballColors = [
+                '#f7ff00', // Yellow (var(--tertiary-neon))
+                '#00ffff', // Cyan (var(--secondary-neon))
+                '#ff00ff', // Magenta (var(--primary-neon))
+                '#39ff14', // Lime Green (var(--quaternary-neon))
+                '#ff8000', // Orange (var(--quinary-neon))
+                '#FF1493', // DeepPink
+                '#4169E1', // RoyalBlue
+                '#9400D3', // DarkViolet
+                '#20B2AA', // LightSeaGreen
+                '#F5F5F5'  // WhiteSmoke (will need strong shadow to pop)
+            ];
+            let ballColorIndex = 0;
+            // --------------------------------------
+            let scorePopupTimeout = null;
+
+            // --- Adjust Grid/Pegs for new size ---
+            let pegRadius = Math.min(containerWidth * 0.012, 5.5); // Slightly smaller pegs
+            let ballRadius = Math.min(containerWidth * 0.016, 9.5); // Slightly smaller balls
+            const numRows = 14; // More rows for taller board
+            const numCols = 17; // More columns for wider board
+            let horizontalSpacing = containerWidth / (numCols + 1);
+            let verticalSpacing = (containerHeight * 0.70) / numRows; // Use more vertical space
+            const startYOffset = containerHeight * 0.08; // Start pegs slightly higher
+
+            // --- Updated Bucket Values (No Decimals) ---
+            const bucketValues = [1000, 2000, 5000, 10000, 25000, 50000, 100000, 50000, 25000, 10000, 5000, 2000, 1000];
+            const numBuckets = bucketValues.length;
+            // --------------------------------------------
+            let bucketWidth = containerWidth / numBuckets;
+            const bucketHeight = containerHeight * 0.09; // Slightly smaller bucket height proportion
+            let dividerHeight = bucketHeight * 1.2;
+            let dividerWidth = Math.max(2.5, containerWidth * 0.004); // Thinner dividers
+            const bucketBaseY = containerHeight - bucketHeight / 2;
+            const bucketTriggerY = containerHeight - bucketHeight * 1.1;
+
+            const pegMap = new Map();
+            let audioContext;
+
+            function initAudio() {
+                 if (!audioContext) {
+                    try {
+                         audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                         if (audioContext.state === 'suspended') {
+                             const resume = async () => {
+                                 await audioContext.resume();
+                                 document.body.removeEventListener('click', resume);
+                                 document.body.removeEventListener('touchend', resume);
+                             };
+                             document.body.addEventListener('click', resume);
+                             document.body.addEventListener('touchend', resume);
+                         }
+                    } catch (e) {
+                        console.error("Web Audio API is not supported in this browser");
+                    }
+                }
+            }
+
+             function playTone(frequency, type = 'triangle', duration = 0.1, volume = 0.3, delay = 0) {
+                if (!audioContext || audioContext.state === 'suspended') return;
+                if (audioContext.currentTime < (playTone.lastPlayTime || 0) + 0.015) {
+                     return;
+                }
+                playTone.lastPlayTime = audioContext.currentTime + delay;
+
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                const now = audioContext.currentTime + delay;
+
+                oscillator.type = type;
+                oscillator.frequency.setValueAtTime(frequency, now);
+
+                gainNode.gain.setValueAtTime(0, now);
+                gainNode.gain.linearRampToValueAtTime(volume, now + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.start(now);
+                oscillator.stop(now + duration);
+            }
+
+            function playDropSound() {
+                playTone(150, 'sine', 0.3, 0.35); // Slightly quieter drop
+            }
+
+            function playPegHitSound() {
+                 const randomPitch = 700 + Math.random() * 300; // Slightly higher pitch range
+                 playTone(randomPitch, 'triangle', 0.05, 0.12); // Shorter, quieter peg hits
+            }
+
+            function playBucketSound(value) {
+                 const minValue = 1000;
+                 const maxValue = 100000;
+                 const minFreq = 110;
+                 const maxFreq = 987;
+                 const ratio = (Math.log(value) - Math.log(minValue)) / (Math.log(maxValue) - Math.log(minValue));
+                 const freq = minFreq * Math.pow(maxFreq / minFreq, Math.max(0, Math.min(1, ratio)));
+                 const duration = 0.25 + ratio * 0.35;
+                 const volume = 0.3 + ratio * 0.4;
+                 const waveType = value < 5000 ? 'square' : 'triangle';
+
+                 playTone(freq, waveType, duration, volume);
+                 if (value >= 10000) {
+                     playTone(freq * 1.5, 'sine', duration * 0.7, volume * 0.5, duration * 0.08);
+                 }
+                 if (value === 100000) {
+                     playTone(freq * 0.5, 'sine', duration * 0.5, volume * 0.3, duration * 0.15);
+                 }
+            }
+
+
+            function createDOMElement(body) {
+                const div = document.createElement('div');
+                div.classList.add('physics-object');
+                if (body.label === 'ball') {
+                    div.classList.add('ball');
+                    div.style.width = `${ballRadius * 2}px`;
+                    div.style.height = `${ballRadius * 2}px`;
+                    const color = body.color || '#f7ff00'; // Default yellow
+                    const isWhite = color === '#F5F5F5';
+                    const gradientColor = isWhite ? '#dddddd' : color; // Use greyish for white gradient start
+                    div.style.background = `radial-gradient(circle, ${isWhite ? '#ffffff' : '#ffffffaa'}, ${gradientColor})`;
+                    // Stronger shadow for white ball to make it visible
+                    const shadowIntensity1 = isWhite ? '18px' : '10px';
+                    const shadowIntensity2 = isWhite ? '30px' : '20px';
+                    div.style.boxShadow = `0 0 ${shadowIntensity1} ${color}, 0 0 ${shadowIntensity2} ${color}, inset 0 0 4px rgba(255,255,255,0.5)`;
+                } else if (body.label === 'peg') {
+                    div.classList.add('peg');
+                    div.style.width = `${pegRadius * 2}px`;
+                    div.style.height = `${pegRadius * 2}px`;
+                    pegMap.set(body.id, div);
+                } else if (body.label === 'divider') {
+                    div.classList.add('divider');
+                } else if (body.label === 'wall') {
+                    div.style.backgroundColor = 'transparent';
+                }
+                gameContainer.appendChild(div);
+                body.domElement = div;
+                syncDOM(body);
+                return div;
+            }
+
+            function syncDOM(body) {
+                if (!body.domElement) return;
+                const pos = body.position;
+                const angle = body.angle;
+                const element = body.domElement;
+                let width, height;
+                // Get dimensions based on label - more robust
+                if (body.label === 'ball') { width = height = ballRadius * 2; }
+                else if (body.label === 'peg') { width = height = pegRadius * 2; }
+                else if (body.label === 'divider') {
+                     width = body.bounds.max.x - body.bounds.min.x;
+                     height = body.bounds.max.y - body.bounds.min.y;
+                }
+                 else if (body.label === 'wall') { // Only sync position if needed, size is static
+                     width = body.bounds.max.x - body.bounds.min.x;
+                     height = body.bounds.max.y - body.bounds.min.y;
+                 }
+                 else { return; } // Don't try to sync unknown elements
+
+                // Check for valid numbers before applying style
+                if (typeof width === 'number' && typeof height === 'number' && width > 0 && height > 0) {
+                   element.style.transform = `translate(${pos.x - width / 2}px, ${pos.y - height / 2}px) rotate(${angle}rad)`;
+                   // Set width/height for dividers if not already set (less critical now with resize handling)
+                   if ((body.label === 'divider' || body.label === 'wall') && (!element.style.width || !element.style.height)) {
+                       element.style.width = `${width}px`;
+                       element.style.height = `${height}px`;
+                   }
+                }
+            }
+
+
+            function createPegs() {
+                Composite.remove(world, world.bodies.filter(body => body.label === 'peg'), true);
+                pegMap.clear();
+                gameContainer.querySelectorAll('.peg').forEach(el => el.remove());
+                const pegs = [];
+
+                 // Check if spacing is too tight for balls
+                 if (horizontalSpacing <= ballRadius * 2) {
+                     console.warn(`Horizontal spacing (${horizontalSpacing.toFixed(1)}px) might be too tight for ball radius (${ballRadius.toFixed(1)}px). Balls may get stuck.`);
+                     // Could potentially reduce numCols here and recalculate, but let's try with current settings first.
+                 }
+                 if (verticalSpacing <= ballRadius * 2) {
+                      console.warn(`Vertical spacing (${verticalSpacing.toFixed(1)}px) might be too tight for ball radius (${ballRadius.toFixed(1)}px). Balls may get stuck.`);
+                 }
+
+
+                for (let row = 0; row < numRows; row++) {
+                    const colsInRow = numCols + (row % 2 === 0 ? 0 : -1);
+                    const rowOffsetY = startYOffset + row * verticalSpacing;
+                    const effectiveHorizontalSpacing = containerWidth / (colsInRow + 1);
+                    const rowOffsetX = effectiveHorizontalSpacing; // Start first peg one spacing unit in
+
+                    for (let col = 0; col < colsInRow; col++) {
+                        const x = rowOffsetX + col * effectiveHorizontalSpacing;
+                        const y = rowOffsetY;
+                        if (x > pegRadius && x < containerWidth - pegRadius) {
+                            const peg = Bodies.circle(x, y, pegRadius, {
+                                isStatic: true,
+                                label: 'peg',
+                                friction: 0.04, // Slightly lower friction
+                                restitution: 0.5, // Slightly higher restitution
+                                render: { visible: false }
+                            });
+                            pegs.push(peg);
+                            createDOMElement(peg);
+                        }
+                    }
+                }
+                Composite.add(world, pegs);
+            }
+
+            function createBoundaries() {
+                Composite.remove(world, world.bodies.filter(body => body.label === 'divider' || body.label === 'wall'), true);
+                gameContainer.querySelectorAll('.divider, .bucket-label').forEach(el => el.remove());
+                const dividers = [];
+                bucketWidth = containerWidth / numBuckets; // Recalculate bucketWidth based on current containerWidth
+                for (let i = 0; i <= numBuckets; i++) {
+                    const x = i * bucketWidth;
+                    const y = containerHeight - dividerHeight / 2;
+                    const dividerBody = Bodies.rectangle(x, y, dividerWidth, dividerHeight, {
+                        isStatic: true,
+                        label: (i === 0 || i === numBuckets) ? 'wall' : 'divider', // Label outer as walls
+                        friction: 0.3,
+                        render: { visible: false }
+                    });
+
+                    if (dividerBody.label === 'wall') {
+                        Composite.add(world, dividerBody);
+                    } else {
+                        dividers.push(dividerBody);
+                        const domEl = createDOMElement(dividerBody);
+                        // Ensure DOM size matches physics size on creation
+                        domEl.style.width = `${dividerWidth}px`;
+                        domEl.style.height = `${dividerHeight}px`;
+                    }
+                }
+                Composite.add(world, dividers);
+
+                // Add Bucket Labels
+                for (let i = 0; i < numBuckets; i++) {
+                    const label = document.createElement('div');
+                    label.classList.add('bucket-label');
+                    const value = bucketValues[i];
+                    let labelText;
+                     if (value >= 1000000) labelText = (value / 1000000) + 'm';
+                     else if (value >= 1000) labelText = (value / 1000) + 'k'; // Simple k notation works now
+                     else labelText = value.toString();
+
+                    label.textContent = labelText;
+                    label.style.left = `${i * bucketWidth}px`;
+                    label.style.width = `${bucketWidth}px`;
+                    label.style.bottom = `${dividerHeight * 0.08}px`;
+                    gameContainer.appendChild(label);
+                }
+
+                // Floor and Side Walls
+                const wallThickness = 50;
+                Composite.add(world, [
+                    Bodies.rectangle(containerWidth / 2, containerHeight + wallThickness / 2 - 5, containerWidth + wallThickness * 2, wallThickness, { isStatic: true, label: 'wall', render: { visible: false } }), // Floor
+                    Bodies.rectangle(-wallThickness / 2, containerHeight / 2, wallThickness, containerHeight * 2, { isStatic: true, label: 'wall', render: { visible: false } }), // Left
+                    Bodies.rectangle(containerWidth + wallThickness / 2, containerHeight / 2, wallThickness, containerHeight * 2, { isStatic: true, label: 'wall', render: { visible: false } }) // Right
+                ]);
+
+                 // Funnel Walls (adjust for size)
+                 const funnelAngle = Math.PI / 7;
+                 const funnelLength = containerWidth * 0.22; // Adjust length relative to width
+                 const funnelY = startYOffset * 0.5; // Position relative to top pegs
+                 const funnelGap = horizontalSpacing * 0.4; // Gap in the middle
+                 const funnelWidth = 8; // Thinner funnel walls
+                 Composite.add(world, [
+                     Bodies.rectangle(containerWidth * 0.5 - funnelGap - funnelLength / 2 * Math.cos(funnelAngle), funnelY + funnelLength / 2 * Math.sin(funnelAngle), funnelLength, funnelWidth, { isStatic: true, angle: funnelAngle, label: 'wall', render: {fillStyle: '#ff00ff'}}),
+                     Bodies.rectangle(containerWidth * 0.5 + funnelGap + funnelLength / 2 * Math.cos(funnelAngle), funnelY + funnelLength / 2 * Math.sin(funnelAngle), funnelLength, funnelWidth, { isStatic: true, angle: -funnelAngle, label: 'wall', render: {fillStyle: '#ff00ff'}})
+                 ]);
+            }
+
+             // --- Update button states based on ball count ---
+            function updateButtonStates() {
+                const canDropMore = balls.size < MAX_BALLS;
+                dropButton.disabled = !canDropMore;
+                // Disable multi-drop if no balls can be dropped
+                dropMultiButton.disabled = !canDropMore;
+            }
+
+            function removeBall(ballBody, isLost = false, immediate = false) {
+                if (!ballBody || !balls.has(ballBody)) return;
+
+                clearTimeout(ballBody.removalTimeout);
+
+                if (isLost && !immediate) { // Don't show 'Lost' if removed immediately (like on resize)
+                    showScorePopup("Lost", containerWidth / 2, containerHeight * 0.8);
+                }
+
+                if (ballBody.domElement) {
+                    if (immediate) {
+                         if (ballBody.domElement.parentNode) ballBody.domElement.remove();
+                    } else {
+                        ballBody.domElement.classList.add('removing');
+                        setTimeout(() => {
+                             if (ballBody.domElement && ballBody.domElement.parentNode) ballBody.domElement.remove();
+                        }, 300);
+                    }
+                }
+
+                if (world.bodies.includes(ballBody)) Composite.remove(world, ballBody);
+                balls.delete(ballBody);
+                updateButtonStates(); // Update buttons after removal
+            }
+
+            function showScorePopup(amount, x, y) {
+                 scorePopup.textContent = typeof amount === 'number' ? `+${amount.toLocaleString()}!` : `${amount}`;
+                 scorePopup.style.left = `${x}px`;
+                 scorePopup.style.top = `${y - 25}px`; // Adjust offset slightly
+                 scorePopup.classList.add('show');
+                 clearTimeout(scorePopupTimeout);
+                 scorePopupTimeout = setTimeout(() => {
+                     scorePopup.classList.remove('show');
+                     scorePopup.textContent = '';
+                 }, 1500);
+            }
+
+            function dropBall(staggerDelay = 0) {
+                if (balls.size >= MAX_BALLS) return;
+
+                // Delay the actual drop slightly if needed
+                setTimeout(() => {
+                    if (balls.size >= MAX_BALLS) return; // Re-check in case state changed during delay
+
+                    initAudio(); // Ensure audio context is ready just before playing
+                    playDropSound();
+
+                    const color = ballColors[ballColorIndex];
+                    ballColorIndex = (ballColorIndex + 1) % ballColors.length;
+
+                    const randomOffsetX = (Math.random() - 0.5) * horizontalSpacing * 0.5; // Wider random offset
+                    const startX = containerWidth / 2 + randomOffsetX;
+                    const startY = startYOffset * 0.1; // Start really high
+
+                    const newBall = Bodies.circle(startX, startY, ballRadius, {
+                        label: 'ball',
+                        friction: 0.02, // Lower friction
+                        frictionAir: 0.005, // Slightly more air friction
+                        restitution: 0.4, // Increased restitution
+                        density: 0.0020, // Slightly denser
+                        sleepThreshold: 120,
+                        render: { visible: false },
+                        color: color
+                    });
+
+                    createDOMElement(newBall);
+                    Composite.add(world, newBall);
+                    balls.add(newBall);
+
+                    newBall.removalTimeout = setTimeout(() => {
+                        if (balls.has(newBall)) {
+                           removeBall(newBall, true);
+                        }
+                    }, 20000); // 20 second timeout per ball
+
+                    updateButtonStates(); // Update buttons after adding
+
+                }, staggerDelay); // Apply the stagger delay
+            }
+
+            // --- Handler for the "Drop 5" button ---
+            function dropMultipleBalls() {
+                 initAudio(); // Init audio once before the burst
+                 const ballsToDrop = Math.min(5, MAX_BALLS - balls.size); // Calculate how many can actually drop
+                 const stagger = 100; // ms delay between drops
+                 for (let i = 0; i < ballsToDrop; i++) {
+                     dropBall(i * stagger); // Call dropBall with increasing delay
+                 }
+            }
+
+
+            function handlePegHit(pegBody) {
+                const pegElement = pegMap.get(pegBody.id);
+                if (pegElement && !pegElement.classList.contains('peg-hit')) {
+                    pegElement.classList.add('peg-hit');
+                    playPegHitSound();
+                    setTimeout(() => pegElement.classList.remove('peg-hit'), 120); // Shorter hit duration
+
+                    const count = 1 + Math.floor(Math.random() * 2);
+                    for (let i = 0; i < count; i++) {
+                        const particle = document.createElement('div');
+                        particle.classList.add('particle');
+                        particle.style.background = 'var(--secondary-neon)';
+                        particle.style.boxShadow = `0 0 5px var(--secondary-neon), 0 0 8px var(--secondary-neon)`;
+                        particle.style.width = '4px'; // Smaller peg hit particles
+                        particle.style.height = '4px';
+                        particle.style.setProperty('--tx', `${(Math.random() - 0.5) * 25}px`);
+                        particle.style.setProperty('--ty', `${(Math.random() - 0.5) * 25}px`);
+                        particle.style.left = `${pegBody.position.x - 2}px`;
+                        particle.style.top = `${pegBody.position.y - 2}px`;
+                        particle.style.animation = 'burst-out 0.4s ease-out forwards';
+                        gameContainer.appendChild(particle);
+                        setTimeout(() => particle.remove(), 400);
+                    }
+                }
+            }
+
+             function triggerEndParticles(x, y, value, ballColor) {
+                 const baseCount = 18; // Fewer base particles
+                 const valueFactor = Math.log10(value / 500 + 1);
+                 const count = baseCount + Math.floor(valueFactor * 12); // Less scaling
+                 const spread = 140 + valueFactor * 40;
+                 const upwardVelocity = -180 - valueFactor * 80;
+                 const duration = 0.7 + valueFactor * 0.3;
+                 const primaryColor = ballColor || '#f7ff00';
+                 const particleColors = [primaryColor, '#00ffff', '#ffffff']; // Ball color, cyan, white mix
+
+                 playBucketSound(value);
+
+                 setTimeout(() => {
+                     for (let i = 0; i < count; i++) {
+                         const particle = document.createElement('div');
+                         particle.classList.add('particle');
+                         const angle = Math.random() * Math.PI * 2;
+                         const distance = Math.random() * spread;
+                         const tx = Math.cos(angle) * distance;
+                         const ty = upwardVelocity + (Math.random() - 0.7) * 100;
+                         particle.style.setProperty('--tx', `${tx}px`);
+                         particle.style.setProperty('--ty', `${ty}px`);
+                         particle.style.left = `${x - 4}px`; // Adjust for particle size
+                         particle.style.top = `${y - 4}px`;
+                         const pColor = particleColors[Math.floor(Math.random() * particleColors.length)];
+                         particle.style.background = pColor;
+                         particle.style.boxShadow = `0 0 6px ${pColor}, 0 0 10px ${pColor}`;
+                         particle.style.animationDuration = `${duration + Math.random() * 0.3}s`;
+
+                         gameWrapper.appendChild(particle);
+                         setTimeout(() => particle.remove(), (duration + Math.random() * 0.3) * 1000);
+                     }
+                 }, 50);
+             }
+
+            function handleResize() {
+                 // Pause runner during resize potentially? (Optional, can cause visual jump)
+                 // Runner.stop(runner);
+
+                 containerWidth = gameContainer.clientWidth;
+                 containerHeight = gameContainer.clientHeight;
+
+                 // Update physics parameters based on new dimensions
+                 pegRadius = Math.min(containerWidth * 0.012, 5.5);
+                 ballRadius = Math.min(containerWidth * 0.016, 9.5);
+                 horizontalSpacing = containerWidth / (numCols + 1);
+                 verticalSpacing = (containerHeight * 0.70) / numRows;
+                 bucketWidth = containerWidth / numBuckets; // Recalculate bucketWidth
+                 dividerWidth = Math.max(2.5, containerWidth * 0.004);
+                 dividerHeight = bucketHeight * 1.2;
+
+                 // Remove all active balls immediately without 'Lost' message
+                 const ballsToRemove = [...balls];
+                 ballsToRemove.forEach(b => removeBall(b, false, true));
+                 balls.clear();
+
+                 // Clear physics world (static bodies) and DOM elements inside game container
+                 Composite.clear(world, false); // Keep world properties (gravity, iterations)
+                 // Engine.clear(engine); // Not needed if Composite.clear keeps world props
+                 gameContainer.innerHTML = ''; // Clear DOM
+                 pegMap.clear(); // Clear peg mapping
+
+                 // Recreate static elements
+                 createPegs();
+                 createBoundaries(); // This re-adds walls, dividers, labels
+
+                 // Sync DOM for newly added static elements if necessary (mainly dividers)
+                 Composite.allBodies(world).forEach(body => {
+                     if (body.isStatic && body.domElement) syncDOM(body);
+                 });
+
+                 // Update button states after resize (likely enabling them)
+                 updateButtonStates();
+
+                 // Resume runner if stopped
+                 // Runner.run(runner, engine);
+            }
+
+            // Initial setup
+            createPegs();
+            createBoundaries();
+            updateButtonStates(); // Set initial button state
+
+            // --- Tick Event Handler ---
+            Events.on(runner, 'tick', () => {
+                 // Sync dynamic bodies (balls)
+                 const currentBalls = [...balls]; // Iterate stable copy
+                 for (const currentBall of currentBalls) {
+                     if (!currentBall || !balls.has(currentBall)) continue;
+
+                     syncDOM(currentBall);
+
+                     // Trail particles
+                      if (!currentBall.trailCounter) currentBall.trailCounter = 0;
+                      currentBall.trailCounter++;
+                      if (currentBall.trailCounter >= 3 && Vector.magnitudeSquared(currentBall.velocity) > 0.15) { // Trail only if moving reasonably fast
+                          currentBall.trailCounter = 0;
+                          const particle = document.createElement('div');
+                          particle.classList.add('trail-particle');
+                          particle.style.left = `${currentBall.position.x - 2}px`; // Adjust for size
+                          particle.style.top = `${currentBall.position.y - 2}px`;
+                          particle.style.background = currentBall.color || '#f7ff00';
+                          gameContainer.appendChild(particle);
+                          setTimeout(() => particle.remove(), 400);
+                      }
+
+                     // Bucket detection
+                     if (currentBall.position.y > bucketTriggerY && !currentBall.isSleeping) {
+                         const ballX = currentBall.position.x;
+                         const speedSqr = Vector.magnitudeSquared(currentBall.velocity);
+                         // Lower speed threshold for settling, check Y pos is deep in bucket area
+                         const isSettling = speedSqr < 0.01 && currentBall.position.y > (containerHeight - bucketHeight * 0.6);
+
+                         if (ballX >= 0 && ballX <= containerWidth) {
+                             const bucketIndex = Math.floor(ballX / bucketWidth);
+                             if (isSettling && bucketIndex >= 0 && bucketIndex < numBuckets) {
+                                 const scoreValue = bucketValues[bucketIndex];
+                                 const bucketCenterX = (bucketIndex + 0.5) * bucketWidth;
+                                 const bucketEffectY = containerHeight - bucketHeight * 0.3;
+
+                                 triggerEndParticles(bucketCenterX, bucketEffectY, scoreValue, currentBall.color);
+
+                                 currentScore += scoreValue;
+                                 scoreDisplay.textContent = `Score: ${currentScore.toLocaleString()}`;
+                                 scoreDisplay.classList.add('score-update');
+                                 setTimeout(() => scoreDisplay.classList.remove('score-update'), 300);
+
+                                 showScorePopup(scoreValue, bucketCenterX, bucketEffectY);
+                                 removeBall(currentBall); // Remove the scoring ball
+
+                             } else if (isSettling && (bucketIndex < 0 || bucketIndex >= numBuckets)) {
+                                 // Settled outside valid bucket indices but within width
+                                 removeBall(currentBall, true);
+                             }
+                         } else if (isSettling) { // Settled outside container width
+                              removeBall(currentBall, true);
+                         }
+                     } else if (currentBall.position.y > containerHeight + ballRadius * 10) { // Increased OOB check multiplier
+                          // Ball fell way out of bounds
+                          removeBall(currentBall, true);
+                     }
+                 } // End loop through balls
+            });
+
+
+            // --- Collision Event Handler ---
+            Events.on(engine, 'collisionStart', (event) => {
+                const pairs = event.pairs;
+                for (let i = 0; i < pairs.length; i++) {
+                    const pair = pairs[i];
+                    let pegBody = null;
+                    let ballBody = null;
+
+                    // Check for active ball vs peg collision
+                    if (pair.bodyA.label === 'peg' && pair.bodyB.label === 'ball' && balls.has(pair.bodyB)) {
+                        pegBody = pair.bodyA;
+                        ballBody = pair.bodyB;
+                    } else if (pair.bodyB.label === 'peg' && pair.bodyA.label === 'ball' && balls.has(pair.bodyA)) {
+                        pegBody = pair.bodyB;
+                        ballBody = pair.bodyA;
+                    }
+
+                    if (pegBody && ballBody) {
+                        handlePegHit(pegBody);
+                        if (ballBody.isSleeping) Body.setSleeping(ballBody, false);
+                    }
+
+                    // --- Potential anti-stick logic ---
+                    // If two balls collide and both are moving very slowly, give them a tiny nudge apart?
+                    // This can be tricky to get right and might cause unwanted behavior.
+                    // if (pair.bodyA.label === 'ball' && pair.bodyB.label === 'ball' && balls.has(pair.bodyA) && balls.has(pair.bodyB)) {
+                    //     const speedA = Vector.magnitudeSquared(pair.bodyA.velocity);
+                    //     const speedB = Vector.magnitudeSquared(pair.bodyB.velocity);
+                    //     if (speedA < 0.05 && speedB < 0.05 && !pair.bodyA.isSleeping && !pair.bodyB.isSleeping) {
+                    //          // Apply tiny outward force along collision normal? Needs careful implementation.
+                    //          // console.log("Slow ball collision");
+                    //     }
+                    // }
+                }
+            });
+
+            // --- Event Listeners ---
+            dropButton.addEventListener('click', () => {
+                initAudio();
+                dropBall(0); // Drop single ball with no delay
+            });
+
+            dropMultiButton.addEventListener('click', () => {
+                dropMultipleBalls(); // Call the multi-drop handler
+            });
+
+            window.addEventListener('resize', handleResize);
+
+            // Start the simulation
+            Runner.run(runner, engine);
+
+            // Initial resize call to set everything up correctly
+            handleResize();
+
+        });
+    </script>
+</body>
+</html>
