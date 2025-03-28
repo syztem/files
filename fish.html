@@ -27,33 +27,33 @@
     let lastFeedTimestamp = -Infinity;
     let lastManualFeedTime = 0;
     const NUM_FISH = 30;
-    const FOOD_DROP_COUNT = 8;
+    const FOOD_DROP_COUNT = 9;
     const BUBBLE_SPAWN_RATE = 0.075;
     const PARTICLE_COUNT = 200;
     const GROWTH_GLOW_DURATION = 120;
     const EAT_PARTICLE_COUNT = 45;
     const FEED_DELAY = 250;
-    const FEED_SPREAD = 80;
-    const SEPARATION_WEIGHT = 10.0;
-    const ALIGNMENT_WEIGHT = 0.8;
-    const COHESION_WEIGHT = 0.6;
+    const FEED_SPREAD = 90;
+    const SEPARATION_WEIGHT = 2.0; 
+    const ALIGNMENT_WEIGHT = 1.2;  
+    const COHESION_WEIGHT = 1.0;   
     const WANDER_WEIGHT = 0.3;
-    const SEEK_FOOD_WEIGHT = 2.2;
-    const SEEK_LAST_FEED_WEIGHT = 1.0;
+    const SEEK_FOOD_WEIGHT = 2.5;
+    const SEEK_LAST_FEED_WEIGHT = 1.25;
     const EDGE_AVOID_WEIGHT = 1.2;
     const CORNER_AVOID_MULT = 2.5;
-    const NOMAD_WEIGHT = 0.12;
+    const NOMAD_WEIGHT = 0.14;
     const PATH_FOLLOWING_WEIGHT = 1.5;
     const FLOCKING_PERCEPTION_FACTOR = 0.6;
     const NUM_PATHS = 6;
     const PATH_WAYPOINTS = 60;
     const WAYPOINT_ADVANCE_DISTANCE_FACTOR = 2.5;
-    const LAST_FEED_ATTRACTION_DURATION = 2500;
+    const LAST_FEED_ATTRACTION_DURATION = 3000;
     const COLLISION_RADIUS_FACTOR = 1.0;
     const GRAVITY = 0.0072;
-    const FOOD_SINK_DRAG = 0.990;
+    const FOOD_SINK_DRAG = 0.980;
     const FOOD_NOISE_INFLUENCE = 0.006;
-    const MIN_FISH_SIZE = 18;
+    const MIN_FISH_SIZE = 15;
     const MAX_FISH_SIZE = 60;
     const MIN_MAX_SPEED = 0.7;
     const MAX_MAX_SPEED = 2.8;
@@ -65,7 +65,7 @@
     const MAX_SIZE_MULT = 2.8;
     const MIN_GROWTH_RATE = 0.05;
     const MAX_GROWTH_RATE = 0.35;
-    const SEPARATION_DISTANCE_FACTOR = 0.55;
+    const SEPARATION_DISTANCE_FACTOR = 1.00;
 
     function setup() {
       createCanvas(windowWidth, windowHeight);
@@ -512,7 +512,9 @@
               let diff = p5.Vector.sub(this.pos, other.pos);
               if (d > 0.001) {
                   diff.normalize();
-                  diff.div(d);
+                  // Modified: Scale force inversely by distance within the separation zone
+                  let strength = map(d, 0, separationDist, 1.0, 0.0);
+                  diff.mult(strength);
                   sum.add(diff);
                   count++;
               }
@@ -522,7 +524,7 @@
         if (count > 0) {
           sum.div(count);
           if (sum.magSq() > 0) {
-            sum.setMag(this.maxSpeed);
+            sum.setMag(this.maxSpeed); // Desired velocity is still maxSpeed away
             return this.steer(sum);
           }
         }
