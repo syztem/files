@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Typer</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --element-bg: #282828;
+            --border-color: #444;
+            --text-color: #eee;
+            --dim-text-color: #aaa;
+            --accent-color-1: #cbccc8;
+            --accent-color-2: #c2c5c7;
+            --accent-color-3: #d2d3cd;
+            --accent-color-4: #dfddd8; /* Brightest */
+            --accent-color-5: #a9b7b7;
+            --error-color: #5d1f1f;
+            --success-color: #98fb98;
+            --shadow-color: rgba(0,0,0,0.3);
+        }
+        body {
+            margin: 0;
+            overflow-x: hidden;
+            overflow-y: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding-top: 3vh;
+        }
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 95%;
+            max-width: 1000px;
+        }
+        #phrase-display {
+            background-color: transparent;
+            padding: 10px 5px;
+            margin-bottom: 10px;
+            font-size: clamp(1.8em, 5vw, 3.5em);
+            text-align: center;
+            width: 100%;
+            line-height: 1.3;
+            min-height: 1.4em;
+            border: none;
+            box-shadow: none;
+            white-space: normal;
+            overflow: visible;
+            word-break: break-word;
+            color: var(--dim-text-color);
+        }
+        #phrase-display span {
+             display: inline-block;
+             transition: color 0.1s ease-in-out, transform 0.1s ease-in-out;
+             padding: 0 0.05em;
+             border-radius: 3px;
+             vertical-align: middle;
+        }
+        .typed-char {
+            color: var(--accent-color-5);
+            transform: scale(0.95);
+            opacity: 0.8;
+        }
+        .current-char {
+            color: var(--accent-color-4);
+            text-decoration: underline;
+            text-decoration-thickness: 3px;
+            text-decoration-color: var(--accent-color-4);
+            background-color: rgba(223, 221, 216, 0.1);
+            transform: scale(1.05);
+            font-weight: normal;
+         }
+        .remaining-char {
+            color: var(--dim-text-color);
+            opacity: 0.6;
+            font-weight: normal;
+        }
+        .phrase-complete {
+            color: var(--success-color);
+            font-weight: bold;
+            text-shadow: 0 0 5px var(--success-color);
+            white-space: normal;
+        }
+        canvas {
+            display: block;
+            background-color: var(--element-bg);
+            cursor: default;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px var(--shadow-color);
+            border: 1px solid var(--border-color);
+            width: 100%;
+        }
+        #instructions {
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: var(--dim-text-color);
+            text-align: center;
+        }
+        .error-flash span.current-char {
+             animation: flash-red 0.3s ease-out;
+         }
+         @keyframes flash-red {
+             0%, 100% { background-color: rgba(223, 221, 216, 0.1); color: var(--accent-color-4); }
+             50% { background-color: var(--error-color); color: var(--text-color); }
+         }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="phrase-display">Loading...</div>
+        <canvas id="decomposerCanvas"></canvas>
+        <div id="instructions">Type the phrase. Letters fall.</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('decomposerCanvas');
+        const ctx = canvas.getContext('2d');
+        const phraseDisplay = document.getElementById('phrase-display');
+        const gameContainer = document.getElementById('game-container');
+
+        const GRAVITY = 0.18;
+        const FADE_SPEED = 0.005;
+        const PARTICLE_COUNT_IMPACT = 12;
+        const PARTICLE_LIFESPAN_IMPACT = 35;
+        const FLOOR_BOUNCE_DAMPENING = -0.40;
+        const FLOOR_FRICTION = 0.85;
+        const colorPalette = ['#cbccc8', '#c2c5c7', '#d2d3cd', '#dfddd8', '#a9b7b7'];
+
+        const allPhrases = [ "sudo make me breakfast.", "Running rm -rf on life.", "There's no place like ::1", "DNS. It's always DNS.", "Error 418: I'm a teapot.", "Send nodes.", "Cache me if you can", "I read the docs, briefly.", "Pixelated perfection", "RTFM! Politely, please.", "0-day exploit my heart.", "Ping 127.0.0.1 for hope.", "Packet loss = sadness.", "Latency is the real enemy.", "Dark mode everything.", "PEBKAC detected.", "Layer 8 problem.", "Bandwidth is finite.", "Sysadmin by day, sleeper...", "My spirit animal is Clippy.", "Firewall: Mood protector.", "Living that VPN life.", "Binary is my native tongue", "My backup has backups.", "Task failed successfully.", "Cloud = Someone's PC.", "Works on *my* machine.", "Debugging is pain.", "Server's fine. Probably.", "My RAM is full of tabs.", "More monitors needed NOW.", "Sleep? That's downtime.", "Browser is the new OS.", "Compiling wit, please wait", "Sleep is just a resource...", "Binary beats decimal", "I void warranties", "Caffeine overflow error", "Logic over lols", "Script kiddie at heart", "Update your social cache", "Other PC: Server rack", "IRL: Insecure Random Life", "Running on caffeine and CLI.", "Mutually assured lag", "Never trust beta code", "Born to hack, forced to work", "Excessive coffee usage", "Eat bytes, not bites", "Fear the blue screen.", "My password is ********", "Ad blocker is my shield.", "Ctrl+C, Ctrl+V expert.", "Inbox zero is a myth.", "Phishing for compliments.", "Digital hoarder.", "End user detected.", "My scroll wheel is tired.", "My filesystem is a mess.", "Peak performance: 3 AM.", "Blame the network.", "Need tech support for life.", "Error: Coffee not found.", "Reality check failed.", "Doomscrolling", "Ctrl+Z: my only undo.", "Reboot? The magic spell.", "Is the cable plugged in?", "Ctrl+Alt+Del my brain", "Cache: Memory of memes", "Brb, updating my soul", "Infinite scroll, finite will", "Delete your cache, bro", "Log in to existential dread", "Hacking my own vibe", "Looping like my thoughts", "I'm not lazy, just buffering", "Y2K: Still no apocalypse", "Infinite loop of memes", "Plug me in, I'm powered!", "Refuse to be a bot", "Data over drama", "Ctrl+S saves lives", "Have you tried turning it off?", "Too many browser tabs open.", "My brain needs defragging.", "Just google it.", "Forgot password? Again?", "WiFi signal: Life force.", "Meme lord in training.", "Still using dial-up speed.", "Alt-Tab master.", "Need more RAM. Always.", "CAPSLOCK IS CRUISE CONTROL", "Powered by instant noodles.", "Low battery anxiety.", "Keyboard warrior.", "Fluent in Emoji.", "Unread emails: >9000", "TL;DR is my life motto.", "I speak fluent GIF.", "Master of the refresh button.", "Gaming rig > Social life", "Search history is cursed.", "I live online now." ];
+        const phrases = allPhrases.filter(p => p.length <= 30);
+
+        let letters = [];
+        let particles = [];
+        let canvasWidth = 800;
+        let canvasHeight = 300;
+        let currentPhraseIndex = 0;
+        let typedIndex = 0;
+        let phraseStartTime = Date.now();
+        let canvasRect = null;
+
+        function setupCanvas() {
+            const containerWidth = gameContainer.offsetWidth;
+            canvasWidth = containerWidth;
+            const phraseHeight = phraseDisplay.offsetHeight;
+            const instructionsHeight = document.getElementById('instructions').offsetHeight;
+            const availableHeight = window.innerHeight - phraseHeight - instructionsHeight - 40;
+            canvasHeight = Math.max(200, Math.min(availableHeight, 450));
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            canvasRect = canvas.getBoundingClientRect();
+        }
+
+        function playTypeSound() {  }
+        function playBackspaceSound() {  }
+        function playImpactSound() {  }
+        function playTransformSound() {  }
+        function playErrorSound() {  }
+        function playPhraseCompleteSound() {  }
+
+        function displayCurrentPhrase() {
+             if (currentPhraseIndex >= phrases.length) {
+                 phraseDisplay.innerHTML = `<span class="phrase-complete">Finished ${phrases.length} Phrases!</span>`;
+                 setupCanvas();
+                 return;
+             }
+             const targetPhrase = phrases[currentPhraseIndex];
+             let html = '';
+             for (let i = 0; i < targetPhrase.length; i++) {
+                 const char = targetPhrase[i];
+                 const spanId = `phrase-char-${currentPhraseIndex}-${i}`;
+                 const displayChar = char === ' ' ? '&nbsp;' : char;
+                 let className = 'remaining-char';
+                 if (i < typedIndex) {
+                     className = 'typed-char';
+                 } else if (i === typedIndex) {
+                     className = 'current-char';
+                 }
+                 html += `<span id="${spanId}" class="${className}" data-index="${i}">${displayChar}</span>`;
+             }
+             phraseDisplay.innerHTML = html;
+             setupCanvas();
+         }
+
+         function triggerErrorFeedback() {
+            playErrorSound();
+            const currentSpan = document.querySelector('#phrase-display span.current-char');
+            if (currentSpan) {
+                currentSpan.classList.add('error-flash');
+                setTimeout(() => {
+                    currentSpan.classList.remove('error-flash');
+                }, 300);
+            }
+         }
+
+        class Letter {
+            constructor(char, startX, startY, size, fontWeight) {
+                this.char = char;
+                this.x = startX;
+                this.y = startY;
+                this.size = size;
+                this.fontWeight = fontWeight || 'normal';
+                this.opacity = 1;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = Math.random() * 1.5 + 0.5;
+                this.rotation = (Math.random() - 0.5) * 0.3;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.07;
+                this.isAlive = true;
+                this.color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+                playTransformSound();
+            }
+
+             update() {
+                if (!this.isAlive) return;
+
+                this.vy += GRAVITY;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.rotation += this.rotationSpeed;
+
+                 this.vx *= 0.985;
+                 this.vy *= 0.99;
+                 this.rotationSpeed *= 0.98;
+
+                 const floorY = canvasHeight - this.size / 3;
+                if (this.y > floorY) {
+                    this.y = floorY;
+                    if (Math.abs(this.vy) > 0.8) {
+                        createImpactParticles(this.x, this.y, this.color);
+                        playImpactSound();
+                         this.rotationSpeed += (Math.random() - 0.5) * 0.25;
+                         this.vx += (Math.random() - 0.5) * 1.5;
+                     } else {
+                         this.rotationSpeed *= 0.3;
+                     }
+                     this.vy *= FLOOR_BOUNCE_DAMPENING;
+                     this.vx *= FLOOR_FRICTION;
+                      if (Math.abs(this.vy) < GRAVITY * 1.1) this.vy = 0;
+                      if (Math.abs(this.vx) < 0.1) this.vx = 0;
+                      if (Math.abs(this.rotationSpeed) < 0.005) this.rotationSpeed = 0;
+                 }
+
+                 if (this.x < this.size / 2) {
+                     this.x = this.size / 2;
+                     this.vx *= -0.5;
+                 } else if (this.x > canvasWidth - this.size / 2) {
+                     this.x = canvasWidth - this.size / 2;
+                     this.vx *= -0.5;
+                 }
+
+                 const speedSq = this.vx * this.vx + this.vy * this.vy;
+                 const isSettled = speedSq < 0.5 && Math.abs(this.y - floorY) < 5 && Math.abs(this.rotationSpeed) < 0.01;
+                 if (isSettled) {
+                     this.opacity -= FADE_SPEED * 4;
+                 } else {
+                     this.opacity -= FADE_SPEED;
+                 }
+                if (this.opacity <= 0) {
+                    this.isAlive = false;
+                }
+            }
+
+            draw() {
+                if (!this.isAlive || this.opacity <= 0 || this.size <= 0) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+                ctx.shadowBlur = 5;
+                ctx.shadowOffsetX = 1;
+                ctx.shadowOffsetY = 2;
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.opacity;
+                ctx.font = `${this.fontWeight} ${this.size}px 'Courier New', Courier, monospace`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.char, 0, 0);
+                ctx.restore();
+            }
+        }
+
+        class Particle { constructor(x, y, options = {}) { this.x = x; this.y = y; this.size = options.size || Math.random() * 2.5 + 1; this.vx = options.vx === 0 ? 0 : options.vx || (Math.random() - 0.5) * 3.5; this.vy = options.vy === 0 ? 0 : options.vy || (Math.random() - 0.5) * 3.5 - 0.8; this.opacity = 1; this.life = options.lifespan || (Math.random() * 18 + PARTICLE_LIFESPAN_IMPACT - 15); this.maxLife = this.life; this.gravityFactor = options.gravityFactor === 0 ? 0 : options.gravityFactor || 0.75; this.color = options.color || colorPalette[Math.floor(Math.random()*colorPalette.length)]; }
+              update() { this.vy += GRAVITY * this.gravityFactor; this.x += this.vx; this.y += this.vy; this.vx *= 0.96; this.vy *= 0.96; this.life--; this.opacity = Math.max(0, (this.life / this.maxLife)); }
+             draw() { if (this.opacity <= 0 || this.life <= 0) return; ctx.save(); ctx.fillStyle = this.color; ctx.globalAlpha = this.opacity; ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size); ctx.restore(); }
+         }
+        function createImpactParticles(x, y, color) {
+            for (let i = 0; i < PARTICLE_COUNT_IMPACT; i++) {
+                const angle = Math.random() * Math.PI - Math.PI;
+                const speed = Math.random() * 3.0 + 1.0;
+                const lifespan = Math.random() * 25 + (PARTICLE_LIFESPAN_IMPACT - 10);
+                const size = Math.random() * 2.8 + 1.0;
+                const gravityFactor = 0.6 + Math.random() * 0.3;
+                particles.push(new Particle(x, y - 2, {
+                    color: color,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed * 1.5 - 1.0,
+                    size: size,
+                    lifespan: lifespan,
+                    gravityFactor: gravityFactor
+                }));
+            }
+        }
+        function createCompletionBurst() {
+            const centerX = canvasWidth / 2;
+            const centerY = canvasHeight / 4;
+            for(let i = 0; i < 120; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 8 + 4;
+                particles.push(new Particle(centerX, centerY, {
+                    color: colorPalette[Math.floor(Math.random() * colorPalette.length)],
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 1.5,
+                    size: Math.random() * 4.0 + 1.2,
+                    lifespan: Math.random() * 60 + 50,
+                    gravityFactor: 0.85
+                }));
+            }
+        }
+
+        function handleKeyDown(event) {
+            if (event.key.length > 1 && event.key !== 'Backspace') return;
+            event.preventDefault();
+            if (currentPhraseIndex >= phrases.length) return;
+
+            const targetPhrase = phrases[currentPhraseIndex];
+
+            if (event.key === 'Backspace') {
+                playBackspaceSound();
+                if (typedIndex > 0) {
+                    typedIndex--;
+                    if (letters.length > 0) letters.pop();
+                    displayCurrentPhrase();
+                }
+            } else if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1) {
+                const expectedChar = targetPhrase[typedIndex];
+                const typedChar = event.key;
+
+                if (typedChar === expectedChar) {
+                    playTypeSound();
+                    const spanId = `phrase-char-${currentPhraseIndex}-${typedIndex}`;
+                    const spanElement = document.getElementById(spanId);
+
+                    if (spanElement && canvasRect) {
+                        const spanRect = spanElement.getBoundingClientRect();
+                        const computedStyle = window.getComputedStyle(spanElement);
+                        const fontSizePx = computedStyle.fontSize;
+                        const fontWeight = computedStyle.fontWeight;
+                        const dynamicFontSize = parseFloat(fontSizePx) || 30;
+                        const startX = (spanRect.left + spanRect.width / 2) - canvasRect.left;
+                        const startY = (spanRect.top + spanRect.height / 2) - canvasRect.top;
+
+                        if (startX >= 0 && startX <= canvasWidth) {
+                             letters.push(new Letter(typedChar, startX, startY, dynamicFontSize, fontWeight));
+                        }
+                    }
+
+                    typedIndex++;
+                    displayCurrentPhrase();
+
+                    if (typedIndex === targetPhrase.length) {
+                        playPhraseCompleteSound();
+                        createCompletionBurst();
+                        currentPhraseIndex++;
+                        typedIndex = 0;
+                        phraseStartTime = Date.now();
+                        setTimeout(displayCurrentPhrase, 800);
+                    }
+                } else {
+                    triggerErrorFeedback();
+                }
+            }
+        }
+
+        function animationLoop() {
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+            ctx.globalAlpha = 1; ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+            particles.forEach(p => p.update()); particles.forEach(p => p.draw());
+            letters.forEach(letter => letter.update()); letters.forEach(letter => letter.draw());
+            const threshold = 0.005;
+            letters = letters.filter(letter => letter.isAlive && letter.opacity > threshold);
+            particles = particles.filter(p => p.life > 0 && p.opacity > threshold);
+            requestAnimationFrame(animationLoop);
+        }
+
+        const resizeObserver = new ResizeObserver(entries => {
+             setupCanvas();
+        });
+        resizeObserver.observe(gameContainer);
+        window.addEventListener('resize', setupCanvas);
+        window.addEventListener('keydown', handleKeyDown);
+
+        displayCurrentPhrase();
+        animationLoop();
+    </script>
+</body>
+</html>
