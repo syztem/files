@@ -6,27 +6,23 @@
 <title>Virtual Kaleidoscope</title>
 <style>
   :root {
-    --shape-glow-intensity: 4;
-    --active-glow-color: rgba(76, 201, 240, 0.9);
-    --info-text-color: #f0f0f0;
-    --info-strong-color: #4cc9f0;
-    --info-small-color: #bbb;
-    --star-color: rgba(230, 230, 255, 0.8);
+    --shape-glow-intensity: 2.0;
+    --active-glow-color: rgba(0, 119, 255, 0.85);
+    --info-text-color: #e0e0e0;
+    --info-strong-color: #0077ff;
+    --info-small-color: #aaaaaa;
+    --star-color: rgba(210, 210, 210, 0.55);
 
-    --base-color-1-h: 275; --base-color-1-s: 100%; --base-color-1-l: 55%;
-    --base-color-2-h: 75;  --base-color-2-s: 100%; --base-color-2-l: 50%;
-    --base-color-3-h: 180; --base-color-3-s: 100%; --base-color-3-l: 52%;
-    --base-color-4-h: 15;  --base-color-4-s: 100%; --base-color-4-l: 53%;
-    --base-color-5-h: 320; --base-color-5-s: 100%; --base-color-5-l: 58%;
-    --base-color-6-h: 215; --base-color-6-s: 100%; --base-color-6-l: 56%;
-    --base-color-7-h: 130; --base-color-7-s: 100%; --base-color-7-l: 48%;
-    --base-color-8-h: 50;  --base-color-8-s: 100%; --base-color-8-l: 51%;
-    --base-color-9-h: 350; --base-color-9-s: 100%; --base-color-9-l: 55%;
-    --base-color-10-h: 295; --base-color-10-s: 95%; --base-color-10-l: 60%;
-    --base-color-11-h: 165; --base-color-11-s: 100%; --base-color-11-l: 50%;
-    --base-color-12-h: 35;  --base-color-12-s: 100%; --base-color-12-l: 54%;
-    --base-color-13-h: 90;  --base-color-13-s: 100%; --base-color-13-l: 52%;
-    --base-color-14-h: 310; --base-color-14-s: 100%; --base-color-14-l: 57%;
+    --item-color-1: #ff1111;
+    --item-color-2: #0088ff;
+    --item-color-3: #39ff14;
+    --item-color-4: #bf00ff;
+    --item-color-5: #ff5500;
+    --item-color-6: #3333ff;
+    --item-color-7: #ffaa00;
+    --item-color-8: #00dd00;
+    --item-color-9: #ff4444;
+    --item-color-10: #ffff00;
   }
 
   html, body {
@@ -35,7 +31,7 @@
     height: 100%;
     width: 100%;
     overflow: hidden;
-    background-color: #05020a;
+    background-color: #00000a;
     font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
     color: var(--info-text-color);
     user-select: none;
@@ -78,7 +74,7 @@
     font-size: clamp(3.1em, 8.8vw, 6.3em);
     font-weight: bold;
     color: #fff;
-    text-shadow: 0 0 6px #fff, 0 0 12px var(--active-glow-color), 0 0 20px var(--active-glow-color), 0 0 35px rgba(0,0,0,0.7);
+    text-shadow: 0 0 5px #fff, 0 0 10px var(--active-glow-color), 0 0 18px var(--active-glow-color), 0 0 30px rgba(0,0,0,0.7);
     margin-bottom: 20px;
     letter-spacing: 4px;
     text-transform: uppercase;
@@ -107,7 +103,7 @@
 <div class="overlay-content" id="text-overlay">
   <div id="arcade-title">Virtual Kaleidoscope</div>
   <div id="instructions">
-    Move <strong>mouse</strong> to twist patterns.<br><strong>Click</strong> screen to release bursts of color.
+    Move <strong>mouse</strong> to twist design. <strong>Click</strong> anywhere for color bursts.
   </div>
 </div>
 
@@ -116,29 +112,28 @@
     const ctx = canvas.getContext('2d', { alpha: true });
     const textOverlay = document.getElementById('text-overlay');
 
-    const numSegments = 12;
+    const numSegments = 8;
     const segmentAngle = (Math.PI * 2) / numSegments;
-    const maxShapes = 100;
-    const shapeMinSize = 5;
-    const shapeMaxSize = 24;
-    const shardMinLength = 18;
-    const shardMaxLength = 40;
+    const maxShapes = 50;
+    const shapeMinSize = 4.5;
+    const shapeMaxSize = 21.6;
+    const shardMinLength = 16.2;
+    const shardMaxLength = 36;
     const shardWidth = 1.5;
-    const rotationSpeedFactor = 0.0024;
-    const wheelRotationFactor = 0.001;
-    const baseGlowIntensity = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--shape-glow-intensity').trim()) || 4;
-    const baseFadeSpeed = 0.0015;
-    const driftSpeedMax = 0.4;
-    const shapeRotationSpeedMax = 0.02;
+    const rotationSpeedFactor = 0.001944;
+    const wheelRotationFactor = 0.00081;
+    const baseGlowIntensity = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--shape-glow-intensity').trim()) || 2.0;
+    const baseFadeSpeed = 0.0010935;
+    const driftSpeedMax = 0.324;
+    const shapeRotationSpeedMax = 0.0162;
 
-    const maxStars = 350;
-    const starInitialFadeSpeed = 0.005;
-    const starTwinkleFadeSpeed = 0.018;
-    const starSpawnRate = 0.10;
+    const maxStars = 150;
+    const starInitialFadeSpeed = 0.00405;
+    const starTwinkleFadeSpeed = 0.01458;
+    const starSpawnRate = 0.04;
+    const initialStarTargetCount = Math.min(maxStars, 100);
+    const initialStarsPerFrame = 5;
 
-    const shardColors = [
-        '#4B0082', '#8A2BE2', '#BA55D3', '#FF00FF', '#FF69B4', '#C71585', '#E6E6FA'
-    ];
     const shapeTypes = ['circle', 'rect', 'triangle', 'diamond', 'star', 'hexagon'];
 
     let shapes = [];
@@ -150,15 +145,13 @@
     let wheelTargetRotationOffset = 0;
     let currentWheelOffset = 0;
     let mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2, isDown: false };
-    let baseHueShift = 0;
     let animationFrameId = null;
     let baseColors = [];
-    let preferredColorIndices = [];
-    let otherColorIndices = [];
-    const PREFERRED_COLOR_CHANCE = 0.75;
 
     let lastDrawTime = 0;
     let hasInteracted = false;
+    let initialStarsCreated = 0;
+    let needsInitialStars = true;
 
     const starPath = new Path2D();
     function buildStarPath(outerRadius, points, innerRadiusRatio) {
@@ -182,58 +175,40 @@
         return Math.random() * (max - min) + min;
     }
 
+    function hexToRgba(hex, alpha) {
+        let r = 0, g = 0, b = 0;
+        if (hex.length == 4) {
+            r = parseInt(hex[1] + hex[1], 16);
+            g = parseInt(hex[2] + hex[2], 16);
+            b = parseInt(hex[3] + hex[3], 16);
+        } else if (hex.length == 7) {
+            r = parseInt(hex[1] + hex[2], 16);
+            g = parseInt(hex[3] + hex[4], 16);
+            b = parseInt(hex[5] + hex[6], 16);
+        }
+        return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+
     function loadBaseColors() {
         baseColors = [];
-        preferredColorIndices = [];
-        otherColorIndices = [];
-        const preferredHues = [
-            275,
-            180,
-            320,
-            215,
-            130,
-            295,
-            165,
-            90,
-            310
-        ];
-
-        for (let i = 1; i <= 14; i++) {
+        const style = getComputedStyle(document.documentElement);
+        for (let i = 1; i <= 10; i++) {
             try {
-                const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(`--base-color-${i}-h`).trim());
-                const s = getComputedStyle(document.documentElement).getPropertyValue(`--base-color-${i}-s`).trim();
-                const l = getComputedStyle(document.documentElement).getPropertyValue(`--base-color-${i}-l`).trim();
-
-                if (!isNaN(h) && s && l) {
-                    const colorData = { h, s, l };
-                    baseColors.push(colorData);
-                    const currentIndex = baseColors.length - 1;
-
-                    if (preferredHues.includes(h)) {
-                        preferredColorIndices.push(currentIndex);
-                    } else {
-                        otherColorIndices.push(currentIndex);
-                    }
+                const color = style.getPropertyValue(`--item-color-${i}`).trim();
+                if (color) {
+                    baseColors.push(color);
                 } else {
-                    throw new Error(`Invalid HSL for color ${i}`);
+                    throw new Error(`Color ${i} not found or empty.`);
                 }
             } catch (e) {
                 console.warn(`Failed load color ${i}:`, e);
-                baseColors.push({ h: randomRange(0, 360), s: '100%', l: '55%' });
-                 otherColorIndices.push(baseColors.length - 1);
             }
-        }
-
-        if (preferredColorIndices.length === 0 && otherColorIndices.length > 0) {
-             preferredColorIndices = [...otherColorIndices];
-        } else if (otherColorIndices.length === 0 && preferredColorIndices.length > 0) {
-             otherColorIndices = [...preferredColorIndices];
         }
 
         if (baseColors.length === 0) {
              console.error("FATAL: No base colors loaded!");
-             baseColors.push({ h: 180, s: '100%', l: '55%' });
-             preferredColorIndices.push(0);
+             baseColors.push('#0088ff');
         }
     }
 
@@ -254,42 +229,18 @@
         shape.createdAt = performance.now();
         shape.fadeSpeed = baseFadeSpeed;
 
-        const shardChance = randomRange(0.18, 0.30);
+        const shardChance = randomRange(0.35, 0.50);
         const isShard = Math.random() < shardChance;
 
-        if (isShard && shardColors.length > 0) {
+        shape.color = baseColors[Math.floor(Math.random() * baseColors.length)];
+        shape.glowColor = hexToRgba(shape.color, 0.55);
+
+        if (isShard) {
             shape.type = 'shard';
-            shape.color = shardColors[Math.floor(Math.random() * shardColors.length)];
-            shape.glowColor = shape.color;
             shape.length = randomRange(shardMinLength, shardMaxLength);
             shape.size = shardWidth;
         } else {
             shape.type = shapeTypes[Math.floor(Math.random() * shapeTypes.length)];
-
-            let chosenColorIndex;
-            const usePreferred = Math.random() < PREFERRED_COLOR_CHANCE;
-
-            if (usePreferred && preferredColorIndices.length > 0) {
-                chosenColorIndex = preferredColorIndices[Math.floor(Math.random() * preferredColorIndices.length)];
-            } else if (otherColorIndices.length > 0) {
-                 chosenColorIndex = otherColorIndices[Math.floor(Math.random() * otherColorIndices.length)];
-            } else if (preferredColorIndices.length > 0){
-                 chosenColorIndex = preferredColorIndices[Math.floor(Math.random() * preferredColorIndices.length)];
-            } else {
-                 chosenColorIndex = 0;
-            }
-
-
-            if (chosenColorIndex >= 0 && chosenColorIndex < baseColors.length) {
-                 const baseColor = baseColors[chosenColorIndex];
-                 const currentHue = (baseColor.h + baseHueShift) % 360;
-                 shape.color = `hsl(${currentHue}, ${baseColor.s}, ${baseColor.l})`;
-                 shape.glowColor = `hsla(${currentHue}, ${baseColor.s}, ${baseColor.l}, 0.7)`;
-            } else {
-                 shape.color = 'hsl(0, 100%, 50%)';
-                 shape.glowColor = 'hsla(0, 100%, 50%, 0.7)';
-            }
-
             shape.size = randomRange(shapeMinSize, shapeMaxSize);
             shape.length = undefined;
         }
@@ -324,7 +275,7 @@
         if (shape.type !== 'shard') { glowAmount *= (shape.size / shapeMaxSize); }
         else { glowAmount *= 0.6; }
 
-        if (glowAmount > 1.0) {
+        if (glowAmount > 0.6) {
              ctx.shadowBlur = Math.max(0, glowAmount);
              ctx.shadowColor = shape.glowColor;
         } else {
@@ -350,7 +301,7 @@
 
      function drawStars() {
         ctx.save();
-        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--star-color').trim() || 'rgba(255, 255, 255, 0.8)';
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--star-color').trim() || 'rgba(210, 210, 210, 0.55)';
         ctx.shadowBlur = 0;
         for (let i = 0, len = stars.length; i < len; i++) {
             const star = stars[i];
@@ -364,7 +315,6 @@
     }
 
     function updateShapes(deltaTime) {
-        baseHueShift = (baseHueShift + 0.05) % 360;
         const bounceRadius = canvasSize.diagonal * 0.55;
         const bounceRadiusSq = bounceRadius * bounceRadius;
 
@@ -421,12 +371,31 @@
          }
          stars = activeStars;
 
-         if (Math.random() < starSpawnRate) { createStar(false); }
+         if (!needsInitialStars && Math.random() < starSpawnRate) { createStar(false); }
     }
+
+    function populateInitialStars() {
+        if (!needsInitialStars) return;
+
+        const starsToAdd = Math.min(initialStarsPerFrame, initialStarTargetCount - initialStarsCreated);
+        for (let i = 0; i < starsToAdd; i++) {
+            createStar(true);
+        }
+        initialStarsCreated += starsToAdd;
+
+        if (initialStarsCreated >= initialStarTargetCount) {
+            needsInitialStars = false;
+        }
+    }
+
 
     function drawFrame(timestamp) {
         const deltaTime = timestamp - (lastDrawTime || timestamp);
         lastDrawTime = timestamp;
+
+        if (needsInitialStars) {
+            populateInitialStars();
+        }
 
         targetRotation = (mouse.x - center.x) * rotationSpeedFactor;
         currentWheelOffset = lerp(currentWheelOffset, wheelTargetRotationOffset, 0.1);
@@ -438,7 +407,7 @@
 
         ctx.globalAlpha = 1.0;
         ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(5, 2, 10, 0.15)';
+        ctx.fillStyle = 'rgba(0, 0, 10, 0.3)';
         ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
         drawStars();
@@ -482,7 +451,7 @@
     function handlePointerDown(e) {
         updateMousePosition(e);
         mouse.isDown = true;
-        const numBurst = 4;
+        const numBurst = 3;
         for(let j=0; j < numBurst; j++) {
             if(mouse.isDown) {
                createShape(mouse.x + randomRange(-15, 15), mouse.y + randomRange(-15, 15));
@@ -509,10 +478,8 @@
         mouse.x = center.x; mouse.y = center.y;
 
         stars = [];
-        const initialStarCount = Math.min(maxStars, 300);
-        for (let i = 0; i < initialStarCount; i++) {
-             createStar(true);
-        }
+        initialStarsCreated = 0;
+        needsInitialStars = true;
     }
 
     function init() {
