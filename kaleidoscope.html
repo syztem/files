@@ -6,8 +6,8 @@
 <title>Virtual Kaleidoscope</title>
 <style>
   :root {
-    --shape-glow-intensity: 2.0;
-    --active-glow-color: rgba(0, 119, 255, 0.85);
+    --shape-glow-intensity: 2.5;
+    --active-glow-color: rgba(0, 136, 255, 0.85);
     --info-text-color: #e0e0e0;
     --info-strong-color: #0077ff;
     --info-small-color: #aaaaaa;
@@ -103,7 +103,7 @@
 <div class="overlay-content" id="text-overlay">
   <div id="arcade-title">Virtual Kaleidoscope</div>
   <div id="instructions">
-    Move <strong>mouse</strong> to twist design. <strong>Click</strong> anywhere for color bursts.
+    Move <strong>mouse</strong> to twist design. <strong>Click</strong> for color bursts.
   </div>
 </div>
 
@@ -112,9 +112,9 @@
     const ctx = canvas.getContext('2d', { alpha: true });
     const textOverlay = document.getElementById('text-overlay');
 
-    const numSegments = 8;
+    const numSegments = 12;
     const segmentAngle = (Math.PI * 2) / numSegments;
-    const maxShapes = 50;
+    const maxShapes = 90;
     const shapeMinSize = 4.5;
     const shapeMaxSize = 21.6;
     const shardMinLength = 16.2;
@@ -122,16 +122,16 @@
     const shardWidth = 1.5;
     const rotationSpeedFactor = 0.001944;
     const wheelRotationFactor = 0.00081;
-    const baseGlowIntensity = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--shape-glow-intensity').trim()) || 2.0;
+    const baseGlowIntensity = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--shape-glow-intensity').trim()) || 2.5;
     const baseFadeSpeed = 0.0010935;
     const driftSpeedMax = 0.324;
     const shapeRotationSpeedMax = 0.0162;
 
-    const maxStars = 150;
+    const maxStars = 320;
     const starInitialFadeSpeed = 0.00405;
     const starTwinkleFadeSpeed = 0.01458;
-    const starSpawnRate = 0.04;
-    const initialStarTargetCount = Math.min(maxStars, 100);
+    const starSpawnRate = 0.081;
+    const initialStarTargetCount = Math.min(maxStars, 220);
     const initialStarsPerFrame = 5;
 
     const shapeTypes = ['circle', 'rect', 'triangle', 'diamond', 'star', 'hexagon'];
@@ -407,7 +407,7 @@
 
         ctx.globalAlpha = 1.0;
         ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(0, 0, 10, 0.3)';
+        ctx.fillStyle = 'rgba(0, 0, 10, 0.18)';
         ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
         drawStars();
@@ -451,7 +451,7 @@
     function handlePointerDown(e) {
         updateMousePosition(e);
         mouse.isDown = true;
-        const numBurst = 3;
+        const numBurst = 4;
         for(let j=0; j < numBurst; j++) {
             if(mouse.isDown) {
                createShape(mouse.x + randomRange(-15, 15), mouse.y + randomRange(-15, 15));
