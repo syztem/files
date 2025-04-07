@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Virtual Kaleidoscope</title>
+<style>
+  :root {
+    --shape-glow-intensity: 4;
+    --active-glow-color: rgba(76, 201, 240, 0.9);
+    --info-text-color: #f0f0f0;
+    --info-strong-color: #4cc9f0;
+    --info-small-color: #bbb;
+    --star-color: rgba(230, 230, 255, 0.8);
+
+    --base-color-1-h: 275; --base-color-1-s: 100%; --base-color-1-l: 55%;
+    --base-color-2-h: 75;  --base-color-2-s: 100%; --base-color-2-l: 50%;
+    --base-color-3-h: 180; --base-color-3-s: 100%; --base-color-3-l: 52%;
+    --base-color-4-h: 15;  --base-color-4-s: 100%; --base-color-4-l: 53%;
+    --base-color-5-h: 320; --base-color-5-s: 100%; --base-color-5-l: 58%;
+    --base-color-6-h: 215; --base-color-6-s: 100%; --base-color-6-l: 56%;
+    --base-color-7-h: 130; --base-color-7-s: 100%; --base-color-7-l: 48%;
+    --base-color-8-h: 50;  --base-color-8-s: 100%; --base-color-8-l: 51%;
+    --base-color-9-h: 350; --base-color-9-s: 100%; --base-color-9-l: 55%;
+    --base-color-10-h: 295; --base-color-10-s: 95%; --base-color-10-l: 60%;
+    --base-color-11-h: 165; --base-color-11-s: 100%; --base-color-11-l: 50%;
+    --base-color-12-h: 35;  --base-color-12-s: 100%; --base-color-12-l: 54%;
+    --base-color-13-h: 90;  --base-color-13-s: 100%; --base-color-13-l: 52%;
+    --base-color-14-h: 310; --base-color-14-s: 100%; --base-color-14-l: 57%;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background-color: #05020a;
+    font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    color: var(--info-text-color);
+    user-select: none;
+    cursor: crosshair;
+  }
+
+  #background-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    display: block;
+    transform: translateZ(0);
+  }
+
+  .overlay-content {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 20px;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 1.5s ease-out;
+  }
+
+  .overlay-content.fade-out {
+    opacity: 0;
+  }
+
+
+  #arcade-title {
+    font-size: clamp(3.1em, 8.8vw, 6.3em);
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 0 6px #fff, 0 0 12px var(--active-glow-color), 0 0 20px var(--active-glow-color), 0 0 35px rgba(0,0,0,0.7);
+    margin-bottom: 20px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    line-height: 1.1;
+  }
+
+  #instructions {
+    font-size: clamp(0.9em, 2.5vw, 1.2em);
+    color: var(--info-text-color);
+    text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.9);
+    max-width: 650px;
+    line-height: 1.5;
+  }
+
+  #instructions strong {
+    color: var(--info-strong-color);
+    font-weight: 600;
+  }
+
+</style>
+</head>
+<body>
+
+<canvas id="background-canvas"></canvas>
+
+<div class="overlay-content" id="text-overlay">
+  <div id="arcade-title">Virtual Kaleidoscope</div>
+  <div id="instructions">
+    Move <strong>mouse</strong> to twist patterns.<br><strong>Click</strong> screen to release bursts of color.
+  </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('background-canvas');
+    const ctx = canvas.getContext('2d', { alpha: true });
+    const textOverlay = document.getElementById('text-overlay');
+
+    const numSegments = 12;
+    const segmentAngle = (Math.PI * 2) / numSegments;
+    const maxShapes = 100;
+    const shapeMinSize = 5;
+    const shapeMaxSize = 24;
+    const shardMinLength = 18;
+    const shardMaxLength = 40;
+    const shardWidth = 1.5;
+    const rotationSpeedFactor = 0.0024;
+    const wheelRotationFactor = 0.001;
+    const baseGlowIntensity = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--shape-glow-intensity').trim()) || 4;
+    const baseFadeSpeed = 0.0015;
+    const driftSpeedMax = 0.4;
+    const shapeRotationSpeedMax = 0.02;
+
+    const maxStars = 350;
+    const starInitialFadeSpeed = 0.005;
+    const starTwinkleFadeSpeed = 0.018;
+    const starSpawnRate = 0.10;
+
+    const shardColors = [
+        '#4B0082', '#8A2BE2', '#BA55D3', '#FF00FF', '#FF69B4', '#C71585', '#E6E6FA'
+    ];
+    const shapeTypes = ['circle', 'rect', 'triangle', 'diamond', 'star', 'hexagon'];
+
+    let shapes = [];
+    let stars = [];
+    let canvasSize = { width: 0, height: 0, diagonal: 0 };
+    let center = { x: 0, y: 0 };
+    let currentRotation = 0;
+    let targetRotation = 0;
+    let wheelTargetRotationOffset = 0;
+    let currentWheelOffset = 0;
+    let mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2, isDown: false };
+    let baseHueShift = 0;
+    let animationFrameId = null;
+    let baseColors = [];
+    let preferredColorIndices = [];
+    let otherColorIndices = [];
+    const PREFERRED_COLOR_CHANCE = 0.75;
+
+    let lastDrawTime = 0;
+    let hasInteracted = false;
+
+    const starPath = new Path2D();
+    function buildStarPath(outerRadius, points, innerRadiusRatio) {
+        const innerRadius = outerRadius * innerRadiusRatio;
+        const angleStep = Math.PI / points;
+        starPath.moveTo(0, -outerRadius);
+        for (let i = 0; i < points * 2; i++) {
+            const radius = i % 2 === 0 ? outerRadius : innerRadius;
+            const angle = i * angleStep - Math.PI / 2;
+            starPath.lineTo(radius * Math.cos(angle), radius * Math.sin(angle));
+        }
+        starPath.closePath();
+    }
+    buildStarPath(1, 5, 0.5);
+
+    function lerp(start, end, amount) {
+        return start + (end - start) * amount;
+    }
+
+    function randomRange(min, max) {
+        return Math.random() * (max - min) + min;
+    }
+
+    function loadBaseColors() {
+        baseColors = [];
+        preferredColorIndices = [];
+        otherColorIndices = [];
+        const preferredHues = [
+            275,
+            180,
+            320,
+            215,
+            130,
+            295,
+            165,
+            90,
+            310
+        ];
+
+        for (let i = 1; i <= 14; i++) {
+            try {
+                const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(`--base-color-${i}-h`).trim());
+                const s = getComputedStyle(document.documentElement).getPropertyValue(`--base-color-${i}-s`).trim();
+                const l = getComputedStyle(document.documentElement).getPropertyValue(`--base-color-${i}-l`).trim();
+
+                if (!isNaN(h) && s && l) {
+                    const colorData = { h, s, l };
+                    baseColors.push(colorData);
+                    const currentIndex = baseColors.length - 1;
+
+                    if (preferredHues.includes(h)) {
+                        preferredColorIndices.push(currentIndex);
+                    } else {
+                        otherColorIndices.push(currentIndex);
+                    }
+                } else {
+                    throw new Error(`Invalid HSL for color ${i}`);
+                }
+            } catch (e) {
+                console.warn(`Failed load color ${i}:`, e);
+                baseColors.push({ h: randomRange(0, 360), s: '100%', l: '55%' });
+                 otherColorIndices.push(baseColors.length - 1);
+            }
+        }
+
+        if (preferredColorIndices.length === 0 && otherColorIndices.length > 0) {
+             preferredColorIndices = [...otherColorIndices];
+        } else if (otherColorIndices.length === 0 && preferredColorIndices.length > 0) {
+             otherColorIndices = [...preferredColorIndices];
+        }
+
+        if (baseColors.length === 0) {
+             console.error("FATAL: No base colors loaded!");
+             baseColors.push({ h: 180, s: '100%', l: '55%' });
+             preferredColorIndices.push(0);
+        }
+    }
+
+    function createShape(x, y) {
+        if (baseColors.length === 0) return;
+
+        const usePooling = shapes.length >= maxShapes;
+        const shape = usePooling ? shapes.shift() : {};
+
+        shape.x = x;
+        shape.y = y;
+        shape.opacity = 1.0;
+        shape.angle = randomRange(0, Math.PI * 2);
+        shape.vx = randomRange(-driftSpeedMax, driftSpeedMax);
+        shape.vy = randomRange(-driftSpeedMax, driftSpeedMax);
+        shape.va = randomRange(-shapeRotationSpeedMax, shapeRotationSpeedMax);
+        shape.isFadingOut = false;
+        shape.createdAt = performance.now();
+        shape.fadeSpeed = baseFadeSpeed;
+
+        const shardChance = randomRange(0.18, 0.30);
+        const isShard = Math.random() < shardChance;
+
+        if (isShard && shardColors.length > 0) {
+            shape.type = 'shard';
+            shape.color = shardColors[Math.floor(Math.random() * shardColors.length)];
+            shape.glowColor = shape.color;
+            shape.length = randomRange(shardMinLength, shardMaxLength);
+            shape.size = shardWidth;
+        } else {
+            shape.type = shapeTypes[Math.floor(Math.random() * shapeTypes.length)];
+
+            let chosenColorIndex;
+            const usePreferred = Math.random() < PREFERRED_COLOR_CHANCE;
+
+            if (usePreferred && preferredColorIndices.length > 0) {
+                chosenColorIndex = preferredColorIndices[Math.floor(Math.random() * preferredColorIndices.length)];
+            } else if (otherColorIndices.length > 0) {
+                 chosenColorIndex = otherColorIndices[Math.floor(Math.random() * otherColorIndices.length)];
+            } else if (preferredColorIndices.length > 0){
+                 chosenColorIndex = preferredColorIndices[Math.floor(Math.random() * preferredColorIndices.length)];
+            } else {
+                 chosenColorIndex = 0;
+            }
+
+
+            if (chosenColorIndex >= 0 && chosenColorIndex < baseColors.length) {
+                 const baseColor = baseColors[chosenColorIndex];
+                 const currentHue = (baseColor.h + baseHueShift) % 360;
+                 shape.color = `hsl(${currentHue}, ${baseColor.s}, ${baseColor.l})`;
+                 shape.glowColor = `hsla(${currentHue}, ${baseColor.s}, ${baseColor.l}, 0.7)`;
+            } else {
+                 shape.color = 'hsl(0, 100%, 50%)';
+                 shape.glowColor = 'hsla(0, 100%, 50%, 0.7)';
+            }
+
+            shape.size = randomRange(shapeMinSize, shapeMaxSize);
+            shape.length = undefined;
+        }
+
+        shapes.push(shape);
+    }
+
+    function createStar(isInitial = false) {
+        const usePooling = stars.length >= maxStars && !isInitial;
+        const star = usePooling ? stars.shift() : {};
+
+        star.x = Math.random() * canvasSize.width;
+        star.y = Math.random() * canvasSize.height;
+        star.size = randomRange(0.5, 1.8);
+        star.opacity = isInitial ? randomRange(0.1, 0.7) : 0;
+        star.isFadingOut = false;
+        star.isInitial = isInitial;
+        star.fadeSpeed = isInitial ? starInitialFadeSpeed : starTwinkleFadeSpeed;
+
+        if (!usePooling && stars.length >= maxStars) {
+             return;
+        }
+        stars.push(star);
+    }
+
+     function drawSingleShape(shape) {
+        if (shape.opacity <= 0) return;
+        ctx.save();
+        ctx.translate(shape.x, shape.y);
+        ctx.rotate(shape.angle);
+        let glowAmount = baseGlowIntensity * shape.opacity;
+        if (shape.type !== 'shard') { glowAmount *= (shape.size / shapeMaxSize); }
+        else { glowAmount *= 0.6; }
+
+        if (glowAmount > 1.0) {
+             ctx.shadowBlur = Math.max(0, glowAmount);
+             ctx.shadowColor = shape.glowColor;
+        } else {
+             ctx.shadowBlur = 0;
+        }
+
+        ctx.globalAlpha = shape.opacity;
+        ctx.fillStyle = shape.color;
+        ctx.strokeStyle = shape.color;
+        ctx.lineWidth = shardWidth;
+
+        const halfSize = shape.size / 2;
+        if (shape.type === 'circle') { ctx.beginPath(); ctx.arc(0, 0, halfSize, 0, Math.PI * 2); ctx.fill(); }
+        else if (shape.type === 'rect') { ctx.fillRect(-halfSize, -halfSize, shape.size, shape.size); }
+        else if (shape.type === 'triangle') { ctx.beginPath(); ctx.moveTo(0, -halfSize); ctx.lineTo(halfSize, halfSize); ctx.lineTo(-halfSize, halfSize); ctx.closePath(); ctx.fill(); }
+        else if (shape.type === 'diamond') { ctx.beginPath(); ctx.moveTo(0, -halfSize); ctx.lineTo(halfSize, 0); ctx.lineTo(0, halfSize); ctx.lineTo(-halfSize, 0); ctx.closePath(); ctx.fill(); }
+        else if (shape.type === 'star') { ctx.scale(halfSize, halfSize); ctx.fill(starPath); }
+        else if (shape.type === 'hexagon') { ctx.beginPath(); const angle = Math.PI / 3; ctx.moveTo(halfSize, 0); for (let i = 1; i <= 6; i++) { ctx.lineTo(halfSize * Math.cos(angle * i), halfSize * Math.sin(angle * i)); } ctx.closePath(); ctx.fill(); }
+        else if (shape.type === 'shard') { ctx.beginPath(); const halfLength = shape.length / 2; ctx.moveTo(-halfLength, 0); ctx.lineTo(halfLength, 0); ctx.stroke(); }
+
+        ctx.restore();
+    }
+
+     function drawStars() {
+        ctx.save();
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--star-color').trim() || 'rgba(255, 255, 255, 0.8)';
+        ctx.shadowBlur = 0;
+        for (let i = 0, len = stars.length; i < len; i++) {
+            const star = stars[i];
+            if (star.opacity <= 0 && star.isFadingOut) continue;
+            ctx.globalAlpha = star.opacity;
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function updateShapes(deltaTime) {
+        baseHueShift = (baseHueShift + 0.05) % 360;
+        const bounceRadius = canvasSize.diagonal * 0.55;
+        const bounceRadiusSq = bounceRadius * bounceRadius;
+
+        let activeShapes = [];
+        for (let i = 0, len = shapes.length; i < len; i++) {
+            const shape = shapes[i];
+            shape.x += shape.vx;
+            shape.y += shape.vy;
+            shape.angle += shape.va;
+            shape.opacity -= shape.fadeSpeed;
+
+            if (shape.opacity > 0) {
+                const dx = shape.x - center.x;
+                const dy = shape.y - center.y;
+                const distSq = dx * dx + dy * dy;
+
+                if (distSq > bounceRadiusSq && shape.opacity > 0.1) {
+                    const distFromCenter = Math.sqrt(distSq);
+                    const normalX = dx / distFromCenter;
+                    const normalY = dy / distFromCenter;
+                    const dotProduct = shape.vx * normalX + shape.vy * normalY;
+                    shape.vx -= 1.8 * dotProduct * normalX;
+                    shape.vy -= 1.8 * dotProduct * normalY;
+                    shape.x = center.x + normalX * (bounceRadius - 1);
+                    shape.y = center.y + normalY * (bounceRadius - 1);
+                }
+                activeShapes.push(shape);
+            }
+        }
+        shapes = activeShapes;
+    }
+
+    function updateStars(deltaTime) {
+        let activeStars = [];
+        for (let i = 0, len = stars.length; i < len; i++) {
+             const star = stars[i];
+             if (star.isFadingOut) {
+                 star.opacity -= star.fadeSpeed;
+                 if (star.opacity > 0) {
+                     activeStars.push(star);
+                 }
+             } else {
+                 star.opacity += star.fadeSpeed;
+                 if (star.opacity >= 1) {
+                     star.opacity = 1;
+                     star.isFadingOut = true;
+                     if (star.isInitial) {
+                         star.fadeSpeed = starTwinkleFadeSpeed;
+                         star.isInitial = false;
+                     }
+                 }
+                 activeStars.push(star);
+             }
+         }
+         stars = activeStars;
+
+         if (Math.random() < starSpawnRate) { createStar(false); }
+    }
+
+    function drawFrame(timestamp) {
+        const deltaTime = timestamp - (lastDrawTime || timestamp);
+        lastDrawTime = timestamp;
+
+        targetRotation = (mouse.x - center.x) * rotationSpeedFactor;
+        currentWheelOffset = lerp(currentWheelOffset, wheelTargetRotationOffset, 0.1);
+        const finalTargetRotation = targetRotation + currentWheelOffset;
+        currentRotation = lerp(currentRotation, finalTargetRotation, 0.08);
+
+        updateShapes(deltaTime);
+        updateStars(deltaTime);
+
+        ctx.globalAlpha = 1.0;
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(5, 2, 10, 0.15)';
+        ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+
+        drawStars();
+
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < numSegments; i++) {
+            ctx.save();
+            ctx.translate(center.x, center.y);
+            ctx.rotate(segmentAngle * i + currentRotation);
+            if (i % 2 === 1) { ctx.scale(1, -1); }
+            ctx.translate(-center.x, -center.y);
+
+            for(let j = 0, len = shapes.length; j < len; j++) {
+                drawSingleShape(shapes[j]);
+            }
+
+            ctx.restore();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1.0;
+        animationFrameId = requestAnimationFrame(drawFrame);
+    }
+
+    function updateMousePosition(e) {
+        const touch = e.touches ? e.touches[0] : e;
+        mouse.x = typeof touch.clientX === 'number' ? touch.clientX : center.x;
+        mouse.y = typeof touch.clientY === 'number' ? touch.clientY : center.y;
+    }
+
+    function handleWheelScroll(e) {
+         wheelTargetRotationOffset += e.deltaY * wheelRotationFactor;
+         if (e.preventDefault) e.preventDefault();
+    }
+
+    function handlePointerMove(e) {
+        updateMousePosition(e);
+    }
+
+    function handlePointerDown(e) {
+        updateMousePosition(e);
+        mouse.isDown = true;
+        const numBurst = 4;
+        for(let j=0; j < numBurst; j++) {
+            if(mouse.isDown) {
+               createShape(mouse.x + randomRange(-15, 15), mouse.y + randomRange(-15, 15));
+            }
+        }
+        if (!hasInteracted && textOverlay) {
+            hasInteracted = true;
+            textOverlay.classList.add('fade-out');
+        }
+    }
+
+    function handlePointerUp(e) {
+        mouse.isDown = false;
+    }
+
+    function resizeCanvas() {
+        canvasSize.width = Math.max(100, window.innerWidth);
+        canvasSize.height = Math.max(100, window.innerHeight);
+        canvas.width = canvasSize.width; canvas.height = canvasSize.height;
+        canvasSize.diagonal = Math.sqrt(canvasSize.width * canvasSize.width + canvasSize.height * canvasSize.height);
+        center.x = canvasSize.width / 2; center.y = canvasSize.height / 2;
+        targetRotation = currentRotation = 0;
+        wheelTargetRotationOffset = currentWheelOffset = 0;
+        mouse.x = center.x; mouse.y = center.y;
+
+        stars = [];
+        const initialStarCount = Math.min(maxStars, 300);
+        for (let i = 0; i < initialStarCount; i++) {
+             createStar(true);
+        }
+    }
+
+    function init() {
+        if (!canvas || !ctx) { console.error("Canvas or Context initialization failed!"); return; }
+        if (!textOverlay) { console.warn("Text overlay element not found!"); }
+
+        loadBaseColors();
+        resizeCanvas();
+
+        document.addEventListener('pointerdown', handlePointerDown);
+        document.addEventListener('pointerup', handlePointerUp);
+        document.addEventListener('pointerleave', handlePointerUp);
+        document.addEventListener('pointermove', handlePointerMove);
+        document.addEventListener('wheel', handleWheelScroll, { passive: false });
+        window.addEventListener('resize', resizeCanvas);
+
+        if (animationFrameId) { cancelAnimationFrame(animationFrameId); }
+        lastDrawTime = performance.now();
+        animationFrameId = requestAnimationFrame(drawFrame);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+</script>
+
+</body>
+</html>
