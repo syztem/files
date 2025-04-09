@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong Reloaded</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+        :root {
+            --primary-color: #76b900;
+            --dark-color: #4a7000;
+            --bright-color: #a2d945;
+            --black: #000000;
+            --charcoal: #1a1a1a;
+            --grey: #888888;
+            --light-grey: #cccccc;
+            --color-transition-speed: 0s;
+        }
+        body { font-family: 'Orbitron', sans-serif; overflow: hidden; background-color: var(--black); color: var(--primary-color); margin: 0; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; transition: color var(--color-transition-speed); }
+        #introScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; cursor: pointer; transition: opacity 1.5s ease-out; opacity: 1; text-align: center; padding: 20px; box-sizing: border-box; }
+        #introScreen.fade-out { opacity: 0; pointer-events: none; }
+        #introTitle { font-size: clamp(3.1em, 8.8vw, 6.3em); font-weight: bold; color: var(--light-grey); text-shadow: 0 0 5px var(--light-grey), 0 0 10px var(--primary-color), 0 0 18px var(--bright-color), 0 0 30px rgba(0,0,0,0.7); margin-bottom: 20px; letter-spacing: 4px; text-transform: uppercase; line-height: 1.1; transition: text-shadow var(--color-transition-speed), color var(--color-transition-speed); }
+        #introScreen:hover #introTitle { text-shadow: 0 0 6px var(--light-grey), 0 0 12px var(--primary-color), 0 0 22px var(--bright-color), 0 0 35px rgba(0,0,0,0.7); }
+        #introInstructions { font-size: clamp(0.9em, 2.5vw, 1.2em); color: var(--grey); text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.9); max-width: 650px; line-height: 1.5; margin-top: 1rem; background-color: rgba(0, 0, 0, 0.7); padding: 10px; border-radius: 5px; transition: color var(--color-transition-speed); }
+        #introInstructions span { color: var(--bright-color); font-weight: bold; transition: color var(--color-transition-speed); }
+        #gameArea { display: none; flex-direction: column; align-items: center; justify-content: center; position: relative; z-index: 10; width: 100%; gap: 1.2rem; }
+        #gameContainer { position: relative; width: 1000px; height: 600px; margin-bottom: 1.5rem; }
+        #matrixRainCanvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; opacity: 0.45; background-color: var(--black); }
+        #gameCanvas { display: block; position: relative; background-color: transparent; border: 3px solid var(--primary-color); box-shadow: 0 0 20px var(--primary-color), inset 0 0 15px rgba(118, 185, 0, 0.3); transition: border-color var(--color-transition-speed), box-shadow var(--color-transition-speed); }
+        .glow { text-shadow: 0 0 6px var(--primary-color), 0 0 12px var(--dark-color); transition: text-shadow var(--color-transition-speed); }
+        #scoreDisplay { display: flex; gap: 5rem; text-align: center; margin-bottom: 1rem; font-size: 3.5rem; font-weight: 700; color: var(--light-grey); }
+        #scoreDisplay span { min-width: 60px; display: inline-block; text-align: center; transition: transform 0.1s, text-shadow 0.1s, color 0.1s; }
+        #controlsContainer { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+        #meterAndMute { display: flex; align-items: center; gap: 0.8rem; }
+        #bulletTimeMeterContainer { width: 280px; height: 12px; border: 2px solid var(--primary-color); background-color: var(--charcoal); position: relative; box-shadow: 0 0 8px var(--dark-color); transition: border-color var(--color-transition-speed), box-shadow var(--color-transition-speed); }
+        #bulletTimeMeterFill { height: 100%; background: linear-gradient(to right, var(--dark-color), var(--primary-color), var(--bright-color)); width: 100%; transition: width 0.15s linear, background var(--color-transition-speed); box-shadow: inset 0 0 4px rgba(0,0,0,0.6); }
+        #bulletTimeLabel { font-size: 0.8rem; color: var(--grey); text-align: center; text-transform: uppercase; letter-spacing: 1px; transition: color var(--color-transition-speed); }
+        #bulletTimeLabel span { color: var(--bright-color); font-weight: bold; background-color: var(--charcoal); padding: 1px 4px; border-radius: 3px; border: 1px solid var(--dark-color); transition: color var(--color-transition-speed), border-color var(--color-transition-speed); }
+        #muteButton { font-size: 1.4rem; color: var(--grey); cursor: pointer; transition: color 0.2s ease, text-shadow 0.2s ease; line-height: 1; user-select: none; }
+        #muteButton:hover { color: var(--light-grey); }
+        #muteButton.muted { color: var(--dark-color); text-shadow: none; transition: color var(--color-transition-speed); }
+        .meter-flash { animation: meterFlash 0.3s ease-out; }
+        @keyframes meterFlash { 0%, 100% { box-shadow: inset 0 0 4px rgba(0,0,0,0.6), 0 0 8px var(--dark-color); } 50% { box-shadow: inset 0 0 6px rgba(0,0,0,0.8), 0 0 18px var(--bright-color); } }
+        #message { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 50; font-size: 3rem; font-weight: 700; color: var(--bright-color); text-align: center; background: rgba(0, 0, 0, 0.85); padding: 25px 40px; border: 3px solid var(--primary-color); text-shadow: 0 0 10px var(--primary-color); display: none; opacity: 0; transition: opacity 0.3s ease-in-out, color var(--color-transition-speed), border-color var(--color-transition-speed), text-shadow var(--color-transition-speed); min-width: 300px; }
+        #message.visible { display: block; opacity: 1; }
+        #playAgainOption { font-size: 1.2rem; color: var(--light-grey); margin-top: 1.5rem; cursor: pointer; display: none; opacity: 0; text-shadow: 0 0 5px var(--primary-color); transition: color var(--color-transition-speed), text-shadow var(--color-transition-speed), opacity 0.5s ease-out; }
+        #playAgainOption.fade-in { animation: fadeIn 1s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        #playAgainOption:hover { color: var(--bright-color); }
+        @keyframes glitchAnimation {
+            0% { transform: translate(0, 0); text-shadow: 0 0 2px var(--bright-color), 1px 1px 1px red, -1px -1px 1px blue; color: var(--light-grey); }
+            25% { transform: translate(-1px, 1px); text-shadow: 0 0 3px var(--primary-color), -1px 1px 1px blue, 1px -1px 1px red; color: var(--bright-color); }
+            50% { transform: translate(1px, -1px); text-shadow: 0 0 2px var(--dark-color), 1px -1px 1px red, -1px 1px 1px cyan; color: var(--grey); }
+            75% { transform: translate(1px, 1px); text-shadow: 0 0 4px var(--primary-color), -1px -1px 1px magenta, 1px 1px 1px blue; color: var(--light-grey); }
+            100% { transform: translate(0, 0); text-shadow: 0 0 2px var(--bright-color), 1px 1px 1px red, -1px -1px 1px blue; color: var(--bright-color); }
+        }
+        .glitch-active {
+            animation: glitchAnimation 0.08s linear infinite;
+        }
+    </style>
+</head>
+<body class="relative">
+
+    <canvas id="matrixRainCanvas"></canvas>
+
+    <div id="introScreen">
+        <div id="introTitle">MATRIX PONG</div>
+        <div id="introInstructions">
+            Use <span>Arrow Keys</span> or <span>W/S</span> to Move Paddle<br/>
+            Hold <span>Spacebar</span> for Bullet Time<br/>
+            Click Anywhere to Start
+        </div>
+    </div>
+
+    <div id="gameArea">
+        <div id="scoreDisplay">
+            <span id="playerScore" class="glow">0</span>
+            <span id="scoreSeparator">-</span>
+            <span id="cpuScore" class="glow">0</span>
+        </div>
+        <div id="gameContainer">
+            <canvas id="gameCanvas" width="1000" height="600"></canvas>
+            <div id="message">
+                <span id="messageText"></span>
+                <div id="playAgainOption">Play Again?</div>
+            </div>
+        </div>
+         <div id="controlsContainer">
+             <div id="meterAndMute">
+                 <div id="bulletTimeMeterContainer">
+                     <div id="bulletTimeMeterFill"></div>
+                 </div>
+                 <div id="muteButton" class="glow" title="Toggle Sound">&#x1F508;</div>
+             </div>
+             <div id="bulletTimeLabel">Hold <span>SPACE</span> for Bullet Time</div>
+         </div>
+    </div>
+
+    <script>
+        const colorThemes = [
+            { name: 'green', primary: '#76b900', dark: '#4a7000', bright: '#a2d945' },
+            { name: 'purple', primary: '#9400D3', dark: '#480082', bright: '#BA55D3' },
+            { name: 'blue', primary: '#007FFF', dark: '#0000CD', bright: '#1E90FF' },
+            { name: 'pink', primary: '#C71585', dark: '#8B008B', bright: '#FF1493' },
+            { name: 'yellow', primary: '#FFD700', dark: '#B8860B', bright: '#FFFF00' },
+            { name: 'red', primary: '#FF0000', dark: '#8B0000', bright: '#FF4500' },
+            { name: 'turquoise', primary: '#40E0D0', dark: '#008080', bright: '#48D1CC' },
+            { name: 'orange', primary: '#FFA500', dark: '#FF8C00', bright: '#FFB84D' },
+            { name: 'teal', primary: '#008080', dark: '#004C4C', bright: '#20B2AA' },
+            { name: 'copper', primary: '#B87333', dark: '#5C3317', bright: '#DA8A67' },
+            { name: 'indigo', primary: '#4B0082', dark: '#2C0042', bright: '#8A2BE2' }
+        ];
+
+        const CYCLE_TIME_MS = 45 * 1000;
+        const FADE_DURATION_MS = 20 * 1000;
+        const STABLE_DURATION_MS = CYCLE_TIME_MS - FADE_DURATION_MS;
+        const pageLoadTime = Date.now();
+        let themeAnimationId = null;
+
+        let primaryColor = colorThemes[0].primary;
+        let darkColor = colorThemes[0].dark;
+        let brightColor = colorThemes[0].bright;
+        const BLACK = '#000000';
+        const CHARCOAL = '#1a1a1a';
+        const GREY = '#888888';
+        const LIGHT_GREY = '#cccccc';
+
+        const introScreen = document.getElementById('introScreen'); const gameArea = document.getElementById('gameArea'); const rainCanvas = document.getElementById('matrixRainCanvas'); const rainCtx = rainCanvas.getContext('2d'); const gameContainer = document.getElementById('gameContainer'); const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d'); const playerScoreEl = document.getElementById('playerScore'); const cpuScoreEl = document.getElementById('cpuScore'); const scoreSeparatorEl = document.getElementById('scoreSeparator'); const messageEl = document.getElementById('message'); const messageTextEl = document.getElementById('messageText'); const playAgainOptionEl = document.getElementById('playAgainOption'); const bulletTimeMeterFillEl = document.getElementById('bulletTimeMeterFill'); const muteButton = document.getElementById('muteButton');
+
+        let gameInitialized = false; let audioCtx; const sounds = {}; let backgroundMusicNode = null; let musicPlaying = false; let masterGain; let isMuted = false; const masterVolume = 0.34; let isBulletTime = false; let bulletTimeMeter = 100; let bulletTimeMeterFlash = false; let isGameRunning = false; let animationFrameId; let particles = []; let vfxEffects = []; let screenShakeIntensity = 0; const WINNING_SCORE = 5; const keys = { ArrowUp: false, ArrowDown: false, ' ': false, w: false, s: false };
+        let glitchEffectTriggered = false;
+        let gameStartTime = 0;
+
+        const speedMultiplier = 0.75; const paddleSpeedIncrease = 1.05;
+        const basePlayerSpeedValue = 8.5 * speedMultiplier * paddleSpeedIncrease * 1.25;
+        const baseCpuSpeedValue = 8.5 * speedMultiplier * paddleSpeedIncrease * 0.75;
+        const paddleWidth = 16; const paddleHeight = 110; const ballRadius = 11;
+        let playerPaddle = { x: 40, y: canvas.height / 2 - paddleHeight / 2, width: paddleWidth, height: paddleHeight, baseSpeed: basePlayerSpeedValue, speed: basePlayerSpeedValue, score: 0, visualHeight: paddleHeight, visualY: 0 };
+        let cpuPaddle = { x: canvas.width - 40 - paddleWidth, y: canvas.height / 2 - paddleHeight / 2, width: paddleWidth, height: paddleHeight, baseSpeed: baseCpuSpeedValue, speed: baseCpuSpeedValue, score: 0, visualHeight: paddleHeight, visualY: 0 };
+        let ball = { x: canvas.width / 2, y: canvas.height / 2, radius: ballRadius, baseSpeed: 7 * speedMultiplier, speed: 7 * speedMultiplier, dx: 0, dy: 0, trail: [] };
+
+        rainCanvas.width = window.innerWidth; rainCanvas.height = window.innerHeight; const rainChars = "日ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾔﾖﾙﾚﾛﾝ0123456789<>?:{}|+=_-()*&^%$#@!~"; const rainFontSize = 14; let rainColumns = Math.ceil(rainCanvas.width / rainFontSize); let rainDrops = Array(rainColumns).fill(1).map(() => Math.random() * rainCanvas.height / rainFontSize); let rainSpeeds = Array(rainColumns).fill(1).map(() => Math.random() * 0.5 + 0.2); let rainInterval = null;
+        function drawMatrixRain() {
+            if (!rainCtx) return;
+            if (rainCanvas.width !== window.innerWidth || rainCanvas.height !== window.innerHeight) {
+                rainCanvas.width = window.innerWidth; rainCanvas.height = window.innerHeight;
+                rainColumns = Math.ceil(rainCanvas.width / rainFontSize);
+                rainDrops = Array(rainColumns).fill(1).map(() => Math.random() * rainCanvas.height / rainFontSize);
+                rainSpeeds = Array(rainColumns).fill(1).map(() => Math.random() * 0.5 + 0.2);
+            }
+            rainCtx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+            rainCtx.fillRect(0, 0, rainCanvas.width, rainCanvas.height);
+            rainCtx.fillStyle = darkColor;
+            rainCtx.font = rainFontSize + 'px monospace';
+            for (let i = 0; i < rainDrops.length; i++) {
+                if (i >= rainColumns) continue;
+                const text = rainChars.charAt(Math.floor(Math.random() * rainChars.length));
+                const x = i * rainFontSize;
+                const y = rainDrops[i] * rainFontSize;
+                rainCtx.fillText(text, x, y);
+                if (y > rainCanvas.height && Math.random() > 0.98) {
+                    rainDrops[i] = 0;
+                    rainSpeeds[i] = Math.random() * 0.5 + 0.2;
+                }
+                if (rainDrops[i] !== undefined && rainSpeeds[i] !== undefined) {
+                    rainDrops[i] += rainSpeeds[i];
+                } else {
+                    rainDrops[i] = 0;
+                    rainSpeeds[i] = Math.random() * 0.5 + 0.2;
+                }
+                if (Math.random() > 0.95 && y > rainFontSize * 5) {
+                    const flickerText = rainChars.charAt(Math.floor(Math.random() * rainChars.length));
+                    rainCtx.fillStyle = brightColor;
+                    rainCtx.fillText(flickerText, x, y - rainFontSize * (Math.floor(Math.random()*3)+1) );
+                    rainCtx.fillStyle = darkColor;
+                }
+            }
+        }
+        if (!rainInterval && rainCtx) {
+             rainInterval = setInterval(drawMatrixRain, 50);
+        }
+
+        function hexToRgb(hex) {
+            let r = 0, g = 0, b = 0;
+            if (!hex) hex = '#000000';
+            if (hex.length == 4) {
+                r = parseInt(hex[1] + hex[1], 16); g = parseInt(hex[2] + hex[2], 16); b = parseInt(hex[3] + hex[3], 16);
+            } else if (hex.length == 7) {
+                r = parseInt(hex[1] + hex[2], 16); g = parseInt(hex[3] + hex[4], 16); b = parseInt(hex[5] + hex[6], 16);
+            }
+            return { r, g, b };
+        }
+
+        function rgbToHex(r, g, b) {
+            r = Math.max(0, Math.min(255, Math.round(r)));
+            g = Math.max(0, Math.min(255, Math.round(g)));
+            b = Math.max(0, Math.min(255, Math.round(b)));
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+        }
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function lerpColor(hex1, hex2, t) {
+            const rgb1 = hexToRgb(hex1);
+            const rgb2 = hexToRgb(hex2);
+            const r = lerp(rgb1.r, rgb2.r, t);
+            const g = lerp(rgb1.g, rgb2.g, t);
+            const b = lerp(rgb1.b, rgb2.b, t);
+            return rgbToHex(r, g, b);
+        }
+
+        function themeUpdateLoop() {
+            const elapsedTime = Date.now() - pageLoadTime;
+            const timeInCycle = elapsedTime % CYCLE_TIME_MS;
+            const cycleNumber = Math.floor(elapsedTime / CYCLE_TIME_MS);
+            const currentThemeIndex = cycleNumber % colorThemes.length;
+            const nextThemeIndex = (currentThemeIndex + 1) % colorThemes.length;
+
+            const currentTheme = colorThemes[currentThemeIndex];
+            const nextTheme = colorThemes[nextThemeIndex];
+
+            let currentPrimary, currentDark, currentBright;
+
+            if (timeInCycle < STABLE_DURATION_MS) {
+                currentPrimary = currentTheme.primary;
+                currentDark = currentTheme.dark;
+                currentBright = currentTheme.bright;
+            } else {
+                const fadeProgress = Math.max(0, Math.min(1, (timeInCycle - STABLE_DURATION_MS) / FADE_DURATION_MS));
+                currentPrimary = lerpColor(currentTheme.primary, nextTheme.primary, fadeProgress);
+                currentDark = lerpColor(currentTheme.dark, nextTheme.dark, fadeProgress);
+                currentBright = lerpColor(currentTheme.bright, nextTheme.bright, fadeProgress);
+            }
+
+            primaryColor = currentPrimary;
+            darkColor = currentDark;
+            brightColor = currentBright;
+
+            const rootStyle = document.documentElement.style;
+            rootStyle.setProperty('--primary-color', primaryColor);
+            rootStyle.setProperty('--dark-color', darkColor);
+            rootStyle.setProperty('--bright-color', brightColor);
+
+            if (bulletTimeMeterFillEl) {
+                 bulletTimeMeterFillEl.style.background = `linear-gradient(to right, ${darkColor}, ${primaryColor}, ${brightColor})`;
+            }
+
+            themeAnimationId = requestAnimationFrame(themeUpdateLoop);
+        }
+
+        function stopThemeUpdateLoop() {
+             if (themeAnimationId) {
+                 cancelAnimationFrame(themeAnimationId);
+                 themeAnimationId = null;
+             }
+        }
+
+
+        function initAudio() {
+             if (audioCtx) return;
+            try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); masterGain = audioCtx.createGain(); masterGain.gain.value = isMuted ? 0 : masterVolume; masterGain.connect(audioCtx.destination); } catch (e) { console.error("Web Audio API not supported", e); return; }
+            const createNoiseBuffer = (duration = 0.15) => { if (!audioCtx) return null; const bufferSize = Math.floor(audioCtx.sampleRate * duration); const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate); const output = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1; return buffer; };
+            sounds.noiseBufferShort = createNoiseBuffer(0.05); sounds.noiseBufferMed = createNoiseBuffer(0.15); sounds.noiseBufferLong = createNoiseBuffer(0.8);
+            sounds.hitPaddle = () => { if (!sounds.noiseBufferShort || !audioCtx) return; const noiseGain = audioCtx.createGain(); noiseGain.connect(masterGain); noiseGain.gain.setValueAtTime(0.25, audioCtx.currentTime); noiseGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05); const noiseSource = audioCtx.createBufferSource(); noiseSource.buffer = sounds.noiseBufferShort; const noiseFilter = audioCtx.createBiquadFilter(); noiseFilter.type = 'bandpass'; noiseFilter.frequency.setValueAtTime(1500, audioCtx.currentTime); noiseFilter.Q.value = 1; noiseSource.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseSource.start(audioCtx.currentTime); const oscGain = audioCtx.createGain(); oscGain.connect(masterGain); oscGain.gain.setValueAtTime(0.35, audioCtx.currentTime); oscGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1); const osc = audioCtx.createOscillator(); osc.type = 'triangle'; osc.frequency.setValueAtTime(150, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.08); osc.connect(oscGain); osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.1); };
+            sounds.hitWall = () => { if (!sounds.noiseBufferShort || !audioCtx) return; const gain = audioCtx.createGain(); gain.connect(masterGain); gain.gain.setValueAtTime(0.4, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.06); const noiseSource = audioCtx.createBufferSource(); noiseSource.buffer = sounds.noiseBufferShort; const noiseFilter = audioCtx.createBiquadFilter(); noiseFilter.type = 'lowpass'; noiseFilter.frequency.setValueAtTime(500, audioCtx.currentTime); noiseSource.connect(noiseFilter); noiseFilter.connect(gain); noiseSource.start(audioCtx.currentTime); };
+            sounds.score = () => {
+                if (!audioCtx) return;
+                const playSingleScoreSound = (startTime) => {
+                    const time = startTime; const duration = 0.30; const startFreq = 30; const endFreq = 90; const startFilterFreq = 30; const endFilterFreq = 90; const vol = 0.35;
+                    const oscGain = audioCtx.createGain(); oscGain.connect(masterGain); oscGain.gain.setValueAtTime(vol, time); oscGain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+                    const osc = audioCtx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(startFreq, time); osc.frequency.exponentialRampToValueAtTime(endFreq, time + duration * 0.8); osc.connect(oscGain);
+                    const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(startFilterFreq, time); filter.frequency.exponentialRampToValueAtTime(endFilterFreq, time + duration * 0.7); filter.Q.value = 2; osc.connect(filter); filter.connect(oscGain);
+                    const dissonantGain = audioCtx.createGain(); dissonantGain.connect(masterGain); dissonantGain.gain.setValueAtTime(vol * 0.3, time); dissonantGain.gain.exponentialRampToValueAtTime(0.005, time + duration * 0.9);
+                    const dissonantOsc = audioCtx.createOscillator(); dissonantOsc.type = 'square'; dissonantOsc.frequency.setValueAtTime(startFreq * Math.pow(2, 1/12), time); dissonantOsc.frequency.exponentialRampToValueAtTime(endFreq * Math.pow(2, 1/12) * 0.9, time + duration * 0.85); dissonantOsc.connect(dissonantGain);
+                    osc.start(time); osc.stop(time + duration); dissonantOsc.start(time); dissonantOsc.stop(time + duration);
+                };
+                const currentTime = audioCtx.currentTime; playSingleScoreSound(currentTime); playSingleScoreSound(currentTime + 0.09);
+            };
+            sounds.losePoint = () => { if (!audioCtx) return; const time = audioCtx.currentTime; const duration = 0.4; const oscGain = audioCtx.createGain(); oscGain.connect(masterGain); oscGain.gain.setValueAtTime(0.05, time); oscGain.gain.exponentialRampToValueAtTime(0.01, time + duration); const osc = audioCtx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(180, time); osc.frequency.exponentialRampToValueAtTime(60, time + duration * 0.8); osc.connect(oscGain); osc.start(time); osc.stop(time + duration); const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(800, time); filter.frequency.exponentialRampToValueAtTime(200, time + duration * 0.7); filter.Q.value = 2; osc.connect(filter); filter.connect(oscGain); const dissonantGain = audioCtx.createGain(); dissonantGain.connect(masterGain); dissonantGain.gain.setValueAtTime(0.15, time); dissonantGain.gain.exponentialRampToValueAtTime(0.005, time + duration * 0.9); const dissonantOsc = audioCtx.createOscillator(); dissonantOsc.type = 'square'; dissonantOsc.frequency.setValueAtTime(180 * Math.pow(2, 1/12), time); dissonantOsc.frequency.exponentialRampToValueAtTime(65, time + duration * 0.85); dissonantOsc.connect(dissonantGain); dissonantOsc.start(time); dissonantOsc.stop(time + duration); };
+            sounds.gameOverLose = () => { if (!audioCtx) return; const time = audioCtx.currentTime; const womp = (startTime, startFreq, endFreq, duration, volume) => { const gain = audioCtx.createGain(); gain.connect(masterGain); gain.gain.setValueAtTime(volume * 2.0, startTime); gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration); const osc = audioCtx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(startFreq, startTime); osc.frequency.exponentialRampToValueAtTime(endFreq, startTime + duration * 0.8); const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(startFreq * 1.5, startTime); filter.frequency.exponentialRampToValueAtTime(endFreq * 2, startTime + duration * 0.7); filter.Q.value = 1.5; osc.connect(filter); filter.connect(gain); osc.start(startTime); osc.stop(startTime + duration); }; womp(time, 150, 60, 0.35, 0.7); womp(time + 0.25, 120, 50, 0.3, 0.6); womp(time + 0.5, 100, 40, 0.25, 0.5); };
+            sounds.gameOverWin = () => { if (!audioCtx) return; const time = audioCtx.currentTime; const duration = 0.5; const oscGain = audioCtx.createGain(); oscGain.connect(masterGain); oscGain.gain.setValueAtTime(0.7, time); oscGain.gain.exponentialRampToValueAtTime(0.01, time + duration); const osc = audioCtx.createOscillator(); osc.type = 'sine'; osc.frequency.setValueAtTime(80, time); osc.frequency.exponentialRampToValueAtTime(600, time + duration * 0.9); osc.connect(oscGain); osc.start(time); osc.stop(time + duration); if (sounds.noiseBufferMed) { const shimmerGain = audioCtx.createGain(); shimmerGain.connect(masterGain); shimmerGain.gain.setValueAtTime(0, time + 0.05); shimmerGain.gain.linearRampToValueAtTime(0.15, time + 0.15); shimmerGain.gain.exponentialRampToValueAtTime(0.001, time + duration); const noiseSource = audioCtx.createBufferSource(); noiseSource.buffer = sounds.noiseBufferMed; const noiseFilter = audioCtx.createBiquadFilter(); noiseFilter.type = 'bandpass'; noiseFilter.frequency.setValueAtTime(4000, time + 0.05); noiseFilter.Q.value = 10; noiseSource.connect(noiseFilter); noiseFilter.connect(shimmerGain); noiseSource.start(time + 0.05); } };
+            sounds.bulletTimeStart = () => { if (!audioCtx) return; const kick1Gain = audioCtx.createGain(); kick1Gain.connect(masterGain); kick1Gain.gain.setValueAtTime(0.9, audioCtx.currentTime); kick1Gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25); const kick1Osc = audioCtx.createOscillator(); kick1Osc.type = 'sine'; kick1Osc.frequency.setValueAtTime(100, audioCtx.currentTime); kick1Osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.15); kick1Osc.connect(kick1Gain); kick1Osc.start(audioCtx.currentTime); kick1Osc.stop(audioCtx.currentTime + 0.25); const kick2Time = audioCtx.currentTime + 0.1; const kick2Gain = audioCtx.createGain(); kick2Gain.connect(masterGain); kick2Gain.gain.setValueAtTime(0.8, kick2Time); kick2Gain.gain.exponentialRampToValueAtTime(0.01, kick2Time + 0.2); const kick2Osc = audioCtx.createOscillator(); kick2Osc.type = 'sine'; kick2Osc.frequency.setValueAtTime(80, kick2Time); kick2Osc.frequency.exponentialRampToValueAtTime(25, kick2Time + 0.12); kick2Osc.connect(kick2Gain); kick2Osc.start(kick2Time); kick2Osc.stop(kick2Time + 0.2); if (sounds.noiseBufferMed) { const sweepGain = audioCtx.createGain(); sweepGain.connect(masterGain); sweepGain.gain.setValueAtTime(0, audioCtx.currentTime); sweepGain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.1); sweepGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4); const sweepSource = audioCtx.createBufferSource(); sweepSource.buffer = sounds.noiseBufferMed; const sweepFilter = audioCtx.createBiquadFilter(); sweepFilter.type = 'lowpass'; sweepFilter.frequency.setValueAtTime(4000, audioCtx.currentTime); sweepFilter.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.35); sweepFilter.Q.value = 2; sweepSource.connect(sweepFilter); sweepFilter.connect(sweepGain); sweepSource.start(audioCtx.currentTime); } };
+            sounds.bulletTimeEnd = () => { if (!audioCtx) return; const gain = audioCtx.createGain(); gain.connect(masterGain); gain.gain.setValueAtTime(0.01, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.05); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2); const osc = audioCtx.createOscillator(); osc.type = 'noise'; const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.Q.value = 10; filter.frequency.setValueAtTime(200, audioCtx.currentTime); filter.frequency.exponentialRampToValueAtTime(4000, audioCtx.currentTime + 0.18); osc.connect(filter); filter.connect(gain); osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.2); };
+            sounds.bulletTimeReward = () => { if (!audioCtx) return; const gain = audioCtx.createGain(); gain.connect(masterGain); gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15); const osc = audioCtx.createOscillator(); osc.type = 'sine'; osc.frequency.setValueAtTime(1600, audioCtx.currentTime); osc.connect(gain); osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.15); };
+        }
+        function playSound(soundName) { if (!isMuted && audioCtx && sounds[soundName] && audioCtx.state === 'running') { sounds[soundName](); } }
+
+        function startBackgroundMusic() {
+            if (!audioCtx || musicPlaying || isMuted) return;
+            musicPlaying = true;
+            let scheduleAheadTime = 0.3; let nextEventTime = audioCtx.currentTime + 0.1;
+            let eventCounter = 0;
+            const midiToFreq = (note) => Math.pow(2, (note - 69) / 12) * 440;
+            const droneNote = 36; const padNotes = [48, 51, 55, 58, 62]; const sparkleNotes = [60, 63, 65, 67, 70, 72, 75]; const arpNotes = [70, 74, 77, 81, 77, 74]; let arpIndex = 0; const rhythmNote = 30;
+
+            const playDrone = (time) => { const droneGain = audioCtx.createGain(); droneGain.connect(masterGain); droneGain.gain.setValueAtTime(0, time); droneGain.gain.linearRampToValueAtTime(0.06, time + 4.0); droneGain.gain.setValueAtTime(0.06, time + 10.0); droneGain.gain.linearRampToValueAtTime(0, time + 14.0); const droneOsc = audioCtx.createOscillator(); droneOsc.type = 'sine'; droneOsc.frequency.setValueAtTime(midiToFreq(droneNote), time); droneOsc.detune.setValueAtTime(-3, time); const droneOsc2 = audioCtx.createOscillator(); droneOsc2.type = 'sine'; droneOsc2.frequency.setValueAtTime(midiToFreq(droneNote), time); droneOsc2.detune.setValueAtTime(3, time); droneOsc.connect(droneGain); droneOsc2.connect(droneGain); droneOsc.start(time); droneOsc2.start(time); droneOsc.stop(time + 14.1); droneOsc2.stop(time + 14.1); };
+            const playPad = (time) => { padNotes.forEach((note) => { const padGain = audioCtx.createGain(); padGain.connect(masterGain); const attack = 2.5 + Math.random() * 1.5; const release = 3.0 + Math.random() * 1.0; const duration = 8.0 + Math.random() * 4.0; const maxVol = (0.08 + Math.random() * 0.04) / padNotes.length; padGain.gain.setValueAtTime(0, time); padGain.gain.linearRampToValueAtTime(maxVol, time + attack); padGain.gain.setValueAtTime(maxVol, time + duration - release); padGain.gain.linearRampToValueAtTime(0.001, time + duration); const padOsc = audioCtx.createOscillator(); padOsc.type = 'triangle'; padOsc.frequency.setValueAtTime(midiToFreq(note), time); padOsc.detune.setValueAtTime((Math.random() - 0.5) * 8, time); const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.Q.value = 1.2; filter.frequency.setValueAtTime(300 + Math.random() * 200, time); filter.frequency.linearRampToValueAtTime(600 + Math.random() * 300, time + duration * 0.7); filter.frequency.linearRampToValueAtTime(350 + Math.random() * 150, time + duration); padOsc.connect(filter); filter.connect(padGain); padOsc.start(time); padOsc.stop(time + duration + 0.1); }); };
+            const playSparkle = (time) => { const sparkleGain = audioCtx.createGain(); sparkleGain.connect(masterGain); const duration = 0.05 + Math.random() * 0.1; const vol = 0.05 + Math.random() * 0.05; sparkleGain.gain.setValueAtTime(vol, time); sparkleGain.gain.exponentialRampToValueAtTime(0.001, time + duration * 2); const sparkleOsc = audioCtx.createOscillator(); sparkleOsc.type = 'sine'; const note = sparkleNotes[Math.floor(Math.random() * sparkleNotes.length)]; sparkleOsc.frequency.setValueAtTime(midiToFreq(note), time); const delay = audioCtx.createDelay(0.5); delay.delayTime.setValueAtTime(0.15 + Math.random() * 0.15, time); const feedback = audioCtx.createGain(); feedback.gain.setValueAtTime(0.4, time); sparkleGain.connect(delay); delay.connect(feedback); feedback.connect(delay); delay.connect(masterGain); sparkleOsc.connect(sparkleGain); sparkleOsc.start(time); sparkleOsc.stop(time + duration); };
+            const playArpLayer = (time) => { const arpGain = audioCtx.createGain(); arpGain.connect(masterGain); const noteDuration = 0.15; const vol = 0.06; arpGain.gain.setValueAtTime(vol, time); arpGain.gain.exponentialRampToValueAtTime(0.001, time + noteDuration * 1.5); const arpOsc = audioCtx.createOscillator(); arpOsc.type = 'triangle'; const note = arpNotes[arpIndex % arpNotes.length]; arpOsc.frequency.setValueAtTime(midiToFreq(note), time); arpIndex++; arpOsc.connect(arpGain); arpOsc.start(time); arpOsc.stop(time + noteDuration); };
+            const playRhythmLayer = (time) => { const rhythmGain = audioCtx.createGain(); rhythmGain.connect(masterGain); const duration = 0.1; const vol = 0.08; rhythmGain.gain.setValueAtTime(vol, time); rhythmGain.gain.exponentialRampToValueAtTime(0.001, time + duration * 2.5); const rhythmOsc = audioCtx.createOscillator(); rhythmOsc.type = 'sine'; rhythmOsc.frequency.setValueAtTime(midiToFreq(rhythmNote), time); rhythmOsc.frequency.exponentialRampToValueAtTime(midiToFreq(rhythmNote - 5), time + duration * 1.5); rhythmOsc.connect(rhythmGain); rhythmOsc.start(time); rhythmOsc.stop(time + duration); };
+
+            const scheduler = () => {
+                if (isMuted || !musicPlaying) { stopBackgroundMusic(); return; }
+                const currentTime = audioCtx.currentTime;
+                const elapsedGameTime = gameStartTime > 0 ? currentTime - gameStartTime : 0;
+
+                while (nextEventTime < currentTime + scheduleAheadTime) {
+                    if (eventCounter % 10 === 0) playDrone(nextEventTime);
+                    if (eventCounter % 4 === 1) playPad(nextEventTime + Math.random() * 0.5);
+                    if (Math.random() < 0.65) playSparkle(nextEventTime + Math.random() * 0.8);
+                    if (elapsedGameTime > 30 && eventCounter % 3 === 0) playArpLayer(nextEventTime + Math.random() * 0.1);
+                    if (elapsedGameTime > 60 && eventCounter % 4 === 0) playRhythmLayer(nextEventTime + Math.random() * 0.2);
+                    nextEventTime += 0.8 + Math.random() * 0.5;
+                    eventCounter++;
+                }
+                if (musicPlaying) backgroundMusicNode = setTimeout(scheduler, 100);
+            }
+            scheduler();
+        }
+
+        function stopBackgroundMusic() { musicPlaying = false; if (backgroundMusicNode) { clearTimeout(backgroundMusicNode); backgroundMusicNode = null; } }
+
+        muteButton.addEventListener('click', () => { if (!audioCtx) return; isMuted = !isMuted; if (isMuted) { masterGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.01); muteButton.textContent = '\u{1F507}'; muteButton.classList.remove('glow'); muteButton.classList.add('muted'); stopBackgroundMusic(); } else { masterGain.gain.setTargetAtTime(masterVolume, audioCtx.currentTime, 0.01); muteButton.textContent = '\u{1F508}'; muteButton.classList.add('glow'); muteButton.classList.remove('muted'); if (audioCtx.state === 'suspended') { audioCtx.resume().catch(e => console.error("Audio resume failed:", e)); } if (isGameRunning) { startBackgroundMusic(); } } });
+        document.addEventListener('keydown', (e) => { const key = e.key.toLowerCase(); if (audioCtx && audioCtx.state === 'suspended' && !isMuted) { audioCtx.resume().catch(e => console.error("Audio resume failed:", e)); } if (key in keys) keys[key] = true; if (e.key === 'ArrowUp') keys.ArrowUp = true; if (e.key === 'ArrowDown') keys.ArrowDown = true; if (key === ' ' && isGameRunning && !isBulletTime && bulletTimeMeter > 10) activateBulletTime(); });
+        document.addEventListener('keyup', (e) => { const key = e.key.toLowerCase(); if (key in keys) keys[key] = false; if (e.key === 'ArrowUp') keys.ArrowUp = false; if (e.key === 'ArrowDown') keys.ArrowDown = false; if (key === ' ') deactivateBulletTime(); });
+        introScreen.addEventListener('click', () => { if (gameInitialized) return; gameInitialized = true; initAudio(); if (audioCtx && audioCtx.state === 'suspended' && !isMuted) { audioCtx.resume().catch(e => console.error("Audio resume failed:", e)); } introScreen.classList.add('fade-out'); setTimeout(() => { introScreen.style.display = 'none'; gameArea.style.display = 'flex'; startGame(); }, 1500); });
+        playAgainOptionEl.addEventListener('click', () => { hideMessage(); startGame(); });
+
+        function showMessage(text, duration = 2000) { messageTextEl.innerHTML = text; messageEl.classList.add('visible'); playAgainOptionEl.style.display = 'none'; playAgainOptionEl.classList.remove('fade-in'); if (duration === 0) { setTimeout(() => { playAgainOptionEl.style.display = 'block'; playAgainOptionEl.classList.add('fade-in'); }, 1500); } else { setTimeout(() => { hideMessage(); }, duration); } }
+        function hideMessage() { messageEl.classList.remove('visible'); playAgainOptionEl.style.display = 'none'; playAgainOptionEl.classList.remove('fade-in'); }
+        function triggerScoreGlitch() {
+            if (!playerScoreEl || !cpuScoreEl || !scoreSeparatorEl || !isGameRunning) return;
+            const elementsToGlitch = [playerScoreEl, cpuScoreEl, scoreSeparatorEl];
+            elementsToGlitch.forEach(el => el.classList.add('glitch-active'));
+            setTimeout(() => {
+                elementsToGlitch.forEach(el => el.classList.remove('glitch-active'));
+            }, 350);
+        }
+
+        function startGame() {
+            resetGame(true);
+            isGameRunning = true;
+            gameStartTime = audioCtx ? audioCtx.currentTime : Date.now() / 1000;
+            if (!isMuted && audioCtx && audioCtx.state === 'running') { startBackgroundMusic(); }
+
+            if (!glitchEffectTriggered) {
+                glitchEffectTriggered = true;
+                const randomGlitchDelay = Math.random() * 5000 + 3000;
+                setTimeout(triggerScoreGlitch, randomGlitchDelay);
+            }
+            gameLoop();
+        }
+        function stopGame(message) {
+            isGameRunning = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            stopBackgroundMusic();
+            showMessage(message, 0);
+            [playerScoreEl, cpuScoreEl, scoreSeparatorEl].forEach(el => el.classList.remove('glitch-active'));
+        }
+        function resetGame(fullReset = false) {
+            [playerScoreEl, cpuScoreEl, scoreSeparatorEl].forEach(el => el.classList.remove('glitch-active'));
+            if (fullReset) {
+                playerPaddle.score = 0;
+                cpuPaddle.score = 0;
+                bulletTimeMeter = 100;
+                hideMessage();
+                stopBackgroundMusic();
+                glitchEffectTriggered = false;
+            }
+            playerScoreEl.textContent = playerPaddle.score; cpuScoreEl.textContent = cpuPaddle.score;
+            playerPaddle.y = canvas.height / 2 - paddleHeight / 2; cpuPaddle.y = canvas.height / 2 - paddleHeight / 2;
+            playerPaddle.visualHeight = playerPaddle.height; playerPaddle.visualY = 0; cpuPaddle.visualHeight = cpuPaddle.height; cpuPaddle.visualY = 0;
+            playerPaddle.speed = playerPaddle.baseSpeed; cpuPaddle.speed = cpuPaddle.baseSpeed;
+            resetBall(); particles = []; vfxEffects = []; deactivateBulletTime();
+            updateBulletTimeMeter();
+        }
+        function resetBall() { ball.trail = []; ball.x = canvas.width / 2; ball.y = canvas.height / 2; ball.speed = ball.baseSpeed * (1 + (playerPaddle.score + cpuPaddle.score) * 0.05); let angle = (Math.random() * Math.PI / 3.2 - Math.PI / 6.4); if (Math.abs(angle) < 0.15) angle = Math.sign(angle || 1) * 0.15; const direction = (Math.random() > 0.5 ? 1 : -1); ball.dx = 0; ball.dy = 0; setTimeout(() => { if (!isGameRunning && (playerPaddle.score !== 0 || cpuPaddle.score !== 0)) return; ball.dx = direction * Math.cos(angle) * ball.speed; ball.dy = Math.sin(angle) * ball.speed; }, 700); }
+
+        function hexToRgba(hex, alpha) {
+            let r = 0, g = 0, b = 0;
+            if (!hex) hex = '#000000';
+            if (hex.length == 4) {
+                r = parseInt(hex[1] + hex[1], 16); g = parseInt(hex[2] + hex[2], 16); b = parseInt(hex[3] + hex[3], 16);
+            } else if (hex.length == 7) {
+                r = parseInt(hex[1] + hex[2], 16); g = parseInt(hex[3] + hex[4], 16); b = parseInt(hex[5] + hex[6], 16);
+            }
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function createParticles(x, y, count, color = primaryColor, speed = 4.0, life = 30, gravity = 0.05) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const currentSpeed = Math.random() * speed + speed * 0.3;
+                particles.push({ x, y, vx: Math.cos(angle) * currentSpeed, vy: Math.sin(angle) * currentSpeed, life: life + Math.random() * life * 0.6, maxLife: life * 1.6, color, size: Math.random() * 3.0 + 1.5, gravity });
+            }
+        }
+        function updateParticles() { for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.vy += p.gravity; p.x += p.vx * (isBulletTime ? 0.3 : 1); p.y += p.vy * (isBulletTime ? 0.3 : 1); p.life -= (isBulletTime ? 0.4 : 1); if (p.life <= 0) particles.splice(i, 1); } }
+        function drawParticles() { if (!ctx) return; ctx.globalCompositeOperation = 'lighter'; particles.forEach(p => { ctx.fillStyle = p.color; const alpha = Math.max(0, (p.life / p.maxLife) * 0.8); ctx.globalAlpha = alpha; ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size); }); ctx.globalAlpha = 1.0; ctx.globalCompositeOperation = 'source-over'; }
+        function triggerScreenShake(intensity = 5, duration = 10) { screenShakeIntensity = Math.max(screenShakeIntensity, intensity); setTimeout(() => screenShakeIntensity = Math.max(0, screenShakeIntensity - intensity), (duration / 60) * 1000); }
+        function applyScreenShake() { if (!ctx) return; if (screenShakeIntensity > 0.5) { const dx = (Math.random() - 0.5) * screenShakeIntensity * 2; const dy = (Math.random() - 0.5) * screenShakeIntensity * 2; ctx.translate(dx, dy); screenShakeIntensity *= 0.88; } else { screenShakeIntensity = 0; } }
+        function triggerPaddleEffect(paddle) { paddle.visualHeight = paddle.height * 0.85; paddle.visualY = paddle.height * 0.075; setTimeout(() => { paddle.visualHeight = paddle.height; paddle.visualY = 0; }, 80); }
+
+        function createBulletTimeVFX(x, y) { const waveCount = 3; for (let i = 0; i < waveCount; i++) { vfxEffects.push({ type: 'bulletTimeWave', x: x, y: y, radius: ball.radius + i * 15, maxRadius: 150 + i * 20, life: 40 + i * 5, maxLife: 40 + i * 5, lineWidth: 4 - i }); } }
+        function updateVfx() { for (let i = vfxEffects.length - 1; i >= 0; i--) { const vfx = vfxEffects[i]; if (vfx.type === 'bulletTimeWave') { vfx.radius += (vfx.maxRadius - vfx.radius) * 0.1; vfx.life -= 1; if (vfx.life <= 0) vfxEffects.splice(i, 1); } } }
+        function drawVfx() { if (!ctx) return; ctx.save(); ctx.globalCompositeOperation = 'lighter'; vfxEffects.forEach(vfx => { if (vfx.type === 'bulletTimeWave') { const alpha = (vfx.life / vfx.maxLife) * 0.8; ctx.beginPath(); ctx.arc(vfx.x, vfx.y, vfx.radius, 0, Math.PI * 2); ctx.strokeStyle = hexToRgba(brightColor, alpha); ctx.lineWidth = vfx.lineWidth; ctx.stroke(); } }); ctx.restore(); }
+
+        function activateBulletTime() { if (!isBulletTime && bulletTimeMeter > 10) { isBulletTime = true; bulletTimeMeter -= 5; playSound('bulletTimeStart'); playerPaddle.speed = playerPaddle.baseSpeed * 0.65; cpuPaddle.speed = cpuPaddle.baseSpeed * 0.35; createBulletTimeVFX(ball.x, ball.y); } }
+        function deactivateBulletTime() { if (isBulletTime) { isBulletTime = false; playSound('bulletTimeEnd'); playerPaddle.speed = playerPaddle.baseSpeed; cpuPaddle.speed = cpuPaddle.baseSpeed; } }
+        function updateBulletTimeMeter() { const bulletTimeDrainRate = 0.28; const bulletTimeRechargeRate = 0.20; if (isBulletTime) { bulletTimeMeter -= bulletTimeDrainRate; if (bulletTimeMeter <= 0) { bulletTimeMeter = 0; deactivateBulletTime(); } } else if (bulletTimeMeter < 100) { bulletTimeMeter += bulletTimeRechargeRate; bulletTimeMeter = Math.min(bulletTimeMeter, 100); } if (bulletTimeMeterFillEl) bulletTimeMeterFillEl.style.width = `${bulletTimeMeter}%`; if (bulletTimeMeterFlash) { const parent = bulletTimeMeterFillEl ? bulletTimeMeterFillEl.parentElement : null; if (parent) { parent.classList.add('meter-flash'); setTimeout(() => { if (parent) parent.classList.remove('meter-flash'); bulletTimeMeterFlash = false; }, 300); } else { bulletTimeMeterFlash = false; } } }
+
+        function drawPaddle(paddle) {
+            if (!ctx) return;
+            const yPos = paddle.y + paddle.visualY; const h = paddle.visualHeight;
+            ctx.fillStyle = primaryColor; ctx.fillRect(paddle.x, yPos, paddle.width, h);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; for (let i = 2; i < h - 2; i += 6) ctx.fillRect(paddle.x + 2 , yPos + i, paddle.width - 4, 2);
+            ctx.strokeStyle = darkColor; ctx.lineWidth = 1; ctx.strokeRect(paddle.x, yPos, paddle.width, h);
+        }
+        function drawBall(x, y, radius) {
+            if (!ctx) return;
+            ball.trail.push({ x, y }); if (ball.trail.length > (isBulletTime ? 25 : 18)) ball.trail.shift();
+            ctx.globalCompositeOperation = 'lighter';
+            for (let i = 0; i < ball.trail.length; i++) {
+                const pos = ball.trail[i]; const alpha = (i / ball.trail.length) * 0.5 * (isBulletTime ? 1.1 : 1); const sizeFactor = (i / ball.trail.length) * 0.7 + 0.3;
+                ctx.beginPath(); ctx.arc(pos.x, pos.y, radius * sizeFactor, 0, Math.PI * 2); ctx.fillStyle = hexToRgba(primaryColor, alpha * 0.6); ctx.fill();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.shadowBlur = isBulletTime ? 20 : 15; ctx.shadowColor = primaryColor;
+            ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fillStyle = primaryColor; ctx.fill();
+            ctx.shadowBlur = 5; ctx.fillStyle = brightColor; ctx.shadowColor = brightColor;
+            ctx.beginPath(); ctx.arc(x, y, radius * 0.6, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+        function drawNet() {
+            if (!ctx) return;
+            const alpha = 0.3 + (Math.sin(Date.now() / 500) + 1) / 6;
+            ctx.strokeStyle = hexToRgba(primaryColor, alpha); ctx.lineWidth = 3; ctx.setLineDash([8, 12]);
+            ctx.beginPath(); ctx.moveTo(canvas.width / 2, 0); ctx.lineTo(canvas.width / 2, canvas.height); ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        function draw() {
+            if (!ctx) return;
+            ctx.fillStyle = isBulletTime ? 'rgba(0, 0, 0, 0.75)' : 'rgba(0, 0, 0, 0.40)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save(); applyScreenShake();
+            if (isBulletTime) { ctx.fillStyle = hexToRgba(primaryColor, 0.04); ctx.fillRect(0, 0, canvas.width, canvas.height); }
+            drawNet(); drawPaddle(playerPaddle); drawPaddle(cpuPaddle); drawParticles(); drawVfx(); drawBall(ball.x, ball.y, ball.radius);
+            ctx.restore();
+        }
+
+        function collision(b, p) { let closestX = Math.max(p.x, Math.min(b.x, p.x + p.width)); let closestY = Math.max(p.y + p.visualY, Math.min(b.y, p.y + p.visualY + p.visualHeight)); let distanceX = b.x - closestX; let distanceY = b.y - closestY; return (distanceX * distanceX + distanceY * distanceY) < (b.radius * b.radius); }
+
+        function update() {
+            if (!isGameRunning) return;
+            const speedFactor = isBulletTime ? 0.3 : 1;
+            let targetY = playerPaddle.y; if (keys.ArrowUp || keys.w) targetY -= playerPaddle.speed; if (keys.ArrowDown || keys.s) targetY += playerPaddle.speed; targetY = Math.max(0, Math.min(canvas.height - playerPaddle.height, targetY)); playerPaddle.y += (targetY - playerPaddle.y) * 0.5;
+            const cpuPaddleCenter = cpuPaddle.y + cpuPaddle.height / 2; let targetBallY = ball.y; const predictTimeFactor = isBulletTime ? 1.3 : 0.9; if (ball.dx > 0) { const timeToReachPaddle = (cpuPaddle.x - ball.x) / (ball.dx * speedFactor || 1); if (timeToReachPaddle > 0 && timeToReachPaddle < 160 / predictTimeFactor) targetBallY = ball.y + ball.dy * speedFactor * timeToReachPaddle; } targetBallY += (Math.random() - 0.5) * 15; const cpuTargetY = targetBallY - cpuPaddle.height / 2; const dy = cpuTargetY - cpuPaddle.y; const cpuReactSpeed = cpuPaddle.speed * speedFactor * (0.9 + Math.random() * 0.1); if (Math.abs(dy) > cpuReactSpeed * 0.4) cpuPaddle.y += Math.sign(dy) * cpuReactSpeed; cpuPaddle.y = Math.max(0, Math.min(canvas.height - cpuPaddle.height, cpuPaddle.y));
+            ball.x += ball.dx * speedFactor; ball.y += ball.dy * speedFactor;
+            if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) { ball.dy = -ball.dy; ball.y = Math.max(ball.radius, Math.min(canvas.height - ball.radius, ball.y)); playSound('hitWall'); createParticles(ball.x, ball.y < ball.radius ? ball.radius : canvas.height - ball.radius, 8, GREY, 2.5, 20, 0.03); triggerScreenShake(2, 8); }
+            let hitPaddle = null; let hitPointRatio = 0; if (ball.dx < 0 && collision(ball, playerPaddle)) { hitPaddle = playerPaddle; ball.dx = -ball.dx; ball.x = playerPaddle.x + playerPaddle.width + ball.radius + 1; hitPointRatio = (ball.y - (playerPaddle.y + playerPaddle.height / 2)) / (playerPaddle.height / 2); triggerPaddleEffect(playerPaddle); } else if (ball.dx > 0 && collision(ball, cpuPaddle)) { hitPaddle = cpuPaddle; ball.dx = -ball.dx; ball.x = cpuPaddle.x - ball.radius - 1; hitPointRatio = (ball.y - (cpuPaddle.y + cpuPaddle.height / 2)) / (cpuPaddle.height / 2); triggerPaddleEffect(cpuPaddle); } if (hitPaddle) { playSound('hitPaddle'); triggerScreenShake(3, 10); createParticles(ball.x, ball.y, 15, brightColor, 4, 35, 0.04); const angle = hitPointRatio * (Math.PI / 3.0); ball.speed = Math.min(ball.speed * 1.025, ball.baseSpeed * 2.5); const direction = (hitPaddle === playerPaddle) ? 1 : -1; ball.dx = direction * Math.cos(angle) * ball.speed; ball.dy = Math.sin(angle) * ball.speed; const maxDyRatio = 0.97; if(Math.abs(Math.sin(angle)) > maxDyRatio) { ball.dy = Math.sign(ball.dy) * ball.speed * maxDyRatio; ball.dx = Math.sign(ball.dx) * Math.sqrt(Math.max(0, ball.speed**2 - ball.dy**2)); } if (isBulletTime) { const reward = 2.5 + Math.abs(hitPointRatio) * 3; bulletTimeMeter = Math.min(100, bulletTimeMeter + reward); bulletTimeMeterFlash = true; playSound('bulletTimeReward'); } }
+            if (ball.x + ball.radius < -10) { cpuPaddle.score++; if(cpuScoreEl) cpuScoreEl.textContent = cpuPaddle.score; createParticles(canvas.width * 0.1, canvas.height/2, 50, LIGHT_GREY, 6, 50, 0.02); if (cpuPaddle.score >= WINNING_SCORE) { playSound('gameOverLose'); triggerScreenShake(15, 30); stopGame(`YOU LOSE`); } else { playSound('losePoint'); triggerScreenShake(9, 20); resetBall(); } }
+            else if (ball.x - ball.radius > canvas.width + 10) { playerPaddle.score++; if(playerScoreEl) playerScoreEl.textContent = playerPaddle.score; createParticles(canvas.width * 0.9, canvas.height/2, 50, brightColor, 6, 50, 0.02); if (playerPaddle.score >= WINNING_SCORE) { playSound('gameOverWin'); triggerScreenShake(12, 25); stopGame(`YOU WIN!`); } else { playSound('score'); triggerScreenShake(9, 20); resetBall(); } }
+            updateBulletTimeMeter(); updateParticles(); updateVfx();
+        }
+
+        function gameLoop() { if (!isGameRunning) return; update(); draw(); animationFrameId = requestAnimationFrame(gameLoop); }
+
+        themeUpdateLoop();
+
+    </script>
+</body>
+</html>
