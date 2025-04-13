@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bear Sign In</title>
+    <style>
+        :root {
+            --bg-gradient-start: #F5E8D3;
+            --bg-gradient-end: #D9B8A3;
+            --bear-head-color: #8B5523;
+            --bear-ear-color: #A66B30;
+            --eye-white-color: #FFF8E8;
+            --pupil-color: #3C2F2F;
+            --muzzle-color: #EAD9C2;
+            --nose-mouth-color: #3C2F2F;
+            --blush-color: rgba(217, 136, 128, 0.3);
+            --form-bg-color: #FFF8E8;
+            --form-border-color: #EAD9C2;
+            --text-dark-brown: #3C2F2F;
+            --text-medium-brown: #5C4033;
+            --text-muted-brown: #A66B30;
+            --accent-color: #D97706;
+            --accent-color-darker: #B45309;
+            --accent-focus-shadow: rgba(217, 119, 6, 0.2);
+            --eye-diameter: 1.8rem;
+            --pupil-diameter: 0.8rem;
+            --shadow-opacity-light: 0.08;
+            --shadow-opacity-medium: 0.1;
+            --eyelid-color: #3C2F2F;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(to bottom right, var(--bg-gradient-start), var(--bg-gradient-end));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-top: 20vh;
+            padding-bottom: 5vh;
+            padding-left: 1rem;
+            padding-right: 1rem;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 380px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .bear-container {
+            position: relative;
+            width: 13.2rem;
+            height: 9rem;
+            margin: 0 auto 1rem;
+            transform: scale(1.9);
+            transform-origin: bottom center;
+            cursor: default;
+        }
+
+        .bear-head {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 8.8rem;
+            height: 7.7rem;
+            background-color: var(--bear-head-color);
+            border-radius: 50% 50% 40% 40% / 60% 60% 40% 40%;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, var(--shadow-opacity-medium));
+            z-index: 5;
+            animation: headWiggle 5s ease-in-out infinite;
+            transform: translateX(-50%);
+        }
+        @keyframes headWiggle {
+            0%, 100% { transform: translateX(-50%) rotate(0deg); }
+            50% { transform: translateX(-50.5%) rotate(-0.75deg); }
+        }
+
+        .ear {
+            position: absolute;
+            top: -0.8rem;
+            width: 2.8rem;
+            height: 2.8rem;
+            background-color: var(--bear-ear-color);
+            border-radius: 50%;
+            box-shadow: inset 0 2px 3px rgba(0, 0, 0, var(--shadow-opacity-light));
+            z-index: 4;
+            transform-origin: bottom center;
+        }
+        .ear-left { left: -0.9rem; }
+        .ear-right { right: -0.9rem; }
+
+        @keyframes quickTwitchLeft { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-4deg); } }
+        @keyframes quickTwitchRight { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(4deg); } }
+        .ear--twitching-left { animation: quickTwitchLeft 300ms ease-in-out; }
+        .ear--twitching-right { animation: quickTwitchRight 300ms ease-in-out; }
+        @keyframes quickFlutterLeft { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(-2.5deg); } 70% { transform: rotate(1.5deg); } }
+        @keyframes quickFlutterRight { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(2.5deg); } 70% { transform: rotate(-1.5deg); } }
+        .ear--fluttering-left { animation: quickFlutterLeft 200ms ease-in-out; }
+        .ear--fluttering-right { animation: quickFlutterRight 200ms ease-in-out; }
+
+        .face {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 1.8rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 6;
+        }
+
+        .eyes { display: flex; gap: 1.5rem; margin-bottom: 0.6rem; position: relative; }
+        .eye {
+            width: var(--eye-diameter); height: var(--eye-diameter);
+            background-color: var(--eye-white-color); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden; box-shadow: inset 0 1px 2px rgba(0, 0, 0, var(--shadow-opacity-light));
+            position: relative;
+            transform-origin: center center;
+            transition: transform 180ms ease-in-out;
+        }
+        .pupil {
+            width: var(--pupil-diameter); height: var(--pupil-diameter);
+            background-color: var(--pupil-color); border-radius: 50%;
+            position: absolute; transition: transform 150ms linear, opacity 180ms ease-in-out;
+            opacity: 1; transform: translate(0px, 0px); z-index: 7;
+        }
+
+        .eye::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 10%;
+            width: 80%;
+            height: 2.5px;
+            background-color: var(--eyelid-color);
+            border-radius: 1.5px;
+            transform: translateY(-50%) scaleY(0);
+            transform-origin: center center;
+            opacity: 0;
+            transition: transform 180ms ease-in-out, opacity 180ms ease-in-out;
+            z-index: 8;
+            pointer-events: none;
+        }
+
+        @keyframes blink {
+            0%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(0.1); }
+        }
+        .eye--blinking {
+            animation: blink 180ms ease-in-out;
+        }
+        .eye--closed {
+            transform: scaleY(0.1);
+        }
+        .eye--closed .pupil {
+            opacity: 0;
+        }
+        .eye--closed::after {
+            transform: translateY(-50%) scaleY(1);
+            opacity: 1;
+        }
+
+        .muzzle {
+            position: relative; width: 4.6rem; height: 3rem;
+            background-color: var(--muzzle-color); border-radius: 0.8rem;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            box-shadow: 0 3px 5px -1px rgba(0, 0, 0, var(--shadow-opacity-light));
+            z-index: 8;
+        }
+        .blush {
+            position: absolute; top: 1.2rem; width: 1.1rem; height: 0.6rem;
+            background-color: var(--blush-color); border-radius: 50%;
+        }
+        .blush-left { left: 0.6rem; } .blush-right { right: 0.6rem; }
+        .nose {
+            position: absolute; top: 0.3rem; width: 1rem; height: 0.75rem;
+            background-color: var(--nose-mouth-color);
+            border-radius: 40% 40% 50% 50% / 60% 60% 40% 40%;
+        }
+        .mouth {
+            position: absolute; top: 1.3rem; width: 1.1rem; height: 0.5rem;
+            border-bottom: 2px solid var(--nose-mouth-color); border-radius: 0 0 50% 50%;
+            transition: border-radius 200ms ease, transform 200ms ease;
+        }
+        .bear-container:hover .mouth {
+            border-radius: 0 0 60% 60% / 0 0 100% 100%; transform: scale(1.05);
+        }
+
+        .form-container {
+            background-color: var(--form-bg-color);
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 8px 15px -3px rgba(0, 0, 0, var(--shadow-opacity-light)), 0 4px 6px -4px rgba(0, 0, 0, var(--shadow-opacity-light));
+            border: 1px solid var(--form-border-color);
+            width: 100%;
+            position: relative;
+            z-index: 1;
+            transition: none;
+        }
+
+        .form-title {
+            font-size: 1.75rem; font-weight: 700; text-align: center;
+            color: var(--text-dark-brown); margin-bottom: 2rem;
+        }
+
+        .form { display: flex; flex-direction: column; gap: 1.5rem; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-label {
+            font-size: 0.875rem; font-weight: 500;
+            color: var(--text-medium-brown); margin-bottom: 0.35rem;
+        }
+        .input-container { position: relative; }
+        .input-icon {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            left: 0.85rem; color: var(--text-muted-brown);
+            transition: transform 200ms ease, color 200ms ease;
+            z-index: 1; pointer-events: none;
+        }
+        .input:focus + .input-icon {
+            color: var(--accent-color); transform: translateY(-50%) scale(1.1);
+        }
+        .input {
+            width: 100%; padding: 0.7rem 0.85rem 0.7rem 2.8rem;
+            border: 1px solid var(--form-border-color); border-radius: 0.5rem;
+            box-shadow: inset 0 1px 1px rgba(0, 0, 0, var(--shadow-opacity-light));
+            font-size: 0.9rem; outline: none;
+            transition: border-color 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
+            background-color: var(--form-bg-color); color: var(--text-dark-brown);
+            position: relative; z-index: 0;
+            -webkit-user-select: text; -moz-user-select: text; -ms-user-select: text; user-select: text;
+        }
+        .input:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px var(--accent-focus-shadow), inset 0 1px 1px rgba(0, 0, 0, var(--shadow-opacity-light));
+            background-color: #fff; z-index: 2;
+        }
+        .input::placeholder { color: var(--text-muted-brown); opacity: 0.8; }
+        .password-input { padding-right: 3rem; }
+        .toggle-password {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            right: 0.85rem; color: var(--text-muted-brown);
+            background: none; border: none; cursor: pointer; padding: 0.2rem;
+            display: flex; align-items: center; justify-content: center;
+            transition: color 200ms ease, transform 200ms ease, opacity 200ms ease, visibility 200ms ease;
+            z-index: 3;
+            opacity: 0;
+            visibility: hidden;
+        }
+        .toggle-password--visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .toggle-password:hover { color: var(--accent-color); transform: translateY(-50%) scale(1.1); }
+        .toggle-password svg { width: 20px; height: 20px; }
+        .options { display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem; }
+        .checkbox-container { display: flex; align-items: center; cursor: pointer; }
+        .checkbox {
+            width: 1.1rem; height: 1.1rem; border: 1px solid var(--form-border-color);
+            border-radius: 0.25rem; accent-color: var(--accent-color); margin-right: 0.5rem;
+            cursor: pointer;
+        }
+        .checkbox:focus { outline: 2px solid var(--accent-focus-shadow); outline-offset: 1px; }
+        .checkbox-label { font-size: 0.875rem; color: var(--text-dark-brown); user-select: none; }
+        .link {
+            font-size: 0.875rem; font-weight: 500; color: var(--accent-color);
+            text-decoration: none; transition: color 150ms ease;
+        }
+        .link:hover { color: var(--accent-color-darker); text-decoration: underline; }
+        .submit-button {
+            width: 100%; padding: 0.75rem 1rem; background-color: var(--accent-color);
+            color: var(--form-bg-color); font-size: 0.95rem; font-weight: 600;
+            border: none; border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, var(--shadow-opacity-medium));
+            cursor: pointer;
+            transition: background-color 200ms ease, transform 150ms ease, box-shadow 200ms ease;
+            margin-top: 0.5rem;
+        }
+        .submit-button:hover {
+            background-color: var(--accent-color-darker); transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, var(--shadow-opacity-medium));
+        }
+        .submit-button:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-focus-shadow); }
+        .submit-button:disabled {
+            background-color: var(--text-muted-brown); cursor: not-allowed;
+            transform: translateY(0); box-shadow: 0 1px 3px rgba(0, 0, 0, var(--shadow-opacity-medium));
+        }
+        .signup-text { margin-top: 1.75rem; text-align: center; font-size: 0.9rem; color: var(--text-medium-brown); }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="bear-container">
+            <div class="bear-head">
+                <div id="ear-left" class="ear ear-left"></div>
+                <div id="ear-right" class="ear ear-right"></div>
+                <div class="face">
+                    <div class="eyes">
+                        <div class="eye eye-left">
+                            <div id="pupil-left" class="pupil"></div>
+                        </div>
+                        <div class="eye eye-right">
+                            <div id="pupil-right" class="pupil"></div>
+                        </div>
+                    </div>
+                    <div class="muzzle">
+                        <div class="blush blush-left"></div>
+                        <div class="blush blush-right"></div>
+                        <div class="nose"></div>
+                        <div class="mouth"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-container">
+            <h2 class="form-title">Welcome Back!</h2>
+            <form id="signin-form" class="form" novalidate>
+                <div class="form-group">
+                    <label for="email" class="form-label">Email</label>
+                    <div class="input-container">
+                        <svg class="input-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206" /></svg>
+                        <input type="email" id="email" name="email" placeholder="you@example.com" class="input" autocomplete="off" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="password" class="form-label">Password</label>
+                    <div class="input-container">
+                        <svg class="input-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                        <input type="password" id="password" name="password" placeholder="••••••••" class="input password-input" autocomplete="current-password"/>
+                        <button type="button" id="toggle-password" class="toggle-password" aria-label="Show password">
+                            <svg id="eye-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                            <svg id="eye-off-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: none;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.02 10.02 0 01-4.132 5.411m0 0L21 21"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="options">
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="remember-me" name="remember-me" class="checkbox" />
+                        <label for="remember-me" class="checkbox-label">Remember me</label>
+                    </div>
+                    <a href="#" class="link">Forgot password?</a>
+                </div>
+                <div><button type="submit" class="submit-button">Sign in</button></div>
+            </form>
+            <p class="signup-text">Not a member? <a href="#" class="link">Sign up</a></p>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            const togglePasswordButton = document.getElementById('toggle-password');
+            const eyeIcon = document.getElementById('eye-icon');
+            const eyeOffIcon = document.getElementById('eye-off-icon');
+            const pupilLeft = document.getElementById('pupil-left');
+            const pupilRight = document.getElementById('pupil-right');
+            const earLeft = document.getElementById('ear-left');
+            const earRight = document.getElementById('ear-right');
+            const signinForm = document.getElementById('signin-form');
+            const eyeLeftEl = document.querySelector('.eye-left');
+            const eyeRightEl = document.querySelector('.eye-right');
+
+            const pupils = [pupilLeft, pupilRight].filter(Boolean);
+            const ears = [earLeft, earRight].filter(Boolean);
+            const eyes = [eyeLeftEl, eyeRightEl].filter(Boolean);
+
+            const state = {
+                isPasswordVisible: false,
+                isEmailFocused: false,
+                isPasswordFocused: false,
+                isPeeking: false,
+                mousePosition: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+                animationFrameId: null,
+                earTimeoutId: null,
+                blinkTimeoutId: null,
+                isBlinking: false,
+            };
+
+            const PUPIL_MAX_OFFSET = 4.0;
+            const EMAIL_FOCUS_TARGET_Y = 8;
+            const EMAIL_FOCUS_BASE_X = -4;
+            const EMAIL_FOCUS_MAX_CHARS = 8;
+            const EMAIL_FOCUS_PIXELS_PER_CHAR = 1;
+            const EAR_MOVEMENT_MIN_DELAY = 5000;
+            const EAR_MOVEMENT_MAX_DELAY = 14000;
+            const EAR_TWITCH_DURATION = 300;
+            const EAR_FLUTTER_DURATION = 200;
+            const FLUTTER_PROBABILITY = 0.35;
+            const BLINK_DURATION = 180;
+            const BLINK_MIN_INTERVAL = 2500;
+            const BLINK_MAX_INTERVAL = 7000;
+
+
+            function getElementVisualCenter(el) {
+                if (!el) return { x: 0, y: 0 };
+                const rect = el.getBoundingClientRect();
+                return {
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2
+                };
+            }
+
+            function setElementTransform(el, x, y) {
+                if (el) {
+                    const numX = typeof x === 'number' ? x : 0;
+                    const numY = typeof y === 'number' ? y : 0;
+                    el.style.transform = `translate(${numX.toFixed(2)}px, ${numY.toFixed(2)}px)`;
+                }
+            }
+
+            function handleIdlePupilMovement() {
+                if (state.isEmailFocused || state.isPasswordFocused || state.isBlinking || !pupilLeft || !pupilRight) return;
+
+                const centerLeftEye = getElementVisualCenter(pupilLeft.parentElement);
+                const centerRightEye = getElementVisualCenter(pupilRight.parentElement);
+
+                const deltaLeftX = state.mousePosition.x - centerLeftEye.x;
+                const deltaLeftY = state.mousePosition.y - centerLeftEye.y;
+                const angleLeft = Math.atan2(deltaLeftY, deltaLeftX);
+                const distLeft = Math.min(PUPIL_MAX_OFFSET, Math.sqrt(deltaLeftX**2 + deltaLeftY**2) * 0.08);
+                const pupilLeftX = Math.cos(angleLeft) * distLeft;
+                const pupilLeftY = Math.sin(angleLeft) * distLeft;
+
+                const deltaRightX = state.mousePosition.x - centerRightEye.x;
+                const deltaRightY = state.mousePosition.y - centerRightEye.y;
+                const angleRight = Math.atan2(deltaRightY, deltaRightX);
+                const distRight = Math.min(PUPIL_MAX_OFFSET, Math.sqrt(deltaRightX**2 + deltaRightY**2) * 0.08);
+                const pupilRightX = Math.cos(angleRight) * distRight;
+                const pupilRightY = Math.sin(angleRight) * distRight;
+
+                setElementTransform(pupilLeft, pupilLeftX, pupilLeftY);
+                setElementTransform(pupilRight, pupilRightX, pupilRightY);
+            }
+
+            function animationLoop() {
+                if (!state.isEmailFocused && !state.isPasswordFocused) {
+                     handleIdlePupilMovement();
+                }
+                state.animationFrameId = requestAnimationFrame(animationLoop);
+            }
+
+            function triggerEarMovement() {
+                if (ears.length === 0) return;
+
+                const earChoice = Math.random();
+                let targetEar = null;
+                let side = '';
+
+                if (earChoice < 0.48 && earLeft) {
+                    targetEar = earLeft; side = 'left';
+                } else if (earChoice < 0.96 && earRight) {
+                    targetEar = earRight; side = 'right';
+                }
+
+                if (targetEar && side) {
+                    const movementType = Math.random() < FLUTTER_PROBABILITY ? 'fluttering' : 'twitching';
+                    const animationClass = `ear--${movementType}-${side}`;
+                    const duration = movementType === 'fluttering' ? EAR_FLUTTER_DURATION : EAR_TWITCH_DURATION;
+
+                    const runningClasses = ['ear--twitching-left', 'ear--twitching-right', 'ear--fluttering-left', 'ear--fluttering-right'];
+                    if (!runningClasses.some(cls => targetEar.classList.contains(cls))) {
+                        targetEar.classList.add(animationClass);
+                        setTimeout(() => {
+                            if (targetEar.classList.contains(animationClass)) {
+                               targetEar.classList.remove(animationClass);
+                            }
+                        }, duration);
+                    }
+                }
+                scheduleNextEarMovement();
+            }
+
+            function scheduleNextEarMovement() {
+                if (state.earTimeoutId) clearTimeout(state.earTimeoutId);
+                const randomDelay = Math.random() * (EAR_MOVEMENT_MAX_DELAY - EAR_MOVEMENT_MIN_DELAY) + EAR_MOVEMENT_MIN_DELAY;
+                state.earTimeoutId = setTimeout(triggerEarMovement, randomDelay);
+            }
+
+            function triggerBlink() {
+                if (state.isBlinking || state.isPasswordFocused || eyes.length === 0) return;
+                state.isBlinking = true;
+                eyes.forEach(eye => eye.classList.add('eye--blinking'));
+
+                setTimeout(() => {
+                    eyes.forEach(eye => eye.classList.remove('eye--blinking'));
+                    state.isBlinking = false;
+                    scheduleNextBlink();
+                }, BLINK_DURATION);
+            }
+
+            function scheduleNextBlink() {
+                if (state.blinkTimeoutId) clearTimeout(state.blinkTimeoutId);
+                const randomDelay = Math.random() * (BLINK_MAX_INTERVAL - BLINK_MIN_INTERVAL) + BLINK_MIN_INTERVAL;
+                state.blinkTimeoutId = setTimeout(triggerBlink, randomDelay);
+            }
+
+
+            function handleMouseMove(event) {
+                state.mousePosition.x = event.clientX;
+                state.mousePosition.y = event.clientY;
+            }
+
+            function togglePasswordVisibility() {
+                state.isPasswordVisible = !state.isPasswordVisible;
+                passwordInput.type = state.isPasswordVisible ? 'text' : 'password';
+                togglePasswordButton.setAttribute('aria-label', state.isPasswordVisible ? 'Hide password' : 'Show password');
+                eyeIcon.style.display = state.isPasswordVisible ? 'none' : 'block';
+                eyeOffIcon.style.display = state.isPasswordVisible ? 'block' : 'none';
+
+                if (state.isPasswordFocused) {
+                    state.isPeeking = state.isPasswordVisible;
+                    if (state.isPeeking) {
+                        eyeRightEl?.classList.remove('eye--closed');
+                    } else {
+                        eyeRightEl?.classList.add('eye--closed');
+                    }
+                    eyeLeftEl?.classList.add('eye--closed');
+                }
+            }
+
+            function handleFormSubmit(event) {
+                event.preventDefault();
+                 const submitButton = signinForm.querySelector('.submit-button');
+                 if (submitButton.disabled) return;
+                 submitButton.textContent = 'Signing in...';
+                 submitButton.disabled = true;
+                 setTimeout(() => {
+                    submitButton.textContent = 'Sign in';
+                    submitButton.disabled = false;
+                 }, 1500);
+            }
+
+            function setEmailPupilPosition() {
+                if (!emailInput || pupils.length === 0 || !state.isEmailFocused || state.isPasswordFocused || state.isBlinking) return;
+                const len = emailInput.value.length;
+                const offset = Math.min(len, EMAIL_FOCUS_MAX_CHARS);
+                const targetX = EMAIL_FOCUS_BASE_X + offset * EMAIL_FOCUS_PIXELS_PER_CHAR;
+                const targetY = EMAIL_FOCUS_TARGET_Y;
+                pupils.forEach(p => setElementTransform(p, targetX, targetY));
+            }
+
+            function handleEmailFocus() {
+                state.isEmailFocused = true;
+                state.isPasswordFocused = false;
+                state.isPeeking = false;
+                eyes.forEach(eye => eye.classList.remove('eye--closed'));
+                togglePasswordButton?.classList.remove('toggle-password--visible');
+                setEmailPupilPosition();
+                scheduleNextBlink();
+            }
+
+            function handleEmailInput() {
+                if (state.isEmailFocused) setEmailPupilPosition();
+            }
+
+            function handleEmailBlur() {
+                state.isEmailFocused = false;
+            }
+
+            function handlePasswordFocus() {
+                state.isPasswordFocused = true;
+                state.isEmailFocused = false;
+                state.isPeeking = false;
+                clearTimeout(state.blinkTimeoutId);
+                state.isBlinking = false;
+
+                eyes.forEach(eye => {
+                    eye.classList.remove('eye--blinking');
+                    eye.classList.add('eye--closed');
+                });
+                togglePasswordButton?.classList.add('toggle-password--visible');
+
+                if (state.isPasswordVisible) {
+                    togglePasswordVisibility();
+                }
+            }
+
+            function handlePasswordBlur() {
+                 setTimeout(() => {
+                    if (document.activeElement !== togglePasswordButton) {
+                        state.isPasswordFocused = false;
+                        state.isPeeking = false;
+                        eyes.forEach(eye => eye.classList.remove('eye--closed'));
+                        togglePasswordButton?.classList.remove('toggle-password--visible');
+                        if (!state.isEmailFocused) {
+                             scheduleNextBlink();
+                        }
+                        if (state.isPasswordVisible) {
+                            togglePasswordVisibility();
+                        }
+                    }
+                 }, 0);
+            }
+
+
+            function initialize() {
+                 handleIdlePupilMovement();
+
+                document.addEventListener('mousemove', handleMouseMove, { passive: true });
+                if(togglePasswordButton) togglePasswordButton.addEventListener('click', togglePasswordVisibility);
+                if(signinForm) signinForm.addEventListener('submit', handleFormSubmit);
+
+                if (emailInput) {
+                    emailInput.addEventListener('focus', handleEmailFocus);
+                    emailInput.addEventListener('input', handleEmailInput);
+                    emailInput.addEventListener('blur', handleEmailBlur);
+                }
+                if (passwordInput) {
+                    passwordInput.addEventListener('focus', handlePasswordFocus);
+                    passwordInput.addEventListener('blur', handlePasswordBlur);
+                    if (passwordInput.value) {
+                         togglePasswordButton?.classList.add('toggle-password--visible');
+                    }
+                    passwordInput.addEventListener('input', () => {
+                        if (passwordInput.value) {
+                            togglePasswordButton?.classList.add('toggle-password--visible');
+                        } else {
+                            togglePasswordButton?.classList.remove('toggle-password--visible');
+                        }
+                    });
+                }
+
+
+                if (ears.length > 0) {
+                    scheduleNextEarMovement();
+                }
+                if (eyes.length > 0) {
+                    scheduleNextBlink();
+                }
+
+                if (state.animationFrameId) cancelAnimationFrame(state.animationFrameId);
+                state.animationFrameId = requestAnimationFrame(animationLoop);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initialize);
+            } else {
+                initialize();
+            }
+
+        })();
+    </script>
+</body>
+</html>
