@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Atlas of Strange Attractors</title>
+<meta name="description" content="Five studies in deterministic chaos. WebAssembly × three.js × htmx 4.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.0/dist/htmx.min.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<style>
+:root{
+  --ink:#efeaff; --dim:rgba(239,234,255,.52); --faint:rgba(239,234,255,.16);
+  --accent:#7fd8ff;
+  --serif:"Instrument Serif","Iowan Old Style",Georgia,serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --sans:Inter,system-ui,-apple-system,sans-serif;
+  --pad:clamp(20px,3.2vw,48px);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#04030a;color:var(--ink);overflow:hidden}
+body{font-family:var(--sans);font-weight:300;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+canvas#gl{position:fixed;inset:0;width:100vw;height:100vh;display:block;cursor:grab;touch-action:none}
+canvas#gl:active{cursor:grabbing}
+::selection{background:var(--accent);color:#04030a}
+
+/* atmosphere */
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 45%,transparent 45%,rgba(2,1,6,.55) 75%,rgba(2,1,6,.95) 100%)}
+.grain{position:fixed;inset:-50%;pointer-events:none;opacity:.07;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation:grain 1.2s steps(6) infinite}
+@keyframes grain{0%{transform:translate(0,0)}20%{transform:translate(-3%,2%)}40%{transform:translate(2%,-4%)}60%{transform:translate(-4%,-1%)}80%{transform:translate(3%,3%)}100%{transform:translate(0,0)}}
+
+/* chrome */
+.ui{position:fixed;inset:0;pointer-events:none;padding:var(--pad);
+  display:grid;grid-template-columns:1fr auto;grid-template-rows:auto 1fr auto;gap:24px;
+  opacity:0;transition:opacity 2.2s cubic-bezier(.2,.7,.2,1) .4s}
+body.ready .ui{opacity:1}
+.ui>*{pointer-events:auto}
+
+.brand{grid-column:1;grid-row:1;align-self:start;display:flex;gap:14px;align-items:baseline}
+.brand .star{font-family:var(--serif);font-size:22px;color:var(--accent);transition:color 1.6s;display:inline-block;animation:spin 24s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.brand b{font-weight:500;font-size:11px;letter-spacing:.32em;text-transform:uppercase}
+.brand small{display:block;margin-top:6px;font-family:var(--serif);font-style:italic;font-size:16px;color:var(--dim);letter-spacing:.01em}
+
+#stats{grid-column:2;grid-row:1;justify-self:end;text-align:right;font-family:var(--mono);font-size:10.5px;line-height:1.9;color:var(--dim);letter-spacing:.04em;min-width:220px}
+#stats .row{display:flex;justify-content:space-between;gap:28px}
+#stats .v{color:var(--ink);font-variant-numeric:tabular-nums}
+#stats .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:8px;box-shadow:0 0 12px var(--accent);animation:pulse 2s ease-in-out infinite;vertical-align:1px}
+@keyframes pulse{50%{opacity:.25}}
+
+#panel{grid-column:1;grid-row:3;align-self:end;max-width:640px}
+.p-in .no{font-family:var(--mono);font-size:11px;letter-spacing:.24em;color:var(--accent);transition:color 1.6s;display:flex;align-items:center;gap:14px}
+.p-in .no::after{content:"";width:64px;height:1px;background:currentColor;opacity:.6;transform-origin:left;animation:line 1.4s cubic-bezier(.2,.7,.2,1) both .2s}
+@keyframes line{from{transform:scaleX(0)}}
+.p-in h1{font-family:var(--serif);font-style:italic;font-weight:400;font-size:clamp(72px,12.5vw,196px);line-height:.86;letter-spacing:-.025em;margin:.12em 0 .14em -.04em;
+  background:linear-gradient(180deg,#fff 30%,color-mix(in oklab,var(--accent) 55%,#fff) 120%);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap}
+.p-in h1 span{display:inline-block;animation:rise 1.3s cubic-bezier(.16,.84,.24,1) both;animation-delay:calc(var(--i)*55ms + 80ms);
+  background:inherit;-webkit-background-clip:text;background-clip:text}
+@keyframes rise{from{opacity:0;transform:translateY(.45em) rotate(4deg);filter:blur(14px)}}
+.p-in .meta{font-family:var(--serif);font-size:19px;color:var(--dim);margin-bottom:22px}
+.p-in .meta em{color:var(--ink)}
+.p-in .eq{font-family:var(--serif);font-size:20px;line-height:1.55;color:var(--ink);padding-left:18px;border-left:1px solid var(--faint);margin-bottom:10px}
+.p-in .eq i{font-style:italic}
+.p-in .params{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--dim);padding-left:19px;margin-bottom:22px;white-space:pre}
+.p-in p{font-size:14.5px;line-height:1.7;color:rgba(239,234,255,.72);max-width:44ch}
+.p-in>*:not(h1){animation:fade 1.4s cubic-bezier(.2,.7,.2,1) both}
+.p-in .meta{animation-delay:.35s!important}.p-in .eq{animation-delay:.45s!important}.p-in .params{animation-delay:.55s!important}.p-in p{animation-delay:.65s!important}
+@keyframes fade{from{opacity:0;transform:translateY(10px);filter:blur(6px)}}
+
+.side{grid-column:2;grid-row:3;align-self:end;justify-self:end;display:flex;flex-direction:column;align-items:flex-end;gap:34px}
+nav ol{list-style:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+nav button{all:unset;cursor:pointer;display:flex;align-items:baseline;gap:14px;padding:5px 0;color:var(--dim);transition:color .5s}
+nav button .n{font-family:var(--mono);font-size:10px;letter-spacing:.18em;opacity:.7}
+nav button .t{font-family:var(--serif);font-size:26px;line-height:1;position:relative}
+nav button .t::after{content:"";position:absolute;left:0;right:0;bottom:-3px;height:1px;background:var(--accent);transform:scaleX(0);transform-origin:right;transition:transform .7s cubic-bezier(.2,.7,.2,1),background 1.6s}
+nav button:hover,nav button:focus-visible{color:var(--ink)}
+nav button:hover .t::after,nav button.on .t::after{transform:scaleX(1);transform-origin:left}
+nav button.on{color:var(--ink)}
+nav button.on .t{font-style:italic}
+nav button.on .n{color:var(--accent);opacity:1}
+
+#tune{display:grid;grid-template-columns:auto 150px;gap:12px 16px;align-items:center;font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+#tune label{text-align:right}
+#tune-readout{grid-column:1/-1;text-align:right;font-size:10px;letter-spacing:.06em;text-transform:none;color:var(--faint);min-height:1em}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:linear-gradient(90deg,var(--accent),var(--faint))}
+input[type=range]::-moz-range-track{height:1px;background:linear-gradient(90deg,var(--accent),var(--faint))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;margin-top:-5px;background:#04030a;border:1px solid var(--ink);box-shadow:0 0 14px var(--accent)}
+input[type=range]::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:#04030a;border:1px solid var(--ink);box-shadow:0 0 14px var(--accent)}
+
+.hint{position:fixed;left:50%;bottom:calc(var(--pad) - 4px);transform:translateX(-50%);font-family:var(--mono);font-size:9.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--faint);pointer-events:none;white-space:nowrap;opacity:0;transition:opacity 2s 2.4s}
+body.ready .hint{opacity:1}
+.stack{position:fixed;right:var(--pad);top:50%;transform:translateY(-50%) rotate(180deg);writing-mode:vertical-rl;font-family:var(--mono);font-size:9.5px;letter-spacing:.3em;text-transform:uppercase;color:var(--faint);pointer-events:none}
+
+#veil{position:fixed;inset:0;background:#04030a;display:grid;place-items:center;z-index:10;transition:opacity 2.4s cubic-bezier(.4,0,.2,1),visibility 0s 2.4s}
+body.ready #veil{opacity:0;visibility:hidden}
+#veil span{font-family:var(--serif);font-style:italic;font-size:22px;color:var(--dim);animation:breathe 2.4s ease-in-out infinite}
+@keyframes breathe{50%{opacity:.3}}
+
+@media (max-width:820px){
+  .ui{grid-template-columns:1fr;grid-template-rows:auto auto 1fr auto auto;gap:14px}
+  #stats{grid-column:1;grid-row:2;justify-self:start;text-align:left;min-width:0;width:100%;max-width:300px}
+  #panel{grid-row:4}
+  .side{grid-column:1;grid-row:5;justify-self:stretch;align-items:stretch}
+  nav ol{flex-direction:row;overflow-x:auto;gap:22px;scrollbar-width:none;justify-content:flex-start}
+  nav button .t{font-size:21px}
+  #tune,.stack,.hint{display:none}
+  .p-in p{display:none}
+  .p-in .eq{font-size:16px}
+}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="vignette"></div>
+<div class="grain"></div>
+<div class="stack">σ · ρ · β — sensitive dependence on initial conditions</div>
+
+<main class="ui">
+  <header class="brand">
+    <span class="star">✶</span>
+    <div><b>Atlas of Strange Attractors</b><small>five studies in deterministic chaos</small></div>
+  </header>
+
+  <!-- live telemetry: htmx polls a route answered by WebAssembly, not a server -->
+  <aside id="stats" hx-get="/wasm/stats" hx-trigger="every 1s" hx-swap="innerHTML">
+    <div class="row"><span><i class="dot"></i>integrating</span><span class="v">—</span></div>
+  </aside>
+
+  <section id="panel" aria-live="polite"></section>
+
+  <div class="side">
+    <nav aria-label="Attractors"><ol>
+      <li><button hx-get="/wasm/attractor/lorenz"    hx-target="#panel" hx-swap="innerHTML" data-k="0"><span class="n">01</span><span class="t">Lorenz</span></button></li>
+      <li><button hx-get="/wasm/attractor/aizawa"    hx-target="#panel" hx-swap="innerHTML" data-k="1"><span class="n">02</span><span class="t">Aizawa</span></button></li>
+      <li><button hx-get="/wasm/attractor/halvorsen" hx-target="#panel" hx-swap="innerHTML" data-k="2"><span class="n">03</span><span class="t">Halvorsen</span></button></li>
+      <li><button hx-get="/wasm/attractor/rossler"   hx-target="#panel" hx-swap="innerHTML" data-k="3"><span class="n">04</span><span class="t">Rössler</span></button></li>
+      <li><button hx-get="/wasm/attractor/dadras"    hx-target="#panel" hx-swap="innerHTML" data-k="4"><span class="n">05</span><span class="t">Dadras</span></button></li>
+    </ol></nav>
+
+    <form id="tune" hx-post="/wasm/tune" hx-trigger="input" hx-target="#tune-readout" hx-swap="innerHTML">
+      <label for="tempo">Tempo</label><input id="tempo" name="tempo" type="range" min="0.1" max="2.5" step="0.01" value="1">
+      <label for="glow">Afterglow</label><input id="glow" name="glow" type="range" min="0" max="0.96" step="0.01" value="0.8">
+      <label for="bloom">Bloom</label><input id="bloom" name="bloom" type="range" min="0" max="2" step="0.01" value="0.75">
+      <output id="tune-readout"></output>
+    </form>
+  </div>
+</main>
+<div class="hint">drag to orbit · scroll to zoom · keys 1 – 5</div>
+<div id="veil"><span>integrating…</span></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls }   from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { AfterimagePass }  from 'three/addons/postprocessing/AfterimagePass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass }      from 'three/addons/postprocessing/OutputPass.js';
+
+/* ───────────────────────── WebAssembly ─────────────────────────
+   774 bytes, hand-assembled. Exports:
+     memory                    – 64 pages; particle i lives at i*16: [x, y, z, |v|] (f32)
+     step(n, dt, mode, lim, s) – one Euler step of n particles through attractor `mode`;
+                                 any particle with |x|+|y|+|z| ≥ lim (or NaN) is reborn in a
+                                 random cube of half-width s (xorshift32 PRNG inside wasm)
+     mean(n)                   – mean speed of the swarm                                      */
+const WASM = "AGFzbQEAAAABEgNgAAF9YAV/fX99fQBgAX8BfQMEAwABAgUDAQBABgoBfwFBkemXqgILBxgDBm1lbW9yeQIABHN0ZXAAAQRtZWFuAAIKtgUDKQAjACMAQQ10cyQAIwAjAEERdnMkACMAIwBBBXRzJAAjALJDAAAAMJQL1QQCAn8HfQJAA0AgBSAATg0BIAYqAgAhByAGKgIEIQggBioCCCEJIAJBAEYEQEMAACBBIAggB5OUIQogB0MAAOBBIAmTlCAIkyELIAcgCJRDq6oqQCAJlJMhDAUgAkEBRgRAIAlDMzMzP5MhDSANIAeUQwAAYEAgCJSTIQpDAABgQCAHlCANIAiUkiELQ5qZGT9DMzNzPyAJlJIgCSAJlCAJlEMAAEBAlZMgByAHlCAIIAiUkkMAAIA/QwAAgD4gCZSSlJNDzczMPSAJlCAHIAeUIAeUlJIhDAUgAkECRgRAQ4Xr8b8gB5RDAACAQCAIlJNDAACAQCAJlJMgCCAIlJMhCkOF6/G/IAiUQwAAgEAgCZSTQwAAgEAgB5STIAkgCZSTIQtDhevxvyAJlEMAAIBAIAeUk0MAAIBAIAiUkyAHIAeUkyEMBSACQQNGBEAgCIwgCZMhCiAHQ83MTD4gCJSSIQtDzcxMPiAJIAdDZma2QJOUkiEMBSAIQwAAQEAgB5STQ83MLEAgCJQgCZSSIQpDmpnZPyAIlCAHIAmUkyAJkiELQwAAAEAgB5QgCJRDAAAQQSAJlJMhDAsLCwsgByAKIAGUkiEHIAggCyABlJIhCCAJIAwgAZSSIQkgB4sgCIuSIAmLkiADXUUEQBAAIASUIQcQACAElCEIEAAgBJQhCUMAAAAAIQpDAAAAACELQwAAAAAhDAsgBiAHOAIAIAYgCDgCBCAGIAk4AgggBiAKIAqUIAsgC5SSIAwgDJSSkTgCDCAGQRBqIQYgBUEBaiEFDAALCwszAgJ/AX0CQANAIAEgAE4NASADIAIqAgySIQMgAkEQaiECIAFBAWohAQwACwsgAyAAspUL";
+const { instance } = await WebAssembly.instantiate(Uint8Array.from(atob(WASM), c => c.charCodeAt(0)));
+const W = instance.exports;
+
+const small = matchMedia('(max-width: 820px), (pointer: coarse)').matches;
+const N = small ? 70000 : 200000;              // capacity: 262,144
+
+/* ───────────────────────── the atlas ───────────────────────── */
+const X90  = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+const DIAG = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 1, 1).normalize(), new THREE.Vector3(0, 1, 0));
+const ATLAS = [
+  { id:'lorenz', name:'Lorenz', who:'Edward N. Lorenz', year:1963,
+    eq:'<i>ẋ</i> = σ(<i>y</i> − <i>x</i>)<br><i>ẏ</i> = <i>x</i>(ρ − <i>z</i>) − <i>y</i><br><i>ż</i> = <i>xy</i> − β<i>z</i>',
+    params:'σ = 10   ρ = 28   β = 8⁄3',
+    text:'A butterfly drawn by the weather. Three equations distilled from convecting air — and the quiet discovery that a world can be perfectly determined, yet never predicted.',
+    dt:.0045, lim:90, spread:22, scale:.058, center:[0,0,24], q:X90, norm:190,
+    c:['#14207a','#36c8ff','#fff4e6'], accent:'#7fd8ff' },
+  { id:'aizawa', name:'Aizawa', who:'Yoji Aizawa', year:1982,
+    eq:'<i>ẋ</i> = (<i>z</i> − <i>b</i>)<i>x</i> − <i>dy</i><br><i>ẏ</i> = <i>dx</i> + (<i>z</i> − <i>b</i>)<i>y</i><br><i>ż</i> = <i>c</i> + <i>az</i> − <i>z</i>³⁄3 − (<i>x</i>² + <i>y</i>²)(1 + <i>ez</i>) + <i>fzx</i>³',
+    params:'a = .95   b = .7   c = .6   d = 3.5   e = .25   f = .1',
+    text:'A sphere pierced by a tube. Orbits spiral up the central axis, spill over the crown, and fall back across the surface like a slow, luminous fountain.',
+    dt:.011, lim:5, spread:1.1, scale:1.1, center:[0,0,.35], q:X90, norm:3.2,
+    c:['#3a0f78','#ff4fa8','#ffd9b8'], accent:'#ff8fc4' },
+  { id:'halvorsen', name:'Halvorsen', who:'Arne Halvorsen', year:'c. 1990',
+    eq:'<i>ẋ</i> = −<i>ax</i> − 4<i>y</i> − 4<i>z</i> − <i>y</i>²<br><i>ẏ</i> = −<i>ay</i> − 4<i>z</i> − 4<i>x</i> − <i>z</i>²<br><i>ż</i> = −<i>az</i> − 4<i>x</i> − 4<i>y</i> − <i>x</i>²',
+    params:'a = 1.89',
+    text:'Cyclic symmetry made visible: swap x for y for z and nothing changes. Three lobes chase one another around the diagonal like the blades of a turning propeller.',
+    dt:.0065, lim:32, spread:7, scale:.17, center:[-3.2,-3.2,-3.2], q:DIAG, norm:62,
+    c:['#06433f','#4dffc0','#f2ffe9'], accent:'#6fffcf' },
+  { id:'rossler', name:'Rössler', who:'Otto E. Rössler', year:1976,
+    eq:'<i>ẋ</i> = −<i>y</i> − <i>z</i><br><i>ẏ</i> = <i>x</i> + <i>ay</i><br><i>ż</i> = <i>b</i> + <i>z</i>(<i>x</i> − <i>c</i>)',
+    params:'a = .2   b = .2   c = 5.7',
+    text:'Built to be the simplest chaos possible: one stretch, one fold. A flat ribbon of orbits that lifts, twists over itself, and returns — forever, never twice the same.',
+    dt:.022, lim:70, spread:9, scale:.13, center:[.8,-1.6,4], q:X90, norm:26,
+    c:['#5c0b18','#ff7a2e','#fff0c4'], accent:'#ffab6b' },
+  { id:'dadras', name:'Dadras', who:'S. Dadras & H. R. Momeni', year:2009,
+    eq:'<i>ẋ</i> = <i>y</i> − <i>ax</i> + <i>byz</i><br><i>ẏ</i> = <i>cy</i> − <i>xz</i> + <i>z</i><br><i>ż</i> = <i>dxy</i> − <i>ez</i>',
+    params:'a = 3   b = 2.7   c = 1.7   d = 2   e = 9',
+    text:'A modern cousin of the butterfly. Two scrolls braid around each other, trading orbits at the waist in long, silken exchanges.',
+    dt:.0065, lim:45, spread:6, scale:.105, center:[-.6,-2.2,0], q:X90, norm:30,
+    c:['#1d1a6e','#a08aff','#eef2ff'], accent:'#b9a8ff' },
+];
+
+/* ───────────────────────── three.js ───────────────────────── */
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
+const PR = Math.min(devicePixelRatio, 2);
+renderer.setPixelRatio(PR);
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#04030a');
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, .01, 200);
+camera.position.set(0, .9, small ? 8.4 : 6.6);
+
+const controls = new OrbitControls(camera, canvas);
+Object.assign(controls, { enableDamping:true, dampingFactor:.045, enablePan:false, minDistance:2.2, maxDistance:16,
+  autoRotate:!matchMedia('(prefers-reduced-motion: reduce)').matches, autoRotateSpeed:.35, rotateSpeed:.6, zoomSpeed:.6 });
+
+// the swarm reads straight out of wasm linear memory — zero copies
+const mem = new Float32Array(W.memory.buffer, 0, N * 4);
+const ib  = new THREE.InterleavedBuffer(mem, 4).setUsage(THREE.DynamicDrawUsage);
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.InterleavedBufferAttribute(ib, 3, 0));
+geo.setAttribute('aSpeed',   new THREE.InterleavedBufferAttribute(ib, 1, 3));
+const rnd = new Float32Array(N); for (let i = 0; i < N; i++) rnd[i] = Math.random();
+geo.setAttribute('aRand', new THREE.BufferAttribute(rnd, 1));
+
+const A0 = ATLAS[0];
+const U = {
+  uTime:{value:0}, uPR:{value:PR}, uSize:{value:small ? 15 : 11}, uNorm:{value:A0.norm},
+  uAlpha:{value:small ? .34 : .2},
+  uC0:{value:new THREE.Color(A0.c[0])}, uC1:{value:new THREE.Color(A0.c[1])}, uC2:{value:new THREE.Color(A0.c[2])},
+};
+const mat = new THREE.ShaderMaterial({
+  uniforms:U, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+  vertexShader:/* glsl */`
+    attribute float aSpeed; attribute float aRand;
+    uniform float uTime, uPR, uSize, uNorm;
+    uniform vec3 uC0, uC1, uC2;
+    varying vec3 vCol; varying float vA;
+    void main(){
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mv;
+      float t = pow(clamp(aSpeed / uNorm, 0.0, 1.0), 0.85);
+      vCol = t < .5 ? mix(uC0, uC1, t * 2.0) : mix(uC1, uC2, t * 2.0 - 1.0);
+      float tw = .65 + .35 * sin(uTime * 1.7 + aRand * 60.0);
+      vA = (.35 + .65 * t) * tw;
+      gl_PointSize = max(1.0, uSize * uPR * (.55 + aRand * .9) / -mv.z);
+    }`,
+  fragmentShader:/* glsl */`
+    uniform float uAlpha;
+    varying vec3 vCol; varying float vA;
+    void main(){
+      vec2 c = gl_PointCoord - .5; float d = dot(c, c);
+      if (d > .25) discard;
+      gl_FragColor = vec4(vCol, exp(-d * 14.0) * vA * uAlpha);
+    }`,
+});
+const swarm = new THREE.Points(geo, mat); swarm.frustumCulled = false;
+const inner = new THREE.Group(); inner.add(swarm);
+const outer = new THREE.Group(); outer.add(inner); scene.add(outer);
+
+// distant dust for parallax depth
+{
+  const M = 2600, p = new Float32Array(M * 3);
+  for (let i = 0; i < M; i++) {
+    const r = 14 + Math.random() * 40, u = Math.random() * 2 - 1, a = Math.random() * 6.2832, s = Math.sqrt(1 - u * u);
+    p.set([r * s * Math.cos(a), r * u, r * s * Math.sin(a)], i * 3);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size:.06, color:'#8f8cb8', transparent:true, opacity:.55, depthWrite:false })));
+}
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const after = new AfterimagePass(.8); composer.addPass(after);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .75, .55, .12); composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+});
+
+/* ───────────────────────── state ───────────────────────── */
+const S = { mode:0, tempo:1, wasmMs:0, fps:60, steps:0, born:performance.now() };
+const target = { scale:A0.scale, center:new THREE.Vector3(...A0.center), q:A0.q.clone(),
+  c:A0.c.map(h => new THREE.Color(h)), norm:A0.norm };
+outer.scale.setScalar(A0.scale); outer.quaternion.copy(A0.q); inner.position.copy(target.center).negate();
+
+W.step(N, A0.dt, 0, -1, A0.spread);   // lim = -1 → every particle is reborn: seeds the cloud
+
+function setMode(k) {
+  const a = ATLAS[k]; S.mode = k;
+  target.scale = a.scale; target.center.set(...a.center); target.q.copy(a.q);
+  target.c = a.c.map(h => new THREE.Color(h)); target.norm = a.norm;
+  document.documentElement.style.setProperty('--accent', a.accent);
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', +b.dataset.k === k));
+  return panel(a, k);
+}
+const panel = (a, k) => `<div class="p-in">
+  <div class="no">Nº 0${k + 1} / 05</div>
+  <h1 aria-label="${a.name}">${[...a.name].map((ch, i) => `<span style="--i:${i}">${ch}</span>`).join('')}</h1>
+  <div class="meta"><em>${a.who}</em>, ${a.year}</div>
+  <div class="eq">${a.eq}</div>
+  <div class="params">${a.params}</div>
+  <p>${a.text}</p></div>`;
+
+const fmt = n => n.toLocaleString('en-US');
+const stats = () => {
+  const sec = (performance.now() - S.born) / 1000;
+  return `<div class="row"><span><i class="dot"></i>${ATLAS[S.mode].name.toLowerCase()}</span><span class="v">${fmt(N)} bodies</span></div>
+  <div class="row"><span>mean |v|</span><span class="v">${W.mean(N).toFixed(2)}</span></div>
+  <div class="row"><span>wasm / frame</span><span class="v">${S.wasmMs.toFixed(2)} ms</span></div>
+  <div class="row"><span>integrations</span><span class="v">${(S.steps * N / 1e9).toFixed(2)} G</span></div>
+  <div class="row"><span>frame rate</span><span class="v">${S.fps.toFixed(0)} fps · ${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}</span></div>`;
+};
+
+/* ───────────────────────── htmx 4 ⇄ wasm transport ─────────────────────────
+   htmx 4 lets you replace fetch() per request via ctx.fetch in htmx:config:request.
+   Every /wasm/* route is answered in-page — there is no server.                    */
+const routes = {
+  attractor: (seg) => { const k = ATLAS.findIndex(a => a.id === seg); return setMode(k < 0 ? 0 : k); },
+  stats: () => stats(),
+  tune: (_, form) => {
+    const t = parseFloat(form.get('tempo')), g = parseFloat(form.get('glow')), b = parseFloat(form.get('bloom'));
+    if (!isNaN(t)) S.tempo = t;
+    if (!isNaN(g)) after.uniforms.damp.value = g;
+    if (!isNaN(b)) bloom.strength = b;
+    return `tempo ${S.tempo.toFixed(2)}× · afterglow ${after.uniforms.damp.value.toFixed(2)} · bloom ${bloom.strength.toFixed(2)}`;
+  },
+};
+function answer(u, body) {
+  const url = new URL(u, location.href), m = url.pathname.match(/\/wasm\/([a-z]+)\/?([a-z]*)/);
+  if (!m || !routes[m[1]]) return null;
+  const form = body instanceof FormData || body instanceof URLSearchParams ? body
+             : new URLSearchParams(typeof body === 'string' ? body : url.search);
+  return routes[m[1]](m[2], form);
+}
+document.addEventListener('htmx:config:request', e => {
+  const ctx = e.detail.ctx, captured = ctx.request?.body;
+  ctx.fetch = async (u, init) => {
+    const html = answer(u, init?.body ?? captured);
+    if (html === null) return fetch(u, init);
+    return new Response(html, { status:200, headers:{ 'Content-Type':'text/html; charset=utf-8' } });
+  };
+});
+
+// graceful fallback if the htmx CDN is unreachable
+if (!window.htmx) {
+  document.querySelectorAll('[hx-get]').forEach(el => {
+    const go = () => { const t = document.querySelector(el.getAttribute('hx-target')) || el; t.innerHTML = answer(el.getAttribute('hx-get')); };
+    /every/.test(el.getAttribute('hx-trigger') || '') ? setInterval(go, 1000) : el.addEventListener('click', go);
+  });
+  const f = document.getElementById('tune');
+  f.addEventListener('input', () => document.getElementById('tune-readout').textContent = answer('/wasm/tune', new FormData(f)));
+}
+
+document.getElementById('panel').innerHTML = setMode(0);
+addEventListener('keydown', e => {
+  const k = +e.key - 1; if (k >= 0 && k < 5) document.querySelector(`nav button[data-k="${k}"]`).click();
+});
+
+/* ───────────────────────── loop ───────────────────────── */
+let last = performance.now(), frames = 0;
+const tmp = new THREE.Vector3();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dtf = Math.min((now - last) / 1000, .1); last = now;
+  const a = ATLAS[S.mode];
+
+  const t0 = performance.now();
+  for (let s = 0; s < 3; s++) W.step(N, a.dt * S.tempo, S.mode, a.lim, a.spread);
+  S.wasmMs += (performance.now() - t0 - S.wasmMs) * .05; S.steps += 3;
+  ib.needsUpdate = true;
+
+  const k = 1 - Math.pow(.0025, dtf);   // frame-rate-independent easing
+  outer.scale.setScalar(THREE.MathUtils.lerp(outer.scale.x, target.scale, k));
+  outer.quaternion.slerp(target.q, k);
+  inner.position.lerp(tmp.copy(target.center).negate(), k);
+  U.uC0.value.lerp(target.c[0], k * .7); U.uC1.value.lerp(target.c[1], k * .7); U.uC2.value.lerp(target.c[2], k * .7);
+  U.uNorm.value += (target.norm - U.uNorm.value) * k;
+  U.uTime.value = now / 1000;
+
+  controls.update();
+  composer.render();
+  if (dtf > 0) S.fps += (1 / dtf - S.fps) * .05;
+  if (++frames === 24) document.body.classList.add('ready');
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
