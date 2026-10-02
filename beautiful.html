@@ -1,0 +1,1941 @@
+<!doctype html>
+<html lang="en" data-boot="0">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>MERIDIAN — Spectrograph Array / Target Unresolved</title>
+<meta name="description" content="A control room for an instrument pointed at something that will not hold still.">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   MERIDIAN — instrument chrome
+   Rules: 1px hairlines, tabular numerals, no radius above 2px,
+   no decorative shadow, one accent hue driven live from JS.
+   ══════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  /* written live by the engine; every accent in the page reads these */
+  --hue: 188;
+  --accent:  hsl(var(--hue) 92% 62%);
+  --accent-d:hsl(var(--hue) 78% 44%);
+  --accent-l:hsl(var(--hue) 96% 78%);
+
+  --void:#03050a;
+  --rule:  hsl(var(--hue) 40% 62% / .14);
+  --rule-2:hsl(var(--hue) 40% 62% / .26);
+  --rule-3:hsl(var(--hue) 40% 62% / .40);
+  --dim:  hsl(var(--hue) 22% 52%);
+  --mid:  hsl(var(--hue) 30% 70%);
+  --hot:  hsl(var(--hue) 90% 90%);
+  --mono: ui-monospace,"SFMono-Regular","SF Mono","JetBrains Mono",
+          "IBM Plex Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --rail-l:218px; --rail-r:234px; --bar-t:46px; --bar-b:118px;
+}
+
+html,body{height:100%}
+html{background:var(--void)}
+body{
+  font-family:var(--mono); color:var(--mid); background:var(--void);
+  overflow-x:hidden; cursor:none;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum" 1,"zero" 1;
+  overscroll-behavior-y:none; touch-action:pan-y;
+}
+body.has-touch{cursor:auto}
+::selection{background:hsl(var(--hue) 90% 60% / .28);color:var(--hot)}
+
+/* scroll is the throttle: eight viewports of nothing but drive */
+#track{position:relative;z-index:0;width:100%;pointer-events:none}
+#track section{height:100vh;height:100svh}
+
+#stage{position:fixed;inset:0;z-index:1;contain:strict}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+#veil{position:fixed;inset:0;z-index:60;background:var(--void);
+  display:grid;place-items:center;transition:opacity .9s cubic-bezier(.2,.7,.2,1)}
+#veil.gone{opacity:0;pointer-events:none}
+.veilsub{text-align:center}
+.veilsub b{display:block;font-size:11px;letter-spacing:.5em;color:var(--hot);
+  font-weight:500;text-indent:.5em}
+.veilsub i{display:block;font-style:normal;font-size:9px;letter-spacing:.3em;
+  color:var(--dim);margin-top:12px;text-indent:.3em}
+
+/* ── HUD frame ─────────────────────────────────────────────── */
+#hud{position:fixed;inset:0;z-index:20;
+  display:grid;grid-template-columns:var(--rail-l) 1fr var(--rail-r);
+  grid-template-rows:var(--bar-t) 1fr var(--bar-b);
+  pointer-events:none;opacity:0;transition:opacity 1.1s ease .15s}
+html[data-boot="1"] #hud{opacity:1}
+#hud button{pointer-events:auto}
+
+.tick{position:absolute;width:9px;height:9px;border:0 solid var(--rule-2)}
+.tick.tl{top:6px;left:6px;border-top-width:1px;border-left-width:1px}
+.tick.tr{top:6px;right:6px;border-top-width:1px;border-right-width:1px}
+.tick.bl{bottom:6px;left:6px;border-bottom-width:1px;border-left-width:1px}
+.tick.br{bottom:6px;right:6px;border-bottom-width:1px;border-right-width:1px}
+
+.lb{font-size:8.5px;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--dim);text-indent:.24em;white-space:nowrap}
+.hr{height:1px;background:var(--rule);margin:9px 0}
+
+#topbar{grid-column:1/4;grid-row:1;display:flex;align-items:center;
+  border-bottom:1px solid var(--rule);padding:0 14px;
+  background:linear-gradient(180deg,hsl(var(--hue) 50% 8% / .55),transparent);
+  backdrop-filter:blur(2px)}
+#topbar>*{height:100%;display:flex;align-items:center}
+.sep{width:1px;height:20px;background:var(--rule);margin:0 12px;flex:none}
+.desig{display:flex;flex-direction:column;justify-content:center;gap:3px}
+.desig .n{font-size:12px;letter-spacing:.34em;color:var(--hot);text-indent:.34em}
+.desig .s{font-size:8px;letter-spacing:.2em;color:var(--dim);text-indent:.2em}
+
+#chip{display:flex;align-items:center;gap:8px;padding:5px 11px;
+  border:1px solid var(--rule-2);background:hsl(var(--hue) 60% 50% / .06);position:relative}
+#chip .dot{width:5px;height:5px;background:var(--accent);flex:none;
+  box-shadow:0 0 7px var(--accent)}
+#chip .t{font-size:9px;letter-spacing:.2em;color:var(--accent-l);text-indent:.2em}
+#chip::after{content:"";position:absolute;inset:-1px;pointer-events:none;
+  border:1px solid var(--accent);opacity:0}
+#chip.flare::after{animation:chipflare .85s cubic-bezier(.2,.8,.2,1)}
+@keyframes chipflare{0%{opacity:0;transform:scale(1)}18%{opacity:1;transform:scale(1)}
+  100%{opacity:0;transform:scale(1.035)}}
+
+.spacer{flex:1 1 auto}
+.clock{display:flex;flex-direction:column;gap:3px;align-items:flex-end;justify-content:center}
+.clock .v{font-size:13px;letter-spacing:.08em;color:var(--hot)}
+#leds{display:flex;gap:7px;align-items:center}
+.led{width:4px;height:4px;border-radius:50%;background:var(--rule-3);flex:none}
+.led.on{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+
+/* ── left rail ─────────────────────────────────────────────── */
+#railL{grid-column:1;grid-row:2;display:flex;flex-direction:column;padding:12px 14px;min-height:0}
+.ro{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:5px 0}
+.ro .k{font-size:8px;letter-spacing:.18em;color:var(--dim);
+  text-transform:uppercase;text-indent:.18em}
+.ro .v{font-size:10.5px;color:var(--hot);letter-spacing:.02em}
+.mt{grid-column:1/3;height:2px;background:hsl(var(--hue) 40% 60% / .13);
+  position:relative;overflow:hidden;margin-top:3px}
+.mt i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);width:0%;
+  box-shadow:0 0 6px var(--accent)}
+.mt u{position:absolute;top:-1px;bottom:-1px;width:1px;background:var(--hot);
+  opacity:.8;left:0%}
+
+#logwrap{margin-top:auto;display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
+#log{overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;
+  gap:0;flex:1 1 auto;min-height:0;
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000 34%);
+          mask-image:linear-gradient(180deg,transparent,#000 34%)}
+.lrow{display:grid;grid-template-columns:auto auto 1fr;gap:7px;align-items:baseline;
+  font-size:9px;line-height:1.55;color:var(--dim);white-space:nowrap;flex:none;
+  animation:lrowin .5s cubic-bezier(.2,.8,.2,1) both}
+@keyframes lrowin{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.lrow .t{color:var(--rule-3)}
+.lrow .s{color:var(--accent-d)}
+.lrow .m{overflow:hidden;text-overflow:ellipsis;color:var(--mid)}
+.lrow .m b{color:var(--hot);font-weight:400}
+.lrow.good .s{color:var(--accent-l)}
+.lrow.bad  .s{color:#ff7a7a}
+
+/* ── right rail ────────────────────────────────────────────── */
+#railR{grid-column:3;grid-row:2;display:flex;flex-direction:column;
+  padding:12px 14px;gap:0;min-height:0}
+#catalog{overflow-y:auto;overflow-x:hidden;flex:1 1 auto;min-height:0;
+  display:flex;flex-direction:column;gap:5px;
+  transition:opacity .2s ease,filter .2s ease;
+  scrollbar-width:thin;scrollbar-color:var(--rule-2) transparent}
+#catalog::-webkit-scrollbar{width:2px}
+#catalog::-webkit-scrollbar-thumb{background:var(--rule-2)}
+#catalog.htmx-swapping{opacity:0;filter:blur(2px)}
+
+.cat{border:1px solid var(--rule);padding:7px 8px;position:relative;
+  background:hsl(var(--hue) 60% 50% / .022);transition:border-color .3s,background .3s}
+.cat:hover{border-color:var(--rule-2);background:hsl(var(--hue) 60% 50% / .06)}
+.cat.cur{border-color:var(--accent);background:hsl(var(--hue) 70% 55% / .1)}
+.cat .h{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.cat .id{font-size:9.5px;letter-spacing:.16em;color:var(--hot)}
+.cat .st{font-size:7.5px;letter-spacing:.16em;color:var(--accent-d);
+  text-transform:uppercase}
+.cat .m{display:flex;gap:10px;margin-top:5px;flex-wrap:wrap}
+.cat .m span{font-size:8px;letter-spacing:.1em;color:var(--dim)}
+.cat .m span b{color:var(--mid);font-weight:400}
+.cat .bar{height:1px;background:var(--rule);margin-top:6px;position:relative;overflow:hidden}
+.cat .bar i{position:absolute;inset:0;width:0;background:var(--accent);
+  transition:width .5s cubic-bezier(.2,.8,.2,1)}
+
+#pending{height:1px;background:var(--rule);position:relative;overflow:hidden;margin-top:8px}
+#pending i{position:absolute;inset:0;width:0;background:var(--accent);opacity:0}
+#pending.htmx-request i{opacity:1;box-shadow:0 0 8px var(--accent)}
+#pending.htmx-request::after{content:"";position:absolute;top:0;bottom:0;
+  width:30%;left:-30%;background:linear-gradient(90deg,transparent,var(--accent-l),transparent);
+  animation:sweep 1s linear infinite}
+@keyframes sweep{to{left:100%}}
+
+#ctl{display:flex;flex-direction:column;gap:1px;margin-top:10px}
+.btn{font:inherit;font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;
+  text-indent:.2em;color:var(--mid);background:transparent;border:1px solid var(--rule);
+  padding:8px 9px;cursor:none;text-align:left;
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  transition:color .2s,border-color .2s,background .2s;position:relative;overflow:hidden}
+.btn:hover,.btn:focus-visible{color:var(--hot);border-color:var(--rule-3);
+  background:hsl(var(--hue) 70% 60% / .08);outline:none}
+.btn kbd{font:inherit;font-size:7.5px;color:var(--rule-3);letter-spacing:.1em}
+.btn[aria-pressed="true"]{color:var(--accent-l);border-color:var(--rule-2);
+  background:hsl(var(--hue) 70% 55% / .1)}
+.btn[aria-pressed="true"] kbd{color:var(--accent-d)}
+.btn::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+  background:var(--accent);transform:scaleY(0);transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+.btn:hover::before,.btn[aria-pressed="true"]::before{transform:scaleY(1)}
+.btn .sw{width:5px;height:5px;border-radius:50%;background:var(--rule-3);flex:none}
+.btn[aria-pressed="true"] .sw{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.btn .k2{font-size:7px;color:var(--rule-3);letter-spacing:.14em;display:block;
+  margin-top:3px;text-indent:.14em}
+#act{border-color:var(--rule-2);padding:11px 9px;background:hsl(var(--hue) 70% 55% / .06)}
+#act:hover{background:hsl(var(--hue) 70% 55% / .14);border-color:var(--accent)}
+#act.htmx-request{color:var(--accent-l);border-color:var(--accent)}
+#act.htmx-request .sw{animation:pulseDot .7s infinite ease-in-out}
+@keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.15}}
+
+/* ── centre reticle ────────────────────────────────────────── */
+#ret{grid-column:2;grid-row:2;position:relative;pointer-events:none}
+#ret .ap{position:absolute;top:50%;left:50%;width:min(46vh,46vw);height:min(46vh,46vw);
+  transform:translate(-50%,-50%);border-radius:50%}
+#ret .ap::before{content:"";position:absolute;inset:0;border-radius:50%;
+  border:1px dashed hsl(var(--hue) 60% 70% / .16);animation:spin 44s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#ret .lb.c{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap}
+#ret .c1{top:calc(50% - min(23vh,23vw) - 22px)}
+#ret .c2{bottom:calc(50% - min(23vh,23vw) - 22px)}
+#ret .c3{left:calc(50% - min(23vh,23vw) - 6px);top:50%;transform:translateY(-50%) rotate(-90deg);
+  transform-origin:left center}
+#ret .c4{right:calc(50% - min(23vh,23vw) - 6px);top:50%;transform:translateY(-50%) rotate(90deg);
+  transform-origin:right center}
+#scalebar{position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(50% - min(23vh,23vw) - 40px);width:min(46vh,46vw);
+  display:flex;justify-content:space-between;align-items:flex-end}
+#scalebar .bar{height:1px;background:var(--rule-2);flex:1;margin:0 8px 4px;position:relative}
+#scalebar .bar::after{content:"";position:absolute;inset:0;
+  background:repeating-linear-gradient(90deg,var(--rule-2) 0 1px,transparent 1px 8px)}
+
+/* ── bottom instrument ─────────────────────────────────────── */
+#bot{grid-column:1/4;grid-row:3;border-top:1px solid var(--rule);
+  display:grid;grid-template-columns:1fr;position:relative;
+  background:linear-gradient(0deg,hsl(var(--hue) 50% 6% / .6),transparent)}
+#bot .row{position:relative}
+#specwrap{height:72px;border-bottom:1px solid var(--rule)}
+#timewrap{height:45px}
+#spec,#tl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#bot .legend{position:absolute;top:6px;left:12px;display:flex;gap:14px;pointer-events:none}
+#bot .legend span{font-size:7.5px;letter-spacing:.18em;color:var(--dim);text-indent:.18em;
+  display:flex;align-items:center;gap:5px}
+#bot .legend i{width:6px;height:1px;background:var(--accent);display:block}
+
+/* ── cursor as instrument ──────────────────────────────────── */
+#rig{position:fixed;inset:0;z-index:70;pointer-events:none;opacity:0;transition:opacity .5s}
+html[data-boot="1"] #rig{opacity:1}
+#rig svg{position:absolute;top:0;left:0;width:100%;height:100%;overflow:visible}
+#rig .st{stroke:var(--accent);fill:none;vector-effect:non-scaling-stroke}
+#rig .st2{stroke:var(--rule-3);fill:none;vector-effect:non-scaling-stroke}
+#rig .f{font:8px var(--mono);letter-spacing:.16em;fill:var(--accent-l)}
+#rig .f2{font:7px var(--mono);letter-spacing:.14em;fill:var(--dim)}
+#readout{position:fixed;top:0;left:0;z-index:71;pointer-events:none;
+  border:1px solid var(--rule-2);background:hsl(var(--hue) 55% 6% / .82);
+  backdrop-filter:blur(3px);padding:5px 7px;min-width:124px;will-change:transform;
+  transition:opacity .35s ease}
+#readout .r{display:flex;justify-content:space-between;gap:12px;font-size:8.5px;line-height:1.6}
+#readout .r span:first-child{color:var(--rule-3);letter-spacing:.12em;
+  text-transform:uppercase;text-indent:.12em}
+#readout .r span:last-child{color:var(--hot)}
+#readout .strip{height:2px;margin-top:4px;display:flex;gap:1px}
+#readout .strip i{flex:1;background:var(--rule-2)}
+#hz{position:fixed;top:0;left:0;z-index:72;pointer-events:none;mix-blend-mode:screen;
+  background:hsl(var(--hue) 90% 62% / .05);border:1px solid hsl(var(--hue) 90% 70% / .10)}
+body.reduced #hz{display:none}
+
+/* ── fallback: no WebGL2, the plate still reads ───────────── */
+#fb{position:fixed;inset:0;z-index:1;display:none;
+  background:radial-gradient(120% 90% at 50% 50%,hsl(var(--hue) 70% 22% / .5),transparent 62%),
+    repeating-linear-gradient(0deg,hsl(var(--hue) 50% 60% / .05) 0 1px,transparent 1px 3px),
+    repeating-linear-gradient(90deg,hsl(var(--hue) 50% 60% / .05) 0 1px,transparent 1px 3px),
+    #03050a;
+  animation:fbbreath 9s ease-in-out infinite}
+@keyframes fbbreath{0%,100%{filter:brightness(.62) saturate(.8)}
+  50%{filter:brightness(1.05) saturate(1.15)}}
+html.nogl #fb{display:block}
+html.nogl #gl{display:none}
+
+/* ── htmx swap choreography ────────────────────────────────── */
+#catalog.htmx-settling .cat{animation:catin .5s cubic-bezier(.2,.8,.2,1) both}
+#catalog.htmx-settling .cat:nth-child(1){animation-delay:.02s}
+#catalog.htmx-settling .cat:nth-child(2){animation-delay:.09s}
+#catalog.htmx-settling .cat:nth-child(3){animation-delay:.16s}
+#catalog.htmx-settling .cat:nth-child(4){animation-delay:.23s}
+#catalog.htmx-settling .cat:nth-child(5){animation-delay:.30s}
+@keyframes catin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ── bare mode: the chassis puts itself away ───────────────── */
+html.bare #topbar,html.bare #railL,html.bare #railR,html.bare #bot,
+html.bare #ret,html.bare .tick{
+  opacity:0;pointer-events:none;transition:opacity .9s cubic-bezier(.2,.8,.2,1)}
+html.bare #track{display:none}
+
+/* ── responsive ───────────────────────────────────────────── */
+@media (max-width:1180px){
+  :root{--rail-l:186px;--rail-r:198px;--bar-b:104px}
+  #specwrap{height:60px}
+}
+@media (max-width:880px){
+  :root{--rail-l:0px;--rail-r:0px;--bar-b:92px;--bar-t:42px}
+  #hud{grid-template-columns:1fr}
+  #railL{position:fixed;left:0;top:var(--bar-t);bottom:var(--bar-b);width:152px;
+    padding:8px 10px;background:linear-gradient(90deg,hsl(var(--hue) 50% 5% / .8),transparent)}
+  #railL .opt{display:none}
+  #railR{position:fixed;right:0;top:var(--bar-t);bottom:var(--bar-b);width:170px;
+    padding:8px 10px;background:linear-gradient(270deg,hsl(var(--hue) 50% 5% / .8),transparent)}
+  #specwrap{height:54px}
+  #ret .lb.c,#scalebar{display:none}
+}
+@media (max-width:620px){
+  #railL{display:none}
+  #railR{width:144px}
+  .desig .s{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  #fb{animation:none}
+  #ret .ap::before{animation:none}
+}
+body.reduced .lrow{animation:none}
+body.reduced #chip::after{animation:none}
+</style>
+</head>
+<body>
+
+<div id="veil"><div class="veilsub">
+  <b>MERIDIAN</b><i id="veiltxt">SPECTROGRAPH ARRAY · SPINNING UP</i>
+</div></div>
+
+<div id="fb"></div>
+<div id="stage"><canvas id="gl"></canvas></div>
+<div id="hz"></div>
+
+<div id="track">
+  <section></section><section></section><section></section><section></section>
+  <section></section><section></section><section></section><section></section>
+</div>
+
+<div id="hud">
+  <i class="tick tl"></i><i class="tick tr"></i><i class="tick bl"></i><i class="tick br"></i>
+
+  <header id="topbar">
+    <div class="desig">
+      <span class="n">MERIDIAN</span>
+      <span class="s">SPECTROGRAPH ARRAY · PC 2047−12 · <span id="desigst">UNRESOLVED</span></span>
+    </div>
+    <i class="sep"></i>
+    <div id="chip"><i class="dot"></i><span class="t" id="chipT">ACQUIRING</span></div>
+    <i class="sep"></i>
+    <div class="desig">
+      <span class="n" style="font-size:10px;letter-spacing:.22em">PC 2047−12</span>
+      <span class="s">RA 20h47m13.0s · DEC −12°04′31″</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="desig" style="align-items:flex-end">
+      <span class="n" style="font-size:10px;letter-spacing:.22em" id="clsname">— — —</span>
+      <span class="s" id="clssub">NO FIXED ASSIGNMENT</span>
+    </div>
+    <i class="sep"></i>
+    <div id="leds">
+      <i class="led on" id="ledA"></i><i class="led" id="ledB"></i>
+      <i class="led" id="ledC"></i><i class="led" id="ledD"></i>
+    </div>
+    <i class="sep"></i>
+    <div class="clock">
+      <span class="lb">UTC · INTEGRATION</span>
+      <span class="v" id="utclock">00:00:00.0</span>
+    </div>
+  </header>
+
+  <aside id="railL">
+    <div class="rows" id="rows">
+      <div class="ro"><span class="k">Frame</span><span class="v" id="r-fps">—</span>
+        <div class="mt"><i id="m-fps"></i></div></div>
+      <div class="ro opt"><span class="k">Photons</span><span class="v" id="r-count">—</span>
+        <div class="mt"><i id="m-count"></i></div></div>
+      <div class="ro"><span class="k">Cycle</span><span class="v" id="r-cycle">—</span>
+        <div class="mt"><i id="m-cycle"></i><u id="u-cycle"></u></div></div>
+      <div class="ro opt"><span class="k">Band</span><span class="v" id="r-band">—</span>
+        <div class="mt"><i id="m-band"></i></div></div>
+      <div class="ro"><span class="k">Agitation</span><span class="v" id="r-agit">—</span>
+        <div class="mt"><i id="m-agit"></i></div></div>
+      <div class="ro opt"><span class="k">E Field</span><span class="v" id="r-efield">—</span>
+        <div class="mt"><i id="m-efield"></i></div></div>
+      <div class="ro opt"><span class="k">Temp</span><span class="v" id="r-temp">—</span>
+        <div class="mt"><i id="m-temp"></i></div></div>
+      <div class="ro opt"><span class="k">Disp</span><span class="v" id="r-disp">—</span></div>
+      <div class="hr"></div>
+    </div>
+    <div id="logwrap">
+      <div class="lb" style="margin-bottom:6px">REQUEST BUS</div>
+      <div id="log" hx-sse:connect="/api/feed" hx-target="this"
+           hx-swap="beforeend settle:0ms"></div>
+    </div>
+  </aside>
+
+  <div id="ret">
+    <div class="ap"></div>
+    <span class="lb c c1">APERTURE Ø 46.0″ · f/8.4</span>
+    <span class="lb c c2" id="retBot">—</span>
+    <span class="lb c c3">GRATING 1200 L/mm</span>
+    <span class="lb c c4" id="retAngle">θ = 0.000°</span>
+    <div id="scalebar">
+      <span class="lb">0 Å</span><span class="bar"></span>
+      <span class="lb" id="scaleR">—</span>
+    </div>
+  </div>
+
+  <aside id="railR">
+    <div class="lb" style="margin-bottom:6px">CATALOGUE · RESOLVED FRAGMENTS</div>
+    <div id="catalog" hx-get="/api/catalog" hx-trigger="load, every 9s"
+         hx-swap="innerHTML settle:180ms" hx-indicator="#pending">
+      <div class="cat" style="opacity:.4"><div class="h"><span class="id">QUERYING…</span></div></div>
+    </div>
+    <div id="pending"><i></i></div>
+    <div id="ctl">
+      <button class="btn" id="act"
+        hx-post="/api/resolve" hx-target="#catalog"
+        hx-swap="innerHTML settle:180ms" hx-indicator="#pending">
+        <span>Resolve<span class="k2">POST /api/resolve · reclassify target</span></span>
+        <i class="sw"></i>
+      </button>
+      <button class="btn"
+        hx-get="/api/catalog?shuffle=1" hx-target="#catalog"
+        hx-swap="innerHTML settle:180ms" hx-indicator="#pending">
+        <span>Re-query<span class="k2">GET /api/catalog</span></span><kbd>↵</kbd>
+      </button>
+      <button class="btn" id="bAgit" aria-pressed="false">
+        <span>Drive · auto<span class="k2">manual agitation · A</span></span><kbd>A</kbd>
+      </button>
+      <button class="btn" id="bAudio" aria-pressed="false">
+        <span>Drive audio<span class="k2">engine hum · S</span></span><i class="sw"></i>
+      </button>
+      <button class="btn" id="bReduce" aria-pressed="false">
+        <span>Reduce motion<span class="k2">shorten trails · R</span></span><i class="sw"></i>
+      </button>
+      <button class="btn" id="bBare" aria-pressed="false">
+        <span>Bare<span class="k2">stow the chassis · H</span></span><kbd>H</kbd>
+      </button>
+    </div>
+  </aside>
+
+  <div id="bot">
+    <div class="row" id="specwrap">
+      <canvas id="spec"></canvas>
+      <div class="legend"><span><i></i>EMISSION</span><span id="lgfit">FIT: —</span>
+        <span id="lgres">RESOLUTION —</span></div>
+    </div>
+    <div class="row" id="timewrap">
+      <canvas id="tl"></canvas>
+      <div class="legend" style="top:3px"><span><i></i>ACQUISITION DENSITY</span>
+        <span id="lgmode">MODE · AUTO</span></div>
+    </div>
+  </div>
+</div>
+
+<svg id="rig" aria-hidden="true"><g id="rigg">
+  <g class="st2"><path d="M-14 0 H-5 M14 0 H5 M0 -14 V-5 M0 14 V5"/></g>
+  <g class="st" id="rigBrackets">
+    <path d="M-22 -22 H-30 M-22 -22 V-30 M22 -22 H30 M22 -22 V-30
+             M-22 22 H-30 M-22 22 V30 M22 22 H30 M22 22 V30"/>
+  </g>
+  <circle class="st" r="3.2"/>
+  <circle class="st2" r="40" id="rigRing" stroke-dasharray="1 7"/>
+  <g class="st2"><path d="M-40 0 h6 M40 0 h-6 M0 -40 v6 M0 40 v-6"/></g>
+  <text class="f" x="34" y="-26" id="rigA">λ 000.0</text>
+  <text class="f2" x="34" y="-14" id="rigB">E 000</text>
+  <text class="f2" x="34" y="-4" id="rigC">—</text>
+</g></svg>
+
+<div id="readout" aria-hidden="true">
+  <div class="r"><span>λ</span><span id="ro-l">000.0 nm</span></div>
+  <div class="r"><span>E</span><span id="ro-e">0.00 mV/m</span></div>
+  <div class="r"><span>Δv</span><span id="ro-v">0 km/s</span></div>
+  <div class="r"><span>cls</span><span id="ro-c">—</span></div>
+  <div class="strip" id="ro-strip"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.0/dist/htmx.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.0/dist/ext/hx-sse.js" crossorigin="anonymous"></script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* ══════════════════════════════════════════════════════════════
+   MERIDIAN — spectrograph array
+   The object is unresolvable. The instrument keeps trying.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── §0  deterministic noise + maths ─────────────────────────── */
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const lerp  = (a,b,t) => a + (b-a)*t;
+const approach = (c,t,r,dt) => c + (t-c)*(1-Math.exp(-r*dt));
+const pad = (s,n) => String(s).padStart(n,'0');
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296;};}
+const $  = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+
+/* ── §1  the classification model ──────────────────────────────
+   Six states the target can hold. Each is a different physical
+   regime, therefore a different spectrum, therefore a different
+   colour on screen. The colour is never chosen; it is sampled.
+   ───────────────────────────────────────────────────────────── */
+const CLASSES = [
+  { name:'IONIZED TRANSITION',  sub:'Lyα forest · no continuum',
+    nm0:372, nm1:403, sat:0.46, res:0.72, cycle:8.6, hue:194, grat:0.00, temp:1.42, dbl:0.20 },
+  { name:'CHROMOSPHERIC',       sub:'Ca II triplet in emission',
+    nm0:388, nm1:412, sat:0.82, res:0.34, cycle:7.1, hue:36,  grat:0.62, temp:2.18, dbl:0.55 },
+  { name:'METALLIC TRANSITION', sub:'Fe I bandhead unresolved',
+    nm0:426, nm1:455, sat:0.74, res:0.41, cycle:6.4, hue:312, grat:0.28, temp:3.06, dbl:0.92 },
+  { name:'BALMER EXCESS',       sub:'H series against continuum',
+    nm0:402, nm1:500, sat:0.88, res:0.22, cycle:5.2, hue:166, grat:0.86, temp:4.11, dbl:1.40 },
+  { name:'DOUBLE-PEAKED',       sub:'orbital motion · 2 components',
+    nm0:482, nm1:556, sat:0.92, res:0.18, cycle:4.4, hue:262, grat:0.41, temp:5.28, dbl:1.88 },
+  { name:'UNSTABLE SHELL',      sub:'emission line filling',
+    nm0:556, nm1:668, sat:0.97, res:0.11, cycle:3.6, hue:22,  grat:0.74, temp:6.74, dbl:2.35 },
+];
+
+/* Rest wavelengths in Å, real positions, relative strengths. */
+const LINES = [
+  { nm:279.90, s:.44, id:'Mg II'  }, { nm:280.27, s:.39, id:'Mg II'   },
+  { nm:372.70, s:.46, id:'[O II]' }, { nm:372.89, s:.42, id:'[O II]'  },
+  { nm:393.37, s:.68, id:'Ca II K'}, { nm:396.85, s:.64, id:'Ca II H' },
+  { nm:397.01, s:.24, id:'H ε'    }, { nm:410.17, s:.29, id:'H δ'     },
+  { nm:434.05, s:.40, id:'H γ'    }, { nm:438.35, s:.27, id:'Fe I'    },
+  { nm:447.15, s:.35, id:'He I'   }, { nm:448.11, s:.24, id:'Mg II'   },
+  { nm:468.57, s:.47, id:'He II'  }, { nm:486.13, s:.66, id:'H β'     },
+  { nm:495.89, s:.32, id:'[O III]'}, { nm:500.70, s:.52, id:'[O III]' },
+  { nm:501.57, s:.31, id:'He I'   }, { nm:517.27, s:.25, id:'Fe I'    },
+  { nm:527.04, s:.23, id:'Fe I'   }, { nm:587.56, s:.74, id:'He I'    },
+  { nm:589.30, s:.57, id:'Na I D' }, { nm:630.03, s:.36, id:'[O I]'   },
+  { nm:636.38, s:.27, id:'[O I]'  }, { nm:656.28, s:1.0, id:'H α'     },
+  { nm:852.96, s:.42, id:'Ca II'  }, { nm:852.21, s:.38, id:'Ca II'   },
+];
+const C_KMS = 299792.458;                       // Å/Å per km/s
+const dopplerNm = l => l.nm * (1 + l.vel / C_KMS);
+
+/* ── §2  spectral response ─────────────────────────────────────
+   A narrow window onto a real spectral locus. Because the window
+   is narrow you rarely see more than three hues at once: colour
+   is sampled, not painted. The grating angle slides the window;
+   unresolved states desaturate toward white, the way a badly
+   resolved spectrum actually does.
+   ───────────────────────────────────────────────────────────── */
+const SPECTRUM = [
+  [380,.55,.24,.86],[410,.38,.30,.96],[440,.20,.45,1.00],[470,.18,.72,1.00],
+  [500,.20,.92,.88],[530,.35,.98,.60],[560,.80,.97,.34],[590,1.0,.82,.28],
+  [620,1.0,.52,.20],[660,1.0,.24,.20],[700,.86,.12,.30],[760,.78,.16,.22],
+  [860,.72,.20,.20],
+];
+function spectralAt(nm){
+  const S_ = SPECTRUM;
+  if (nm <= S_[0][0]) return [S_[0][1],S_[0][2],S_[0][3]];
+  for (let i=0;i<S_.length-1;i++){
+    if (nm <= S_[i+1][0]){
+      const t=(nm-S_[i][0])/(S_[i+1][0]-S_[i][0]), e=t*t*(3-2*t);
+      return [lerp(S_[i][1],S_[i+1][1],e),lerp(S_[i][2],S_[i+1][2],e),
+              lerp(S_[i][3],S_[i+1][3],e)];
+    }
+  }
+  const l=S_[S_.length-1]; return [l[1],l[2],l[3]];
+}
+const luma = c => .2126*c[0] + .7152*c[1] + .0722*c[2];
+
+const LUT_W = 256;
+function makeLUT(){
+  const t = new THREE.DataTexture(new Uint8Array(LUT_W*4), LUT_W, 1, THREE.RGBAFormat);
+  t.colorSpace = THREE.NoColorSpace;
+  t.minFilter = t.magFilter = THREE.LinearFilter;
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.needsUpdate = true;
+  return t;
+}
+function paintLUT(tex, cls, doppler){
+  const C = CLASSES[cls], d = tex.image.data, span = C.nm1 - C.nm0;
+  const slide = 0.70 + C.grat * 0.62, tilt = clamp(doppler * 0.006, -.30, .30);
+  for (let i=0;i<LUT_W;i++){
+    const nm = (C.nm0 + (i/(LUT_W-1))*span) * slide;
+    let c = spectralAt(nm); const g = luma(c);
+    c = [lerp(g,c[0],C.sat), lerp(g,c[1],C.sat), lerp(g,c[2],C.sat)];
+    c = [clamp(c[0]+tilt,0,1), clamp(c[1]-tilt*.4,0,1), clamp(c[2]+tilt*.62,0,1)];
+    const b=c[0]*c[0]*c[1], g2=c[1]*c[1]*c[2], r=c[2]*c[2]*c[0];
+    d[i*4]=clamp(c[0]+.30*r,0,1)*255;
+    d[i*4+1]=clamp(c[1]+.30*g2,0,1)*255;
+    d[i*4+2]=clamp(c[2]+.30*b,0,1)*255;
+    d[i*4+3]=255;
+  }
+  tex.needsUpdate = true;
+}
+function lutColor(cls, doppler, x){
+  const C = CLASSES[cls], span = C.nm1 - C.nm0, slide = 0.70 + C.grat*0.62;
+  let c = spectralAt((C.nm0 + clamp(x,0,1)*span)*slide); const g = luma(c);
+  c = [lerp(g,c[0],C.sat), lerp(g,c[1],C.sat), lerp(g,c[2],C.sat)];
+  const t = clamp(doppler*0.006,-.3,.3);
+  c = [clamp(c[0]+t,0,1), clamp(c[1]-t*.4,0,1), clamp(c[2]+t*.62,0,1)];
+  const b=c[0]*c[0]*c[1], g2=c[1]*c[1]*c[2], r=c[2]*c[2]*c[0];
+  c = [clamp(c[0]+.30*r,0,1), clamp(c[1]+.30*g2,0,1), clamp(c[2]+.30*b,0,1)];
+  return `rgb(${(c[0]*255)|0},${(c[1]*255)|0},${(c[2]*255)|0})`;
+}
+
+/* ── §3  vocabulary for the request bus ─────────────────────── */
+const WORD = {
+  band:['GAMMA','DELTA','EPSILON','ZETA','ETA','THETA','IOTA','KAPPA','LAMBDA','MU'],
+  tone:['CONTINUUM','ABSORPTION','EMISSION','BALLAST','FOREST','BANDHEAD','TRIPLET','SERIES','CORONA'],
+  st:['RESOLVED','MARGINAL','UNSTABLE','DRIFTING','LOCKED','SPLIT','PENDING','NOISY','SATURATED'],
+  op:['MERGE','QUADRATURE','HOLD','RE-OBSERVE','CONTINUE','RE-SEEK','STACK','RE-CONFIRM'],
+};
+const rnd = mulberry32(0x5EED17);
+const pick = a => a[(rnd()*a.length)|0];
+const observation = () => ({
+  id:'OBS-'+pad((rnd()*9999)|0,4), op:pick(WORD.op),
+  band:pick(WORD.band), tone:pick(WORD.tone), st:pick(WORD.st), f:rnd(),
+});
+
+/* ── §4  renderer, targets, blitter ─────────────────────────── */
+const canvas = $('#gl');
+let renderer = null;
+try {
+  renderer = new THREE.WebGLRenderer({
+    canvas, antialias:false, alpha:false, stencil:false, depth:false,
+    powerPreference:'high-performance', preserveDrawingBuffer:false
+  });
+} catch (e) { renderer = null; }
+if (!renderer || !renderer.getContext()) {
+  document.documentElement.classList.add('nogl');
+  console.warn('[meridian] no webgl2 context — running the static plate');
+}
+
+const Q = {
+  dpr: Math.min(devicePixelRatio || 1, 2),
+  maxDpr: Math.min(devicePixelRatio || 1, 2),
+  count: 46000, maxCount: 46000, mips: 6, auto: true, tier: 3,
+};
+let W = 1, H = 1, DPR = 1;
+
+const RTOPT = { type:THREE.HalfFloatType, format:THREE.RGBAFormat,
+  minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter,
+  depthBuffer:false, stencilBuffer:false, generateMipmaps:false };
+const mkRT = (w,h) => new THREE.WebGLRenderTarget(Math.max(1,w|0), Math.max(1,h|0), RTOPT);
+
+let sceneRT, trailA, trailB, mipRT = [];
+function allocate(w,h){
+  [sceneRT, trailA, trailB, ...mipRT].forEach(t => t && t.dispose());
+  W = Math.max(2, w|0); H = Math.max(2, h|0);
+  sceneRT = mkRT(W,H); trailA = mkRT(W,H); trailB = mkRT(W,H);
+  mipRT = [];
+  let mw=W, mh=H;
+  for (let i=0;i<Q.mips;i++){ mw=Math.max(2,mw>>1); mh=Math.max(2,mh>>1); mipRT.push(mkRT(mw,mh)); }
+  renderer.setRenderTarget(trailA); renderer.setClearColor(0x000000,1); renderer.clear(true,false,false);
+  renderer.setRenderTarget(trailB); renderer.clear(true,false,false);
+  renderer.setRenderTarget(null);
+}
+
+/* fullscreen triangle — one draw, no seam, no quad diagonal */
+const triGeo = new THREE.BufferGeometry();
+triGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1,-1,0, 3,-1,0, -1,3,0]),3));
+triGeo.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array([0,0, 2,0, 0,2]),2));
+const quadCam = new THREE.Camera(), quadScene = new THREE.Scene();
+const quadMesh = new THREE.Mesh(triGeo, null);
+quadMesh.frustumCulled = false;
+quadScene.add(quadMesh);
+const VS_QUAD = `varying vec2 vUv;
+void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+function blit(mat, target){
+  quadMesh.material = mat;
+  renderer.setRenderTarget(target || null);
+  renderer.render(quadScene, quadCam);
+}
+
+/* ── §5  post chain ────────────────────────────────────────────
+   exposure feedback → threshold → 13-tap down → tent up → composite
+   ───────────────────────────────────────────────────────────── */
+const mTrail = new THREE.ShaderMaterial({
+  uniforms:{ tPrev:{value:null}, tScene:{value:null},
+    uDecay:{value:0.90}, uZoom:{value:1.0015}, uRot:{value:0.0} },
+  vertexShader:VS_QUAD,
+  fragmentShader:`
+    uniform sampler2D tPrev, tScene; uniform float uDecay, uZoom, uRot;
+    varying vec2 vUv;
+    void main(){
+      vec2 p = vUv - 0.5;
+      float c = cos(uRot), s = sin(uRot);
+      p = mat2(c,-s,s,c) * p * uZoom;
+      vec3 prev = texture2D(tPrev, p + 0.5).rgb;
+      vec3 sc   = texture2D(tScene, vUv).rgb;
+      vec3 o = max(sc, prev*uDecay) + prev*uDecay*0.19;
+      gl_FragColor = vec4(min(o, vec3(22.0)), 1.0);
+    }`, depthTest:false, depthWrite:false });
+
+const mBright = new THREE.ShaderMaterial({
+  uniforms:{ tDiffuse:{value:null}, uThresh:{value:0.42}, uKnee:{value:0.55} },
+  vertexShader:VS_QUAD,
+  fragmentShader:`
+    uniform sampler2D tDiffuse; uniform float uThresh, uKnee; varying vec2 vUv;
+    void main(){
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      float l = max(c.r, max(c.g, c.b));
+      float s = clamp((l - uThresh)/uKnee, 0.0, 1.0);
+      s = s*s*(3.0-2.0*s);
+      gl_FragColor = vec4(c*s, 1.0);
+    }`, depthTest:false, depthWrite:false });
+
+const mDown = new THREE.ShaderMaterial({
+  uniforms:{ tDiffuse:{value:null}, uTexel:{value:new THREE.Vector2()} },
+  vertexShader:VS_QUAD,
+  fragmentShader:`
+    uniform sampler2D tDiffuse; uniform vec2 uTexel; varying vec2 vUv;
+    void main(){
+      vec2 t = uTexel;
+      vec3 a=texture2D(tDiffuse,vUv+t*vec2(-2.,-2.)).rgb;
+      vec3 b=texture2D(tDiffuse,vUv+t*vec2( 0.,-2.)).rgb;
+      vec3 c=texture2D(tDiffuse,vUv+t*vec2( 2.,-2.)).rgb;
+      vec3 d=texture2D(tDiffuse,vUv+t*vec2(-1.,-1.)).rgb;
+      vec3 e=texture2D(tDiffuse,vUv+t*vec2( 1.,-1.)).rgb;
+      vec3 f=texture2D(tDiffuse,vUv+t*vec2(-2., 0.)).rgb;
+      vec3 g=texture2D(tDiffuse,vUv).rgb;
+      vec3 h=texture2D(tDiffuse,vUv+t*vec2( 2., 0.)).rgb;
+      vec3 i=texture2D(tDiffuse,vUv+t*vec2(-1., 1.)).rgb;
+      vec3 j=texture2D(tDiffuse,vUv+t*vec2( 1., 1.)).rgb;
+      vec3 k=texture2D(tDiffuse,vUv+t*vec2(-2., 2.)).rgb;
+      vec3 l=texture2D(tDiffuse,vUv+t*vec2( 0., 2.)).rgb;
+      vec3 m=texture2D(tDiffuse,vUv+t*vec2( 2., 2.)).rgb;
+      vec3 o = (d+e+i+j)*0.125;
+      o += (a+b+g+f)*0.03125; o += (b+c+h+g)*0.03125;
+      o += (f+g+l+k)*0.03125; o += (g+h+m+j)*0.03125;
+      gl_FragColor = vec4(o, 1.0);
+    }`, depthTest:false, depthWrite:false });
+
+const mUp = new THREE.ShaderMaterial({
+  uniforms:{ tDiffuse:{value:null}, uTexel:{value:new THREE.Vector2()}, uAmt:{value:1.0} },
+  vertexShader:VS_QUAD,
+  fragmentShader:`
+    uniform sampler2D tDiffuse; uniform vec2 uTexel; uniform float uAmt;
+    varying vec2 vUv;
+    void main(){
+      vec2 h = uTexel;
+      vec3 s  = texture2D(tDiffuse,vUv+vec2(-h.x,-h.y)).rgb;
+      s += texture2D(tDiffuse,vUv+vec2( 0. ,-h.y)).rgb*2.0;
+      s += texture2D(tDiffuse,vUv+vec2( h.x,-h.y)).rgb;
+      s += texture2D(tDiffuse,vUv+vec2(-h.x, 0. )).rgb*2.0;
+      s += texture2D(tDiffuse,vUv                   ).rgb*4.0;
+      s += texture2D(tDiffuse,vUv+vec2( h.x, 0. )).rgb*2.0;
+      s += texture2D(tDiffuse,vUv+vec2(-h.x, h.y)).rgb;
+      s += texture2D(tDiffuse,vUv+vec2( 0. , h.y)).rgb*2.0;
+      s += texture2D(tDiffuse,vUv+vec2( h.x, h.y)).rgb;
+      gl_FragColor = vec4(s*(1.0/16.0)*uAmt, 1.0);
+    }`, blending:THREE.AdditiveBlending, depthTest:false, depthWrite:false });
+
+const mComp = new THREE.ShaderMaterial({
+  uniforms:{ tScene:{value:null}, tTrail:{value:null}, tBloom:{value:null},
+    uBloom:{value:0.72}, uCA:{value:0.0016}, uGrain:{value:0.045},
+    uTime:{value:0}, uVig:{value:0.92}, uTrail:{value:0.85},
+    uExposure:{value:1.05}, uSat:{value:1.06}, uBarrel:{value:0.030},
+    uRes:{value:new THREE.Vector2()}, uTint:{value:new THREE.Color(0.6,0.85,1.0)},
+    uShake:{value:0.0}, uScan:{value:0.05}, uFlash:{value:0.0} },
+  vertexShader:VS_QUAD,
+  fragmentShader:`
+    uniform sampler2D tScene, tTrail, tBloom;
+    uniform float uBloom,uCA,uGrain,uTime,uVig,uTrail,uExposure,uSat,uBarrel,uShake,uScan,uFlash;
+    uniform vec2 uRes; uniform vec3 uTint; varying vec2 vUv;
+    float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453123); }
+    float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
+    vec3 aces(vec3 x){
+      x *= 0.62;
+      return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0);
+    }
+    vec3 toSRGB(vec3 c){
+      c = max(c, vec3(0.0));
+      return mix(c*12.92, 1.055*pow(c, vec3(1.0/2.4)) - 0.055, step(vec3(0.0031308), c));
+    }
+    void main(){
+      vec2 uv = vUv, d = uv - 0.5;
+      float r2 = dot(d,d);
+      uv = 0.5 + d*(1.0 + uBarrel*r2*2.2);                       // lens
+      uv += vec2(sin(uTime*61.0), cos(uTime*47.0))*uShake*0.0016; // plate shift
+
+      float ca = uCA*(0.35 + r2*3.4);
+      // each channel samples the feedback at its own radius: the
+      // trails fringe outward, which is what a real spectrograph does
+      vec2 off = d*length(d)*ca;
+      vec3 tl = vec3(texture2D(tTrail, uv+off).r,
+                     texture2D(tTrail, uv      ).g,
+                     texture2D(tTrail, uv-off).b);
+      vec3 bl = vec3(texture2D(tBloom, uv+off).r,
+                     texture2D(tBloom, uv      ).g,
+                     texture2D(tBloom, uv-off).b);
+      vec3 col = max(texture2D(tScene,uv).rgb, tl*uTrail) + bl*uBloom;
+
+      col *= uExposure;
+      col *= mix(vec3(1.0), uTint, 0.12);
+      col = mix(vec3(luma(col)), col, uSat);
+      col += uFlash*vec3(0.7,0.85,1.0);
+      col = aces(col);
+
+      float lines = sin(uv.y*uRes.y*1.55 + uTime*2.0);           // sensor readout
+      col *= 1.0 - uScan*0.5*(0.5 + 0.5*lines);
+      col += (h21(gl_FragCoord.xy + fract(uTime)*91.7) - 0.5)
+             * uGrain*(0.6 + 0.9*(1.0 - length(col)));            // grain, heavier in the blacks
+
+      float vig = smoothstep(1.05, 0.18, length(d*vec2(uRes.x/uRes.y,1.0))*1.32);
+      col *= mix(1.0, vig, uVig);
+
+      col = toSRGB(col);
+      col += (h21(gl_FragCoord.xy*1.7 + 3.1) - 0.5)/255.0;       // debanding dither
+      gl_FragColor = vec4(col, 1.0);
+    }`, depthTest:false, depthWrite:false });
+
+/* ── §6  the lattice ───────────────────────────────────────────
+   Multi-scale hairline grid on a breathing wave field, with
+   discrete events firing at grid nodes. Every node is its own small
+   machine: it lights, decays, waits for the next period.
+   ───────────────────────────────────────────────────────────── */
+const mLattice = new THREE.ShaderMaterial({
+  uniforms:{ uTime:{value:0}, uRes:{value:new THREE.Vector2(1,1)},
+    uLutA:{value:null}, uLutB:{value:null}, uLutMix:{value:0},
+    uCursor:{value:new THREE.Vector2(-9999,-9999)}, uCurE:{value:0},
+    uShocks:{value:Array.from({length:6},()=>new THREE.Vector4(0,0,0,0))},
+    uAgit:{value:0.3}, uDensity:{value:0.35}, uSpin:{value:0.0} },
+  vertexShader:VS_QUAD,
+  fragmentShader:`
+    uniform float uTime,uLutMix,uCurE,uAgit,uDensity,uSpin;
+    uniform vec2 uRes,uCursor; uniform sampler2D uLutA,uLutB; uniform vec4 uShocks[6];
+    varying vec2 vUv;
+    float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453123); }
+    // gp is in device pixels, so distance-to-line is already in pixels:
+    // no fwidth, no derivatives extension, resolution-stable hairlines.
+    float line1(float v, float sp, float w){
+      float d = abs(fract(v/sp) - 0.5)*sp;
+      return 1.0 - smoothstep(0.0, w, d);
+    }
+    float grid(vec2 g, float sp, float w){ return max(line1(g.x,sp,w), line1(g.y,sp,w)); }
+
+    void main(){
+      vec2 px = vUv*uRes, d = px - uRes*0.5;
+      float r = length(d)/uRes.y;
+
+      // wave field: the plate breathes outward from the aperture
+      float w1 = sin(r*26.0 - uTime*1.75);
+      float w2 = sin(r*11.0 - uTime*0.92 + 1.7);
+      float disp = pow(0.5 + 0.5*w1, 7.0)*(0.55 + 0.45*(0.5 + 0.5*w2));
+      vec2 dir = d/max(length(d), 1e-4);
+      vec2 warp = dir*disp*(2.0 + uAgit*13.0)*(1.0 + uSpin*2.0);
+
+      // the cursor is a lens in the field, not a pointer over it
+      vec2 cd = px - uCursor; float cl = length(cd);
+      float lens = exp(-cl*cl*0.00018)*uCurE;
+      warp += (cd/max(cl,1e-4))*lens*(26.0 + uAgit*40.0);
+      float lensGlow = exp(-cl*0.0075)*uCurE;
+
+      // shockwave fronts
+      float shock = 0.0;
+      for (int i=0;i<6;i++){
+        vec4 s = uShocks[i];
+        if (s.w <= 0.001) continue;
+        vec2 sd = px - s.xy; float sl = length(sd);
+        float front = s.z*1050.0;
+        float b = (sl - front)*0.030;
+        float ring = exp(-b*b)*exp(-s.z*1.15)*(1.0 - exp(-s.z*16.0));
+        warp += (sd/max(sl,1e-4))*ring*s.w*42.0;
+        shock += ring*s.w;
+      }
+
+      vec2 gp = px + warp;
+
+      float fine  = grid(gp,   7.5, 1.0)*0.14;
+      float main  = grid(gp,  30.0, 1.15)*0.46;
+      float major = grid(gp, 150.0, 1.5)*0.85;
+
+      float ang = uTime*0.026 + uSpin;
+      mat2 R = mat2(cos(ang),-sin(ang), sin(ang),cos(ang));
+      vec2 rp = R*gp;
+      float sub = (line1(rp.x,11.0,1.0) + line1(rp.y,11.0,1.0))*0.20;
+
+      // events firing at grid nodes
+      vec2 cell = floor(gp/30.0);
+      float hh = h21(cell);
+      float per = 1.4 + hh*7.5;
+      float tt = fract((uTime + hh*37.0)/per);
+      float pop = smoothstep(0.0,0.035,tt)*(1.0 - smoothstep(0.05,0.22,tt));
+      float dd = length(fract(gp/30.0) - 0.5)*30.0;
+      float ev = exp(-dd*dd/(0.9 + hh*3.4))*pop*step(hh, uDensity);
+
+      float focus   = mix(1.0, 0.22, smoothstep(0.42, 0.04, r));  // clear the aperture
+      float breathe = 0.80 + 0.20*sin(uTime*0.61);
+      float falloff = 1.0 - smoothstep(0.20, 1.05, r);
+
+      float t = clamp(r*1.25 + disp*0.10 + uSpin*0.12, 0.0, 1.0);
+      vec3 col = mix(texture2D(uLutA,vec2(t,0.5)).rgb,
+                     texture2D(uLutB,vec2(t,0.5)).rgb, uLutMix);
+
+      float amt = (fine+main+major+sub)*focus*breathe
+                + ev*2.6 + shock*2.2 + lensGlow*0.55 + disp*0.16;
+      vec3 c = col*amt;
+      c += col*0.016*falloff;                       // the plate is never pure black
+      c += vec3(0.30,0.55,0.85)*shock*0.25;          // white-hot front
+      c += vec3(0.6,0.85,1.0)*lensGlow*0.06;
+      gl_FragColor = vec4(c, 1.0);
+    }`, depthTest:false, depthWrite:false });
+
+/* ── §7  photon field ──────────────────────────────────────────
+   Every particle carries its own shell, inclination, node and
+   phase. A four-beat envelope runs continuously — arrive, split,
+   orbit, resolve — so at any instant thousands of those beats are
+   in flight at once. Nothing here is driven from the CPU.
+   ───────────────────────────────────────────────────────────── */
+const mPart = new THREE.ShaderMaterial({
+  uniforms:{ uTime:{value:0}, uCycle:{value:0}, uOmega:{value:0.9},
+    uAgit:{value:0.3}, uEnergy:{value:1.0}, uRadius:{value:5.0},
+    uCursor:{value:new THREE.Vector3(99,99,0)}, uCurE:{value:0},
+    uShocks:{value:Array.from({length:6},()=>new THREE.Vector4(0,0,0,0))},
+    uLutA:{value:null}, uLutB:{value:null}, uLutMix:{value:0},
+    uSize:{value:0.020}, uScale:{value:1000}, uOpacity:{value:1.0} },
+  vertexShader:`
+    attribute vec4 aSeed; attribute float aIdx;
+    uniform float uTime,uCycle,uOmega,uAgit,uEnergy,uRadius,uCurE,
+                  uLutMix,uSize,uScale,uOpacity;
+    uniform vec3 uCursor; uniform vec4 uShocks[6]; uniform sampler2D uLutA,uLutB;
+    varying vec3 vCol; varying float vA;
+    const float TAU = 6.28318530718;
+    float envelope(float t){
+      float e;
+      if      (t < 0.17) e = mix(2.30,0.15, smoothstep(0.00,0.17,t));  // arrive
+      else if (t < 0.46) e = mix(0.15,1.19, smoothstep(0.17,0.46,t));  // split
+      else if (t < 0.70) e = mix(1.19,1.00, smoothstep(0.46,0.70,t));  // orbit
+      else if (t < 0.87) e = 1.0 + 0.038*sin((t-0.70)/0.17*3.14159265);
+      else               e = mix(1.00,0.08, smoothstep(0.87,1.00,t));  // resolve
+      return e;
+    }
+    void main(){
+      float plate = step(0.960, aIdx);                  // 4% plate artifacts
+
+      float life = fract(uCycle + aSeed.x);
+      float env  = mix(envelope(life), 1.0, plate*0.88);
+
+      // shell radius: log-ish fill so the disc is dense without a rim
+      float R0 = pow(aSeed.w, 1.75)*uRadius*(0.90 + position.x*0.20);
+      R0 = mix(R0, uRadius*(0.90 + aSeed.w*0.55), plate);
+
+      // differential rotation — inner shells lead, outer shells drag
+      float om = uOmega*pow(max(R0/uRadius, 0.035), -0.52);
+      float th = position.z*TAU + uTime*om*(0.72 + aSeed.y*0.56)
+               + life*(2.2 + uAgit*7.0)*(1.0 - plate);
+
+      vec3 p = vec3(cos(th), sin(th), 0.0)*R0*env;
+      p.z += (aSeed.y - 0.5)*uRadius*0.09;             // disc thickness
+      p.z += sin(uTime*0.83 + aSeed.z*TAU)*uRadius*0.055;
+
+      float inc = position.y*2.26, ci = cos(inc), si = sin(inc);   // own plane
+      p = vec3(p.x, p.y*ci - p.z*si, p.y*si + p.z*ci);
+      float nn = position.z*3.14159265 + aSeed.z*6.28318530, cn = cos(nn), sn = sin(nn);
+      p = vec3(p.x*cn - p.y*sn, p.x*sn + p.y*cn, p.z);
+
+      vec2 toC = uCursor.xy - p.xy; float dc = length(toC);
+      float infl = exp(-dc*dc*0.080)*uCurE;
+      p.xy += (toC/max(dc,1e-4))*infl*(1.2 + uAgit*1.5);
+      float bright = infl*1.9;
+
+      for (int i=0;i<6;i++){
+        vec4 s = uShocks[i];
+        if (s.w <= 0.001) continue;
+        vec2 sd = p.xy - s.xy; float sl = length(sd);
+        float b = (sl - s.z*9.0)*1.45;
+        float ring = exp(-b*b)*exp(-s.z*1.5)*(1.0 - exp(-s.z*22.0));
+        p.xy += (sd/max(sl,1e-4))*ring*s.w*1.35;
+        bright += ring*s.w*2.4;
+      }
+
+      vec4 mv = modelViewMatrix*vec4(p,1.0);
+      gl_Position = projectionMatrix*mv;
+
+      float hot     = smoothstep(0.19, 0.01, life);
+      float fadeIn  = smoothstep(0.0, 0.05, life);
+      float fadeOut = 1.0 - smoothstep(0.90, 1.0, life);
+
+      float tr = clamp(length(p.xy)/(uRadius*2.0) + bright*0.16, 0.0, 1.0);
+      vec3 col = mix(texture2D(uLutA,vec2(tr,0.5)).rgb,
+                     texture2D(uLutB,vec2(tr,0.5)).rgb, uLutMix);
+      col = mix(col, vec3(1.0), clamp(hot*0.80 + plate*0.30, 0.0, 1.0));
+      col *= (0.40 + hot*2.1 + bright*1.5 + uAgit*0.55)*(0.75 + uEnergy*0.45);
+
+      float sz = (0.95 + hot*2.9 + bright*2.2 + plate*1.6)*uSize*(1.0 + plate*1.8);
+      gl_PointSize = clamp(sz*uScale/max(-mv.z, 0.05), 1.0, 42.0);
+
+      vCol = col;
+      vA = fadeIn*fadeOut*uOpacity*(0.34 + hot*0.80)*(1.0 - plate*0.62);
+    }`,
+  fragmentShader:`
+    varying vec3 vCol; varying float vA;
+    void main(){
+      float d = length(gl_PointCoord - 0.5)*2.0;
+      if (d > 1.0) discard;
+      float a = (exp(-d*d*8.5) + exp(-d*3.1)*0.28)*vA;
+      if (a < 0.0035) discard;
+      gl_FragColor = vec4(vCol*a, a);
+    }`,
+  transparent:true, blending:THREE.AdditiveBlending, depthTest:false, depthWrite:false });
+
+/* orbit cage — the structure the field turns on */
+const mRing = new THREE.ShaderMaterial({
+  uniforms:{ uTime:{value:0}, uCol:{value:new THREE.Color(0.4,0.8,1)}, uOp:{value:0.5},
+             uAgit:{value:0.3}, uCursor:{value:new THREE.Vector3(99,99,0)} },
+  vertexShader:`
+    attribute float aRing, aAng;
+    uniform float uTime,uAgit; uniform vec3 uCursor; varying float vA;
+    void main(){
+      vec3 p = position;
+      p *= 1.0 + sin(uTime*(0.30 + aRing*0.021) + aRing)*(0.035 + uAgit*0.10);
+      p.xy += vec2(cos(uTime*0.11 + aRing), sin(uTime*0.09 + aRing*1.7))*uAgit*0.5;
+      vec2 toC = uCursor.xy - p.xy; float dc = length(toC);
+      p.xy += (toC/max(dc,1e-4))*exp(-dc*dc*0.045)*0.9;
+      float node = fract(aAng*2.0 - uTime*(0.05 + aRing*0.004));   // conjunction
+      float k = exp(-pow(min(node, 1.0-node)*9.0, 2.0));
+      vA = (0.16 + k*0.9)*(0.5 + uAgit*0.9)*smoothstep(1.35, 0.25, length(p)/6.0);
+      gl_Position = projectionMatrix*modelViewMatrix*vec4(p,1.0);
+    }`,
+  fragmentShader:`
+    uniform vec3 uCol; uniform float uOp; varying float vA;
+    void main(){ gl_FragColor = vec4(uCol*vA*uOp, vA*uOp); }`,
+  transparent:true, blending:THREE.AdditiveBlending, depthTest:false, depthWrite:false });
+
+/* ── §8  scene ───────────────────────────────────────────────── */
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(54, 1, 0.1, 140);
+camera.position.set(0, 0, 9.6);
+
+let parts = null, rings = null;
+function buildParticles(n){
+  if (parts){ scene.remove(parts); parts.geometry.dispose(); }
+  const pos = new Float32Array(n*3), seed = new Float32Array(n*4), idx = new Float32Array(n);
+  for (let i=0;i<n;i++){
+    pos[i*3+0] = Math.pow(rnd(), 0.85);      // shell
+    pos[i*3+1] = Math.pow(rnd(), 2.05);      // plane inclination
+    pos[i*3+2] = rnd();                      // node
+    seed[i*4+0] = rnd(); seed[i*4+1] = rnd(); seed[i*4+2] = rnd(); seed[i*4+3] = rnd();
+    idx[i] = i/n;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  g.setAttribute('aSeed',    new THREE.BufferAttribute(seed,4));
+  g.setAttribute('aIdx',     new THREE.BufferAttribute(idx,1));
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 60);
+  parts = new THREE.Points(g, mPart);
+  parts.frustumCulled = false;
+  scene.add(parts);
+}
+function buildRings(){
+  const RS = 36, SEG = 220, n = RS*SEG;
+  const pos = new Float32Array(n*3), ri = new Float32Array(n), an = new Float32Array(n);
+  let w = 0;
+  for (let i=0;i<RS;i++){
+    const f = i/(RS-1), R = 1.05 + Math.pow(f,1.55)*6.4;
+    const inc = Math.pow(f,0.8)*2.35, node = i*1.137;
+    const ci = Math.cos(inc), si = Math.sin(inc), cn = Math.cos(node), sn = Math.sin(node);
+    for (let j=0;j<SEG;j++){
+      const t = j/SEG*Math.PI*2, x = Math.cos(t)*R, y = Math.sin(t)*R;
+      const y2 = y*ci, z2 = y*si;
+      pos[w*3+0] = x*cn - y2*sn; pos[w*3+1] = x*sn + y2*cn; pos[w*3+2] = z2;
+      ri[w] = i; an[w] = j/SEG; w++;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  g.setAttribute('aRing', new THREE.BufferAttribute(ri,1));
+  g.setAttribute('aAng',  new THREE.BufferAttribute(an,1));
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 40);
+  rings = new THREE.LineSegments(g, mRing);
+  rings.frustumCulled = false;
+  scene.add(rings);
+}
+
+/* ── §9  input · the attention model ────────────────────────────
+   Glance and it is a storm. Stare and it resolves into a pattern.
+   The instrument reads your pointer velocity and decides for you.
+   ───────────────────────────────────────────────────────────── */
+const IN = {
+  px: innerWidth*0.5, py: innerHeight*0.5, cx: innerWidth*0.5, cy: innerHeight*0.5,
+  speedS: 0, curE: 0, targetE: 0, down: 0,
+  energy: 0, agitation: 0.30, agitTarget: 0.30, manual: null,
+  scroll: 0, scrollV: 0, lastY: scrollY, touch: false,
+};
+addEventListener('pointermove', e => { IN.px = e.clientX; IN.py = e.clientY; }, {passive:true});
+addEventListener('pointerdown', e => {
+  if (e.target.closest('#ctl')) return;
+  const p = screenToField(e.clientX, e.clientY);
+  fireShock(p.x, p.y, 1.0);
+  IN.down = 1; chirp(0);
+}, {passive:true});
+addEventListener('pointerup', () => { IN.down = 0; }, {passive:true});
+addEventListener('scroll', () => {
+  IN.scrollV = Math.abs(scrollY - IN.lastY);
+  IN.lastY = scrollY; IN.scroll = scrollY;
+}, {passive:true});
+addEventListener('touchstart', () => {
+  IN.touch = true; document.body.classList.add('has-touch');
+}, {passive:true});
+if (matchMedia('(pointer: coarse)').matches) {
+  IN.touch = true; document.body.classList.add('has-touch');
+}
+
+const _v = new THREE.Vector3();
+function screenToField(cx, cy){
+  _v.set((cx/W)*2 - 1, -(cy/H)*2 + 1, 0.5).unproject(camera)
+      .sub(camera.position).normalize();
+  return new THREE.Vector3().copy(camera.position)
+    .addScaledVector(_v, -camera.position.z / _v.z);
+}
+const _q = new THREE.Vector3();
+const fx = x => (_q.set(x,0,0).project(camera), (_q.x*0.5 + 0.5)*W);
+const fy = y => (_q.set(0,y,0).project(camera), (0.5 - _q.y*0.5)*H);
+
+const shocks = Array.from({length:6}, () => ({x:0, y:0, t:99, s:0}));
+let shockPtr = 0;
+function fireShock(x, y, s){
+  const k = shocks[shockPtr++ % shocks.length];
+  k.x = x; k.y = y; k.t = 0; k.s = s;
+}
+function stepShocks(){
+  const lu = mLattice.uniforms.uShocks.value, pu = mPart.uniforms.uShocks.value;
+  for (let i=0;i<6;i++){
+    const k = shocks[i];
+    if (k.t < 12) k.t += STATE.dt;
+    const s = k.t < 12 ? k.s*Math.exp(-k.t*0.9) : 0;
+    lu[i].set(fx(k.x), fy(k.y), k.t, s);
+    pu[i].set(k.x, k.y, k.t, s);
+  }
+}
+
+/* ── §10  state ──────────────────────────────────────────────── */
+const STATE = {
+  t:0, dt:0, frame:0, fps:60, ms:16,
+  cls:0, clsPrev:0, lutMix:1, vel:0, grat:0, temp:0, res0:0,
+  cycle:0, cycles:0, resolved:0, integration:0, plate:0, plateT:0,
+  flash:0, shake:0, spin:0,
+  reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
+};
+let lutA = makeLUT(), lutB = makeLUT();
+paintLUT(lutA, STATE.cls, 0);
+paintLUT(lutB, STATE.clsPrev, 0);
+
+function resize(){
+  if (!renderer) return;
+  DPR = Q.dpr;
+  renderer.setPixelRatio(DPR);
+  renderer.setSize(innerWidth, innerHeight, false);
+  const sz = renderer.getDrawingBufferSize(new THREE.Vector2());
+  W = Math.max(2, sz.x|0); H = Math.max(2, sz.y|0);
+  allocate(W, H);
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  // H is the drawing-buffer height, so gl_PointSize lands in device pixels
+  mPart.uniforms.uScale.value = H / (2*Math.tan(camera.fov*Math.PI/360));
+  mPart.uniforms.uSize.value  = 0.0165 + (Q.maxDpr > 1.5 ? 0.005 : 0.002);
+  mLattice.uniforms.uRes.value.set(W, H);
+  mComp.uniforms.uRes.value.set(W, H);
+  layoutCanvases();
+}
+addEventListener('resize', resize, {passive:true});
+addEventListener('orientationchange', () => setTimeout(resize, 150), {passive:true});
+
+const root = document.documentElement;
+function setClass(idx, fromServer){
+  idx = ((idx % CLASSES.length) + CLASSES.length) % CLASSES.length;
+  if (idx === STATE.cls && !fromServer) return;
+  lutA.dispose(); lutA = lutB; lutB = makeLUT();
+  paintLUT(lutB, idx, STATE.vel);
+  STATE.clsPrev = STATE.cls; STATE.cls = idx; STATE.lutMix = 0;
+  STATE.resolved++;
+  STATE.flash = Math.max(STATE.flash, 0.30);
+  STATE.shake = Math.max(STATE.shake, 0.9);
+  const C = CLASSES[idx];
+  STATE.grat = C.grat;
+  flareChip();
+  root.style.setProperty('--hue', C.hue);
+  $('#clsname').textContent = C.name;
+  $('#clssub').textContent  = C.sub.toUpperCase();
+  $('#desigst').textContent = STATE.resolved > 0 ? 'REASSIGNED' : 'UNRESOLVED';
+  if (!fromServer) writeLog('SYS', 'class', `<b>${esc(C.name)}</b> adopted locally`);
+}
+
+/* ── §11  frame ──────────────────────────────────────────────── */
+let lastT = 0, fpsWindow = 0, fpsN = 0;
+
+function applyTier(){
+  const t = Q.tier;
+  Q.dpr = t >= 3 ? Q.maxDpr : t === 2 ? Math.min(Q.maxDpr, 1.5) : t === 1 ? 1 : 0.75;
+  const want = Math.round(Q.maxCount * [0.30, 0.52, 0.76, 1][t]);
+  if (parts && parts.geometry.attributes.aIdx.count !== want) buildParticles(want);
+  resize();
+}
+
+function frame(now){
+  requestAnimationFrame(frame);
+  const t = now*0.001;
+  let dt = t - lastT; lastT = t;
+  if (!(dt > 0)) dt = 0.016;
+  dt = Math.min(dt, 0.05);
+  STATE.t += dt; STATE.dt = dt; STATE.frame++;
+
+  const C = CLASSES[STATE.cls];
+  const R = STATE.reduced ? 0.35 : 1;
+
+  /* attention model */
+  const raw = Math.hypot(IN.px - IN.cx, IN.py - IN.cy) / Math.max(dt, 1e-3);
+  IN.speedS = approach(IN.speedS, Math.min(raw, 4000), 7, dt);
+  IN.cx = approach(IN.cx, IN.px, 26, dt);
+  IN.cy = approach(IN.cy, IN.py, 26, dt);
+  IN.scrollV = approach(IN.scrollV, 0, 5.5, dt);
+
+  const motion = clamp(IN.speedS/1500, 0, 1);
+  const thrust = clamp(IN.scrollV/90, 0, 1);
+  IN.agitTarget = IN.manual === null
+    ? clamp(0.085 + motion*1.30 + thrust*0.55, 0, 1) : IN.manual;
+  IN.agitation = approach(IN.agitation, IN.agitTarget,
+    IN.agitTarget > IN.agitation ? 3.4 : 1.25, dt);
+  const A = IN.agitation;
+
+  IN.energy  = approach(IN.energy, clamp(thrust*1.2 + motion*0.35, 0, 1), 3, dt);
+  IN.targetE = (IN.touch ? 0.28 : 0.55) + A*0.5 + IN.down*0.6;
+  IN.curE    = approach(IN.curE, IN.targetE, 4.2, dt);
+
+  /* slow state evolution */
+  const prevCycle = STATE.cycle;
+  STATE.cycle = (STATE.cycle + dt/(C.cycle/(0.55 + A*1.30 + IN.energy*0.45))) % 1;
+  if (STATE.cycle < prevCycle){
+    STATE.cycles++;
+    STATE.flash = Math.max(STATE.flash, 0.055 + A*0.10);
+    if (STATE.cycles % 7 === 0) chirp(1);
+  }
+  STATE.integration += dt;
+
+  STATE.vel  = C.dbl*(1 + Math.sin(STATE.t*0.37)*0.5 + Math.sin(STATE.t*0.13)*0.3);
+  STATE.temp = C.temp*(1 + A*0.45) + Math.sin(STATE.t*0.51)*0.12 + A*0.8;
+  STATE.res0 = C.res*(1 + A*1.7)*(0.9 + 0.2*Math.sin(STATE.t*0.9));
+  STATE.flash = approach(STATE.flash, 0, 3.4, dt);
+  STATE.shake = approach(STATE.shake, 0, 2.2, dt);
+  STATE.spin  = approach(STATE.spin, 0, 0.55, dt);
+
+  STATE.plateT += dt;
+  if (STATE.plateT > 26){
+    STATE.plateT = 0; STATE.plate++;
+    STATE.flash = Math.max(STATE.flash, 0.24);
+    writeLog('PLT', 'local',
+      `plate <b>${pad(STATE.plate+1,3)}</b> developed · ${pad(Math.floor(STATE.integration),4)}s integration`);
+    chirp(2);
+  }
+
+  STATE.lutMix = approach(STATE.lutMix, 1, 1.5, dt);
+  lutClock += dt;
+  if (lutClock > 0.4){
+    lutClock = 0;
+    paintLUT(lutA, STATE.clsPrev, STATE.vel);
+    paintLUT(lutB, STATE.cls, STATE.vel);
+    mComp.uniforms.uTint.value.setRGB(
+      spectralAt(C.nm0)[0], spectralAt((C.nm0+C.nm1)*0.5)[1], spectralAt(C.nm1)[2]);
+  }
+
+  if (renderer){
+    const cw = screenToField(IN.cx, IN.cy);
+    const lu = mLattice.uniforms, pu = mPart.uniforms;
+
+    lu.uTime.value = STATE.t;
+    lu.uLutA.value = lutA; lu.uLutB.value = lutB; lu.uLutMix.value = STATE.lutMix;
+    lu.uCursor.value.set(IN.cx, IN.cy); lu.uCurE.value = IN.curE*0.85;
+    lu.uAgit.value = A; lu.uSpin.value = STATE.spin;
+    lu.uDensity.value = 0.16 + 0.34*A;
+
+    stepShocks();
+
+    pu.uTime.value = STATE.t; pu.uCycle.value = STATE.cycle;
+    pu.uAgit.value = A; pu.uEnergy.value = IN.energy;
+    pu.uCurE.value = IN.curE*0.5;
+    pu.uLutA.value = lutA; pu.uLutB.value = lutB; pu.uLutMix.value = STATE.lutMix;
+    pu.uOpacity.value = STATE.reduced ? 0.82 : 1;
+    pu.uCursor.value.set(cw.x, cw.y, 0);
+
+    mRing.uniforms.uTime.value = STATE.t;
+    mRing.uniforms.uAgit.value = A;
+    mRing.uniforms.uCursor.value.set(cw.x, cw.y, 0);
+    mRing.uniforms.uOp.value = 0.30 + A*0.34 + STATE.flash*0.6;
+
+    /* scroll is the throttle, cursor is parallax */
+    camera.position.set(
+      Math.sin(STATE.t*0.09)*0.26 + (IN.cx/W - 0.5)*0.9,
+      Math.cos(STATE.t*0.07)*0.20 - (IN.cy/H - 0.5)*0.7,
+      9.6 + clamp(IN.scroll, 0, 6000)*0.0021 + Math.sin(STATE.t*0.17)*0.13);
+    camera.lookAt(0, 0, 0);
+
+    /* render */
+    renderer.autoClear = false;
+    mTrail.uniforms.uDecay.value = lerp(0.52, 0.962, A*R)*(STATE.reduced ? 0.8 : 1);
+    mTrail.uniforms.uZoom.value  = 1.0006 + A*0.0013;
+    mTrail.uniforms.uRot.value   = Math.sin(STATE.t*0.11)*0.0007*A;
+
+    renderer.setRenderTarget(sceneRT);
+    renderer.setClearColor(0x000000, 1);
+    renderer.clear(true, false, false);
+    blit(mLattice, sceneRT);
+    renderer.setRenderTarget(sceneRT);
+    renderer.render(scene, camera);
+
+    mTrail.uniforms.tPrev.value  = trailA.texture;
+    mTrail.uniforms.tScene.value = sceneRT.texture;
+    blit(mTrail, trailB);
+    const sw = trailA; trailA = trailB; trailB = sw;
+
+    mBright.uniforms.tDiffuse.value = trailA.texture;
+    mBright.uniforms.uThresh.value  = 0.30 + A*0.16;
+    blit(mBright, mipRT[0]);
+    for (let i=1;i<mipRT.length;i++){
+      mDown.uniforms.tDiffuse.value = mipRT[i-1].texture;
+      mDown.uniforms.uTexel.value.set(1/mipRT[i-1].width, 1/mipRT[i-1].height);
+      blit(mDown, mipRT[i]);
+    }
+    for (let i=mipRT.length-2;i>=0;i--){
+      mUp.uniforms.tDiffuse.value = mipRT[i+1].texture;
+      mUp.uniforms.uTexel.value.set(1/mipRT[i+1].width, 1/mipRT[i+1].height);
+      blit(mUp, mipRT[i]);
+    }
+
+    const cu = mComp.uniforms;
+    cu.tScene.value = sceneRT.texture;
+    cu.tTrail.value = trailA.texture;
+    cu.tBloom.value = mipRT[0].texture;
+    cu.uTime.value     = STATE.t;
+    cu.uBloom.value    = (0.40 + A*0.58)*(Q.tier === 0 ? 0.8 : 1);
+    cu.uCA.value       = (0.0008 + A*0.0030)*(STATE.reduced ? 0.4 : 1);
+    cu.uGrain.value    = 0.032 + A*0.030;
+    cu.uShake.value    = STATE.shake*0.9;
+    cu.uFlash.value    = STATE.flash;
+    cu.uExposure.value = 1.02 + A*0.14;
+    cu.uSat.value      = 1.04 + A*0.10;
+    cu.uBarrel.value   = 0.026 + A*0.022;
+    blit(mComp, null);
+
+    /* metering + adaptive quality */
+    fpsN++;
+    if (t - fpsWindow > 0.7){
+      STATE.fps = fpsN/(t - fpsWindow);
+      STATE.ms = 1000/Math.max(STATE.fps, 0.001);
+      fpsWindow = t; fpsN = 0;
+      if (Q.auto){
+        if (STATE.fps < 41 && Q.tier > 0){ Q.tier--; applyTier(); }
+        else if (STATE.fps > 57 && Q.tier < 3){ Q.tier++; applyTier(); }
+      }
+    }
+  }
+  drawHUD();
+}
+let lutClock = 0;
+
+/* ── §12  instrument readouts ────────────────────────────────── */
+const EL = {};
+['r-fps','r-count','r-cycle','r-band','r-agit','r-efield','r-temp','r-disp',
+ 'm-fps','m-count','m-cycle','u-cycle','m-band','m-agit','m-efield','m-temp',
+ 'utclock','chipT','retBot','retAngle','scaleR','lgfit','lgres','lgmode',
+ 'rigg','rigBrackets','rigRing','rigA','rigB','rigC',
+ 'ro-l','ro-e','ro-v','ro-c','ro-strip','hz','readout'].forEach(id => EL[id] = document.getElementById(id));
+
+const STRIPN = 22;
+for (let i=0;i<STRIPN;i++) EL['ro-strip'].appendChild(document.createElement('i'));
+const stripEls = [...EL['ro-strip'].children];
+const bar = (id,v) => { const e = EL[id]; if (e) e.style.width = (clamp(v,0,1)*100).toFixed(1)+'%'; };
+
+function inWindow(vel){
+  const C = CLASSES[STATE.cls];
+  let best = null, bs = -1;
+  for (const L of LINES){
+    const nm = dopplerNm({nm:L.nm, vel});
+    if (nm >= C.nm0 && nm <= C.nm1 && L.s > bs){ bs = L.s; best = {nm, id:L.id}; }
+  }
+  return best;
+}
+function updateDOM(){
+  const C = CLASSES[STATE.cls];
+  const n = parts ? parts.geometry.attributes.aIdx.count : 0;
+  const A = IN.agitation;
+
+  EL['r-fps'].textContent   = STATE.fps.toFixed(0)+' / '+STATE.ms.toFixed(1)+'ms';
+  EL['r-count'].textContent = n.toLocaleString('en-US')+' · q'+Q.tier;
+  EL['r-cycle'].textContent = (STATE.cycle*100).toFixed(1)+'% · '+STATE.cycles+' acq';
+  EL['r-band'].textContent  = C.nm0.toFixed(0)+'–'+C.nm1.toFixed(0)+' Å';
+  EL['r-agit'].textContent  = (A*100).toFixed(0)+'% · '+
+    (A<0.22?'COHERENT':A<0.48?'SEEKING':A<0.74?'DISTURBED':'STORM');
+  EL['r-efield'].textContent = IN.curE.toFixed(3)+' V/m';
+  EL['r-temp'].textContent   = STATE.temp.toFixed(3)+' kK';
+  EL['r-disp'].textContent   = '±'+STATE.vel.toFixed(2)+' km/s';
+
+  bar('m-fps', STATE.fps/62); bar('m-count', n/Q.maxCount);
+  bar('m-cycle', STATE.cycle);
+  EL['u-cycle'].style.left = (STATE.cycle*100).toFixed(1)+'%';
+  bar('m-band', (STATE.cls+0.5)/CLASSES.length);
+  bar('m-agit', A); bar('m-efield', clamp(IN.curE,0,1.4)/1.4);
+  bar('m-temp', clamp(STATE.temp/7.5,0,1));
+
+  const s = Math.floor(STATE.integration);
+  EL['utclock'].textContent =
+    pad((s/60|0)%60,2)+':'+pad(s%60,2)+'.'+pad(((STATE.integration%1)*10)|0,1);
+  EL['chipT'].textContent = STATE.resolved === 0 ? 'ACQUIRING'
+    : STATE.resolved < 3 ? 'CLASS '+STATE.cls+' · HOLD'
+    : 'RECLASS '+STATE.cls+' · DRIFT';
+  EL['retAngle'].textContent = 'θ = '+(STATE.grat*41.6).toFixed(3)+'°';
+  EL['retBot'].textContent   = 'λ '+C.nm0.toFixed(1)+'–'+C.nm1.toFixed(1)+
+    ' Å · '+Math.round(C.nm1-C.nm0)+' Å BAND';
+  EL['scaleR'].textContent   = (C.nm1-C.nm0).toFixed(0)+' Å';
+  EL['lgres'].textContent    = 'RESOLUTION '+STATE.res0.toFixed(2)+' Å/px';
+  EL['lgmode'].textContent   = 'MODE · '+
+    (IN.manual === null ? 'AUTO' : 'DRIVE '+Math.round(IN.manual*100)+'%');
+
+  const hit = inWindow(STATE.vel);
+  EL['lgfit'].textContent = 'FIT: ' +
+    (hit ? hit.id+' @ '+hit.nm.toFixed(1)+'Å' : 'NO LINE IN BAND');
+}
+
+/* ── §13  the trace ──────────────────────────────────────────── */
+const specC = $('#spec'), sctx = specC.getContext('2d');
+const tlC = $('#tl'),   tctx = tlC.getContext('2d');
+let sw = 0, sh = 0, tw = 0, th = 0;
+
+function layoutCanvases(){
+  const dpr = Math.min(Q.dpr, 2);
+  for (const c of [specC, tlC]){
+    const r = c.getBoundingClientRect();
+    c.width  = Math.max(2, Math.round(r.width*dpr));
+    c.height = Math.max(2, Math.round(r.height*dpr));
+  }
+  sctx.setTransform(Math.min(Q.dpr,2),0,0,Math.min(Q.dpr,2),0,0);
+  tctx.setTransform(Math.min(Q.dpr,2),0,0,Math.min(Q.dpr,2),0,0);
+  sw = specC.getBoundingClientRect().width;  sh = specC.getBoundingClientRect().height;
+  tw = tlC.getBoundingClientRect().width;    th = tlC.getBoundingClientRect().height;
+}
+
+/* a plausible flux curve: continuum + bandheads + lines + detector noise */
+function flux(nm, res, vel, A){
+  let f = 0.18 + 0.12*Math.exp(-Math.pow((nm-386)/9, 2)) + 0.05;
+  f += 0.10*Math.exp(-Math.pow((nm-431)/7, 2))*(0.5 + 0.5*Math.sin(nm*2.7));
+  const sig = Math.max(res/2.355, 0.02);
+  for (const L of LINES){
+    const d = nm - dopplerNm({nm:L.nm, vel});
+    f += L.s*Math.exp(-(d*d)/(2*sig*sig))*(0.55 + A*0.9);
+  }
+  return f + 0.022*Math.sin(nm*41.3 + STATE.t*5.1) + 0.016*Math.sin(nm*97.7 - STATE.t*3.3);
+}
+
+function drawSpectrum(){
+  if (!sw) return;
+  const C = CLASSES[STATE.cls], pad = 14, span = C.nm1 - C.nm0;
+  const h = sh - 16, w = sw - pad*2, base = 8 + h;
+  sctx.clearRect(0, 0, sw, sh);
+
+  const stepA = span > 70 ? 20 : span > 34 ? 10 : 5;
+  sctx.font = '7px ui-monospace, monospace';
+  sctx.textAlign = 'center';
+  sctx.fillStyle = 'rgba(140,190,255,0.30)';
+  for (let nm = Math.ceil(C.nm0/stepA)*stepA; nm <= C.nm1; nm += stepA){
+    const x = pad + ((nm - C.nm0)/span)*w;
+    sctx.strokeStyle = 'rgba(140,190,255,0.09)';
+    sctx.beginPath(); sctx.moveTo(x, 6); sctx.lineTo(x, base+4); sctx.stroke();
+    sctx.fillText(nm.toFixed(0), x, sh-3);
+  }
+  sctx.textAlign = 'left';
+  sctx.fillStyle = 'rgba(140,190,255,0.24)';
+  sctx.fillText('Å', sw-10, sh-3);
+
+  const N = Math.max(80, w|0), vals = new Float32Array(N);
+  let mx = 0.001;
+  for (let i=0;i<N;i++){
+    const v = flux(C.nm0 + (i/(N-1))*span, STATE.res0, STATE.vel, IN.agitation);
+    vals[i] = v; if (v > mx) mx = v;
+  }
+  const g = sctx.createLinearGradient(pad, 0, pad+w, 0);
+  for (let i=0;i<=12;i++) g.addColorStop(i/12, lutColor(STATE.cls, STATE.vel, i/12));
+
+  sctx.beginPath();
+  sctx.moveTo(pad, base);
+  for (let i=0;i<N;i++) sctx.lineTo(pad + (i/(N-1))*w, base - (vals[i]/mx)*h*0.94);
+  sctx.lineTo(pad+w, base); sctx.closePath();
+  sctx.globalAlpha = 0.30; sctx.fillStyle = g; sctx.fill(); sctx.globalAlpha = 1;
+
+  sctx.beginPath();
+  for (let i=0;i<N;i++){
+    const x = pad + (i/(N-1))*w, y = base - (vals[i]/mx)*h*0.94;
+    i ? sctx.lineTo(x, y) : sctx.moveTo(x, y);
+  }
+  sctx.strokeStyle = g; sctx.lineWidth = 1.15;
+  sctx.stroke();
+  sctx.shadowBlur = 7; sctx.shadowColor = g; sctx.stroke(); sctx.shadowBlur = 0;
+
+  sctx.strokeStyle = 'rgba(140,190,255,0.22)';
+  sctx.beginPath(); sctx.moveTo(pad, base+0.5); sctx.lineTo(pad+w, base+0.5); sctx.stroke();
+
+  const found = LINES
+    .map(L => ({id:L.id, s:L.s, nm:dopplerNm({nm:L.nm, vel:STATE.vel})}))
+    .filter(L => L.nm > C.nm0+1 && L.nm < C.nm1-1 && L.s > 0.2)
+    .sort((a,b) => b.s - a.s).slice(0,5);
+  sctx.font = '7px ui-monospace, monospace';
+  for (const L of found){
+    const x  = pad + ((L.nm - C.nm0)/span)*w;
+    const c  = lutColor(STATE.cls, STATE.vel, (L.nm - C.nm0)/span);
+    const y  = base - (L.s*(0.55 + IN.agitation*0.9)/mx)*h*0.94;
+    sctx.strokeStyle = c; sctx.globalAlpha = 0.55;
+    sctx.beginPath(); sctx.moveTo(x, y); sctx.lineTo(x, base); sctx.stroke();
+    sctx.globalAlpha = 1; sctx.fillStyle = c;
+    const right = L.nm > (C.nm0 + C.nm1)*0.5;
+    sctx.textAlign = right ? 'right' : 'left';
+    sctx.fillText(L.id, right ? x-3 : x+3, Math.max(9, y-4));
+  }
+  sctx.textAlign = 'left';
+}
+
+/* ── §14  acquisition timeline ───────────────────────────────── */
+const TLB = 420, tlBuf = new Float32Array(TLB), tlMarks = [];
+let tlHead = 0;
+function drawTimeline(){
+  if (!tw) return;
+  tctx.clearRect(0, 0, tw, th);
+  const base = th-7, h = th-13;
+
+  tctx.lineWidth = 1;
+  tctx.strokeStyle = 'rgba(140,190,255,0.22)';
+  tctx.beginPath(); tctx.moveTo(0, base+0.5); tctx.lineTo(tw, base+0.5); tctx.stroke();
+  tctx.strokeStyle = 'rgba(140,190,255,0.10)';
+  for (let i=0;i<=10;i++){
+    const x = (i/10)*tw;
+    tctx.globalAlpha = i % 5 === 0 ? 0.5 : 0.22;
+    tctx.beginPath(); tctx.moveTo(x, 3); tctx.lineTo(x, base); tctx.stroke();
+  }
+  tctx.globalAlpha = 1;
+
+  let mx = 0.001;
+  for (let i=0;i<TLB;i++) if (tlBuf[i] > mx) mx = tlBuf[i];
+  const bw = tw/TLB;
+  for (let i=0;i<TLB;i++){
+    const v = tlBuf[(tlHead+i) % TLB]/mx;
+    if (v < 0.004) continue;
+    const bh = Math.max(1, v*h);
+    tctx.fillStyle = lutColor(STATE.cls, STATE.vel, 0.15 + v*0.85);
+    tctx.globalAlpha = 0.28 + (i/TLB)*0.68;
+    tctx.fillRect((i/TLB)*tw, base-bh, Math.max(1, bw-0.55), bh);
+  }
+  tctx.globalAlpha = 1;
+
+  const now = performance.now();
+  for (let i=tlMarks.length-1;i>=0;i--){
+    const age = (now - tlMarks[i].t)/14000;
+    if (age > 1){ tlMarks.splice(i,1); continue; }
+    const x = tw*(1-age);
+    tctx.strokeStyle = lutColor(STATE.cls, STATE.vel, (STATE.cls+0.5)/CLASSES.length);
+    tctx.globalAlpha = (1-age)*0.85;
+    tctx.beginPath(); tctx.moveTo(x,2); tctx.lineTo(x, base); tctx.stroke();
+    tctx.fillRect(x-1.5, 2, 3, 3);
+  }
+  tctx.globalAlpha = 1;
+  tctx.fillStyle = 'rgba(220,240,255,0.9)';
+  tctx.fillRect(tw-1, 1, 1, th-8);
+}
+
+/* ── §15  cursor as instrument ───────────────────────────────── */
+function updateRig(){
+  const x = IN.cx, y = IN.cy;
+  EL.rigg.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+  const sp = clamp(IN.speedS/2200, 0, 1);
+  EL.rigBrackets.setAttribute('transform', `scale(${(1+sp*0.85).toFixed(3)})`);
+  EL.rigRing.setAttribute('transform', `rotate(${(STATE.t*11).toFixed(1)})`);
+  EL.rigRing.setAttribute('r', (40 + sp*26).toFixed(1));
+
+  // the cursor's position in the field maps through the grating to a wavelength
+  const C = CLASSES[STATE.cls];
+  const fp = screenToField(x, y);
+  const rr = clamp(Math.hypot(fp.x, fp.y)/7.4, 0, 1);
+  const lam = C.nm0 + rr*(C.nm1 - C.nm0);
+  EL.rigA.textContent = 'λ '+lam.toFixed(1);
+  EL.rigB.textContent = 'E '+IN.curE.toFixed(2);
+  EL.rigC.textContent = 'd'+(Math.hypot(fp.x, fp.y)*2.1).toFixed(2);
+
+  EL.readout.style.transform = `translate(${(x+26).toFixed(0)}px, ${(y+20).toFixed(0)}px)`;
+  EL['ro-l'].textContent = lam.toFixed(1)+' nm';
+  EL['ro-e'].textContent = (IN.curE*1e3).toFixed(1)+' mV/m';
+  EL['ro-v'].textContent = (STATE.vel >= 0 ? '+' : '')+STATE.vel.toFixed(2)+' km/s';
+  EL['ro-c'].textContent = 'C'+STATE.cls+' · '+(rr*100).toFixed(0)+'%';
+  for (let i=0;i<STRIPN;i++){
+    stripEls[i].style.background =
+      lutColor(STATE.cls, STATE.vel, clamp(rr + (i/STRIPN - 0.5)*0.16, 0, 1));
+  }
+
+  const zs = 96 + sp*60;
+  EL.hz.style.width = zs+'px'; EL.hz.style.height = zs+'px';
+  EL.hz.style.transform = `translate(${(x-zs/2).toFixed(0)}px, ${(y-zs/2).toFixed(0)}px)`;
+  EL.hz.style.opacity = (0.25 + sp*0.55).toFixed(2);
+  EL.readout.style.opacity = IN.touch ? '0' : '1';
+}
+
+let hudAcc = 1, specAcc = 1, tlAcc = 1;
+function drawHUD(){
+  if (renderer) updateRig();
+  hudAcc += STATE.dt;
+  if (hudAcc > 0.075){ hudAcc = 0; updateDOM(); }
+  specAcc += STATE.dt;
+  if (specAcc > 1/34){ specAcc = 0; drawSpectrum(); }
+  tlAcc += STATE.dt;
+  if (tlAcc > 1/26){
+    tlAcc = 0;
+    // density sample: how many beats are in flight at this instant
+    tlBuf[tlHead] = IN.agitation*0.55 + IN.energy*0.35
+      + Math.abs(Math.cos(STATE.cycle*Math.PI*2))*0.35 + Math.random()*0.12;
+    tlHead = (tlHead+1) % TLB;
+    drawTimeline();
+  }
+}
+
+/* ── §16  audio ──────────────────────────────────────────────── */
+const AUD = { on:false, ctx:null, master:null, nodes:[] };
+function initAudio(){
+  if (AUD.ctx) return AUD.ctx;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  const ctx = new AC();
+  const master = ctx.createGain(); master.gain.value = 0;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -18; comp.ratio.value = 12; comp.release.value = 0.28;
+  master.connect(comp).connect(ctx.destination);
+
+  // the hum: two detuned bodies through a moving lowpass
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 3.2;
+  lp.connect(master);
+  for (const [f,d,g] of [[41.2,0,.5],[41.2,6.5,.34],[82.4,-3,.16]]){
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.value = f; o.detune.value = d;
+    const gg = ctx.createGain(); gg.gain.value = g;
+    o.connect(gg).connect(lp); o.start();
+    AUD.nodes.push(o);
+  }
+  const lfo = ctx.createOscillator(); lfo.frequency.value = 0.055;
+  const lfoG = ctx.createGain(); lfoG.gain.value = 130;
+  lfo.connect(lfoG).connect(lp.frequency); lfo.start();
+
+  // the air: filtered noise, riding with agitation
+  const nb = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
+  const nd = nb.getChannelData(0);
+  for (let i=0;i<nd.length;i++) nd[i] = (Math.random()*2-1)*0.6;
+  const ns = ctx.createBufferSource(); ns.buffer = nb; ns.loop = true;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = 1400; bp.Q.value = 0.8;
+  const ng = ctx.createGain(); ng.gain.value = 0.10;
+  ns.connect(bp).connect(ng).connect(master); ns.start();
+  AUD.nodes.push(ns);
+  AUD.master = master; AUD.ctx = ctx; AUD.lp = lp; AUD.ng = ng;
+  return ctx;
+}
+function audioToggle(on){
+  const ctx = initAudio(); if (!ctx) return false;
+  on = on === undefined ? !AUD.on : on;
+  if (on && ctx.state === 'suspended') ctx.resume();
+  AUD.on = on;
+  AUD.master.gain.cancelScheduledValues(ctx.currentTime);
+  AUD.master.gain.linearRampToValueAtTime(on ? 0.20 : 0, ctx.currentTime + (on ? 1.6 : 0.7));
+  $('#ledD').classList.toggle('on', on);
+  $('#bAudio').setAttribute('aria-pressed', String(on));
+  return on;
+}
+function chirp(kind){
+  if (!AUD.on || !AUD.ctx) return;
+  const ctx = AUD.ctx, t = ctx.currentTime, C = CLASSES[STATE.cls];
+  const base = 180 + C.nm0*1.6 + kind*90;
+  const o = ctx.createOscillator(); o.type = 'triangle';
+  o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base*(kind === 2 ? 0.55 : 1.9), t+0.5);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.11, t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+0.62);
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = base*2; bp.Q.value = 2.4;
+  o.connect(bp).connect(g).connect(AUD.master);
+  o.start(t); o.stop(t+0.7);
+}
+
+/* ── §17  the server ───────────────────────────────────────────
+   In production these are real endpoints. Here they live in memory
+   behind a fetch shim so the page stays one file. Everything htmx
+   does — request, headers, status, events, swap, settle, indicator,
+   SSE framing — is real. Only the socket is not. This shim is
+   exactly what a Service Worker would do.
+   ───────────────────────────────────────────────────────────── */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function catEntries(n){
+  const C = CLASSES[STATE.cls];
+  const inb = LINES.filter(L => L.nm >= C.nm0-1 && L.nm <= C.nm1+1)
+                   .sort((a,b) => b.s - a.s).slice(0, n);
+  let out = '';
+  for (let i=0;i<n;i++){
+    const L = inb[i];
+    const nm  = L ? dopplerNm({nm:L.nm, vel:STATE.vel}) : C.nm0 + rnd()*(C.nm1-C.nm0);
+    const cf  = L ? clamp(0.55 + L.s*0.4 - STATE.res0*0.35 + rnd()*0.08, .04, .99)
+                  : rnd()*0.3;
+    const st  = cf > .78 ? 'LOCKED' : cf > .5 ? 'RESOLVED' : cf > .28 ? 'MARGINAL' : 'PENDING';
+    out += `<div class="cat${i === 0 && STATE.resolved > 0 ? ' cur' : ''}">
+      <div class="h">
+        <span class="id">${L ? esc(L.id) : 'CONTINUUM'} · ${nm.toFixed(2)}Å</span>
+        <span class="st">${st}</span>
+      </div>
+      <div class="m">
+        <span>WIN <b>${(C.nm1-C.nm0).toFixed(0)}Å</b></span>
+        <span>RES <b>${STATE.res0.toFixed(2)}Å</b></span>
+        <span>SNR <b>${(cf*42).toFixed(1)}</b></span>
+        <span>EXP <b>${(0.4 + rnd()*12).toFixed(1)}ks</b></span>
+      </div>
+      <div class="bar"><i style="width:${(cf*100).toFixed(0)}%"></i></div>
+    </div>`;
+  }
+  return out;
+}
+const obsRow = o =>
+  `<div class="lrow"><span class="t">${o.id}</span><span class="s">${o.op}</span>` +
+  `<span class="m">${o.band} ${o.tone} · <b>${o.st}</b></span></div>`;
+
+function resolveBody(){
+  const next = (STATE.cls + 1 + ((rnd()*(CLASSES.length-1))|0)) % CLASSES.length;
+  const C = CLASSES[next];
+  return {
+    html: catEntries(5),
+    trigger: JSON.stringify({
+      'meridian:resolved': { cls: next, vel:+(C.dbl*(0.55 + rnd()*0.9)).toFixed(2),
+                             res:+C.res.toFixed(2) },
+      'meridian:chirp': 2,
+    }),
+  };
+}
+const API = {
+  '/api/catalog': { fn:() => catEntries(5),     ms:[90,360] },
+  '/api/resolve': { fn:resolveBody,             ms:[220,700] },
+  '/api/obs':     { fn:() => obsRow(observation()), ms:[30,130] },
+};
+
+let feedTimer = null, feedN = 0, feedClosed = false;
+function sseResponse(){
+  const enc = new TextEncoder();
+  const stream = new ReadableStream({
+    start(ctrl){
+      const send = s => { if (!feedClosed) try{ ctrl.enqueue(enc.encode(s)); }catch(e){} };
+      send('retry: 3000\n\n');
+      feedTimer = setInterval(() => {
+        feedN++;
+        send(`id: obs-${feedN}\ndata: ${obsRow(observation())}\n\n`);
+        if (feedN % 4 === 0){
+          const c = (STATE.cls + 1 + ((rnd()*(CLASSES.length-1))|0)) % CLASSES.length;
+          send(`event: meridian:resolved\ndata: ${JSON.stringify({
+            cls:c, vel:+(CLASSES[c].dbl*(0.55 + rnd()*0.9)).toFixed(2),
+            res:+CLASSES[c].res.toFixed(2) })}\n\n`);
+        }
+        if (feedN % 6 === 4) send('event: meridian:chirp\ndata: 1\n\n');
+      }, 1850);
+    },
+    cancel(){ feedClosed = true; clearInterval(feedTimer); },
+  });
+  return new Response(stream, { status:200, headers:{
+    'Content-Type':'text/event-stream', 'Cache-Control':'no-cache' } });
+}
+
+const realFetch = window.fetch.bind(window);
+window.fetch = async function(input, init){
+  const raw = typeof input === 'string' ? input : (input && input.url) || String(input);
+  const [path, qs] = raw.split('?');
+  if (path === '/api/feed') return sseResponse();
+  const route = API[path];
+  if (!route) return realFetch(input, init);
+  const t0 = performance.now();
+  await sleep(route.ms[0] + Math.random()*(route.ms[1]-route.ms[0]));
+  const out = route.fn(new URLSearchParams(qs || ''));
+  const obj = out && typeof out === 'object' && 'html' in out;
+  const headers = new Headers({'Content-Type':'text/html; charset=utf-8'});
+  headers.set('X-MERIDIAN-LATENCY', (performance.now()-t0).toFixed(0));
+  if (obj && out.trigger) headers.set('HX-Trigger', out.trigger);
+  return new Response(obj ? out.html : out, { status:200, headers });
+};
+
+/* ── §18  htmx 4 extension ──────────────────────────────────────
+   htmx 4 replaces the callback API with per-phase event hooks.
+   Every request this page makes is timestamped here and printed
+   into the request bus with its real measured latency.
+   ───────────────────────────────────────────────────────────── */
+const EXT = { seq:0, last:0, errors:0, swaps:0 };
+const _t0 = new WeakMap();
+
+if (window.htmx) {
+  htmx.registerExtension('meridian', {
+    htmx_before_request: (elt, detail) => {
+      const h = detail.ctx.request.headers;
+      h['X-MERIDIAN-SEQ'] = String(++EXT.seq);
+      h['X-MERIDIAN-CHANNEL'] = 'acquisition';
+      _t0.set(elt, performance.now());
+    },
+    htmx_after_request: (elt, detail) => {
+      EXT.last = performance.now() - (_t0.get(elt) || performance.now());
+      if ((detail.ctx.response.status || 0) >= 400) EXT.errors++;
+    },
+    htmx_after_swap: (elt, detail) => {
+      EXT.swaps++;
+      const action = detail.ctx.request.action || '';
+      const path = action.split('?')[0];
+      const q = new URLSearchParams(action.split('?')[1] || '');
+      const tag = (path.endsWith('resolve') ? 'POST' : 'GET') + ' ' + path.replace('/api/','');
+      writeLog(detail.ctx.request.method || 'GET', 'resolve',
+        `<b>${esc(tag)}</b> → 200 · ${EXT.last.toFixed(0)}ms${q.get('shuffle') ? ' ·shuffled' : ''}`);
+    },
+  });
+
+  document.body.addEventListener('htmx:error', e => {
+    writeLog('NET', 'error', `<b>${esc(e.detail?.error?.message || 'request failed')}</b>`);
+  });
+
+  /* the server tells the instrument what the target now is */
+  document.body.addEventListener('meridian:resolved', e => {
+    const d = e.detail || {};
+    if (typeof d.cls !== 'number') return;
+    setClass(d.cls, true);
+    tlMarks.push({ t: performance.now() });
+    writeLog('SRV', 'class', `<b>${esc(CLASSES[d.cls].name)}</b> · Δv ${d.vel} km/s`);
+  });
+  document.body.addEventListener('meridian:chirp', () => chirp(1));
+} else {
+  writeLog('HTM', 'error', 'htmx unavailable — instrument running headless');
+}
+
+/* ── §19  the request bus ────────────────────────────────────── */
+let logN = 0;
+const logEl = $('#log');
+function writeLog(src, kind, msg){
+  if (!logEl) return;
+  const d = document.createElement('div');
+  d.className = 'lrow' + (kind === 'error' ? ' bad' : kind === 'resolve' ? ' good' : '');
+  d.innerHTML = `<span class="t">${esc(src)}</span><span class="s">${esc(kind)}</span>`+
+                `<span class="m">${msg}</span>`;
+  logEl.appendChild(d);
+  if (++logN % 6 === 0) while (logEl.children.length > 22) logEl.removeChild(logEl.firstChild);
+}
+function flareChip(){
+  const c = $('#chip');
+  c.classList.remove('flare'); void c.offsetWidth; c.classList.add('flare');
+}
+
+/* ── §20  the chassis controls ────────────────────────────────── */
+const btnAgit = $('#bAgit'), btnAudio = $('#bAudio'),
+      btnReduce = $('#bReduce'), btnBare = $('#bBare');
+
+function syncAgitBtn(){
+  const m = IN.manual;
+  btnAgit.setAttribute('aria-pressed', String(m !== null));
+  btnAgit.querySelector('span').firstChild.textContent =
+    'Drive · ' + (m === null ? 'auto' : Math.round(m*100) + '%');
+}
+function toggleAgit(){
+  IN.manual = IN.manual === null ? 0.88 : IN.manual === 0.88 ? 0.34 : null;
+  syncAgitBtn();
+  writeLog('UI', 'drive', IN.manual === null
+    ? 'agitation <b>auto</b>' : `agitation held at <b>${Math.round(IN.manual*100)}%</b>`);
+}
+function toggleReduce(on){
+  STATE.reduced = on === undefined ? !STATE.reduced : on;
+  document.body.classList.toggle('reduced', STATE.reduced);
+  btnReduce.setAttribute('aria-pressed', String(STATE.reduced));
+  writeLog('UI', 'motion', STATE.reduced ? 'trails <b>shortened</b>' : 'trails <b>full length</b>');
+}
+function toggleBare(){
+  const on = root.classList.toggle('bare');
+  btnBare.setAttribute('aria-pressed', String(on));
+  writeLog('UI', 'chassis', on ? 'chassis <b>stowed</b>' : 'chassis <b>deployed</b>');
+}
+btnAgit.addEventListener('click', toggleAgit);
+btnReduce.addEventListener('click', () => toggleReduce());
+btnBare.addEventListener('click', toggleBare);
+btnAudio.addEventListener('click', () => audioToggle());
+
+addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return;
+  const k = e.key.toLowerCase();
+  if (k === 'a'){ toggleAgit(); e.preventDefault(); }
+  else if (k === 's'){ audioToggle(); e.preventDefault(); }
+  else if (k === 'r'){ toggleReduce(); e.preventDefault(); }
+  else if (k === 'h'){ toggleBare(); e.preventDefault(); }
+  else if (k === 'q' || e.key === 'Enter'){
+    if (window.htmx){ htmx.trigger('#act', 'click'); e.preventDefault(); }
+  }
+});
+matchMedia('(prefers-reduced-motion: reduce)')
+  .addEventListener?.('change', ev => toggleReduce(ev.matches));
+
+/* context loss is a real event on a page like this, so handle it */
+if (renderer) {
+  canvas.addEventListener('webglcontextlost', e => {
+    e.preventDefault();
+    writeLog('GL', 'error', '<b>context lost</b> — holding exposure');
+    $('#veiltxt').textContent = 'PLATE HELD · AWAITING CONTEXT';
+    $('#veil').classList.remove('gone');
+  }, false);
+  canvas.addEventListener('webglcontextrestored', () => {
+    writeLog('GL', 'sys', 'context <b>restored</b> — integrating');
+    buildParticles(Q.maxCount); buildRings(); resize();
+    $('#veil').classList.add('gone');
+  }, false);
+}
+
+/* ── §21  graceful fall: if hx-sse never attached, drive the bus ── */
+let sseSeen = 0;
+new MutationObserver(() => {
+  if (logEl.children.length > sseSeen) sseSeen = logEl.children.length;
+}).observe(logEl, { childList:true });
+setTimeout(() => {
+  if (sseSeen > 0 || !window.htmx) return;
+  writeLog('SSE', 'error', 'stream extension unavailable — local bus');
+  setInterval(() => {
+    const d = document.createElement('div');
+    d.className = 'lrow';
+    d.innerHTML = obsRow(observation());
+    logEl.appendChild(d);
+    while (logEl.children.length > 22) logEl.removeChild(logEl.firstChild);
+  }, 1900);
+}, 5000);
+
+/* ── §22  spin up ────────────────────────────────────────────── */
+function boot(){
+  layoutCanvases();
+  syncAgitBtn();
+  if (renderer){
+    buildParticles(Q.maxCount);
+    buildRings();
+    resize();
+  }
+  drawSpectrum(); drawTimeline(); updateDOM(); drawHUD();
+
+  writeLog('SRV', 'sys', `channel <b>acquisition</b> open · ${Q.maxCount.toLocaleString('en-US')} tracks armed`);
+  writeLog('OPT', 'sys', 'grating <b>1200 L/mm</b> · blaze 4870 Å · f/8.4');
+  writeLog('CLS', 'sys', 'target <b>unresolved</b> — no fixed assignment');
+  setTimeout(() => writeLog('EVT', 'good', 'first <b>partial</b> at L3 · continuing'), 1400);
+  setTimeout(() => writeLog('EVT', 'good', 'line at L7 <b>split</b> · 2 components'), 3300);
+
+  requestAnimationFrame(frame);
+  setTimeout(() => {
+    root.dataset.boot = '1';
+    $('#veil').classList.add('gone');
+    setTimeout(() => $('#veil').remove(), 1200);
+  }, 420);
+}
+boot();
+</script>
+</body>
+</html>
