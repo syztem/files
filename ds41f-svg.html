@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="htmx-config" content="mode:cors, defaultSettleDelay:24, includeIndicatorCSS:false">
+<title>AEON · a single-file celestial observatory</title>
+<meta name="description" content="A night sky drawn entirely in SVG, swapping plates with htmx 4.">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+--void:#05070f;--line:rgba(255,255,255,.10);--line2:rgba(255,255,255,.055);
+--txt:#e9e3d7;--dim:#93a6c8;--dim2:#63769b;--teal:#7fe3c8;--violet:#a394ef;--amber:#ffd9a0;
+--serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+--mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+--sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+--pad:clamp(18px,5vw,86px);--max:1280px}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background-color:var(--void);background-image:radial-gradient(125% 72% at 50% -6%,#16224e 0%,#080d1e 44%,#05070f 100%);background-attachment:fixed;color:var(--txt);font-family:var(--sans);line-height:1.6;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:400;font-family:var(--serif)}
+p{margin:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit}
+::selection{background:var(--teal);color:#05070f}
+.wrap{max-width:var(--max);margin:0 auto;padding:clamp(78px,13vh,170px) var(--pad)}
+.rule{height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent)}
+.kicker{font:500 10.5px/1 var(--mono);letter-spacing:.46em;text-transform:uppercase;color:var(--teal);opacity:.85}
+h2{font-size:clamp(30px,5.2vw,62px);line-height:1.03;letter-spacing:-.012em}
+h3{font-size:clamp(17px,1.5vw,20px)}
+.body{color:#a4b5d2;font-size:clamp(14px,1.05vw,16.5px);line-height:1.8;max-width:54ch}
+.top{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;gap:clamp(16px,4vw,56px);padding:15px var(--pad);background:linear-gradient(180deg,rgba(5,7,15,.9),rgba(5,7,15,0));backdrop-filter:blur(14px) saturate(1.25);-webkit-backdrop-filter:blur(14px) saturate(1.25)}
+.brand{display:flex;align-items:center;gap:11px;font:600 12px/1 var(--mono);letter-spacing:.36em;text-transform:uppercase}
+.brand svg{width:21px;height:21px;color:var(--teal);overflow:visible}
+.brand svg path{filter:drop-shadow(0 0 6px rgba(127,227,200,.7))}
+.top nav{display:flex;gap:clamp(16px,2.6vw,36px);margin-left:auto}
+.top nav a{position:relative;padding:6px 0;font:500 10.5px/1 var(--mono);letter-spacing:.28em;text-transform:uppercase;color:var(--dim);transition:color .35s}
+.top nav a::after{content:"";position:absolute;left:0;right:100%;bottom:0;height:1px;background:var(--teal);transition:right .5s cubic-bezier(.2,.8,.2,1)}
+.top nav a:hover{color:#fff}
+.top nav a:hover::after{right:0}
+.feed{display:flex;align-items:center;gap:9px;font:500 10px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--dim2)}
+.feed i{width:6px;height:6px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal);animation:blip 2.8s ease-in-out infinite}
+@keyframes blip{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+@media (max-width:820px){.top nav{display:none}.feed{margin-left:auto}}
+.hero{position:relative;display:grid;place-items:center;height:100svh;min-height:520px;overflow:hidden}
+.scene{position:absolute;top:0;left:0;width:100%;height:100%}
+@media (max-aspect-ratio:5/8){.scene{width:220%;left:-120%}}
+@media (max-aspect-ratio:1/1) and (min-aspect-ratio:5/8){.scene{width:152%;left:-46%}}
+.copy{position:relative;z-index:3;display:grid;gap:clamp(12px,2vh,24px);justify-items:start;max-width:min(560px,60vw);padding:0 0 0 0}
+@media (min-width:820px){.copy{position:absolute;left:var(--pad);top:50%;transform:translateY(-50%)}}
+@media (max-width:819px){.copy{justify-items:center;text-align:center;max-width:min(92vw,560px)}}
+.eyebrow{display:flex;align-items:center;gap:14px;font:500 10.5px/1 var(--mono);letter-spacing:.42em;text-transform:uppercase;color:#a8bcdd}
+.eyebrow::before{content:"";width:clamp(18px,7vw,74px);height:1px;background:linear-gradient(90deg,transparent,rgba(168,188,221,.7))}
+@media (max-width:819px){.eyebrow::before{background:linear-gradient(90deg,transparent,rgba(168,188,221,.7),transparent);width:clamp(24px,14vw,120px)}}
+.copy h1{font-size:clamp(56px,11.5vw,178px);line-height:.9;letter-spacing:-.012em;color:#ece6da;text-shadow:0 2px 40px rgba(5,7,15,.7)}
+.lede{font-family:var(--serif);font-style:italic;font-size:clamp(14.5px,1.4vw,20px);line-height:1.65;color:#bcc9e2;max-width:36ch;text-shadow:0 1px 24px rgba(5,7,15,.8)}
+.cue{position:absolute;left:50%;bottom:clamp(16px,3.4vh,36px);z-index:3;transform:translateX(-50%);display:grid;justify-items:center;gap:10px;font:500 9.5px/1 var(--mono);letter-spacing:.4em;color:var(--dim2)}
+.cue i{display:block;width:1px;height:40px;background:linear-gradient(180deg,rgba(255,255,255,.55),transparent);animation:cue 2.8s ease-in-out infinite}
+@keyframes cue{0%,100%{opacity:.3;transform:scaleY(.55)}50%{opacity:1;transform:scaleY(1)}}
+.obs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:clamp(32px,4.6vw,82px);align-items:center}
+@media (max-width:960px){.obs{grid-template-columns:1fr}}
+.lead{display:grid;gap:clamp(16px,2.4vh,26px);justify-items:start}
+.switch{display:flex;flex-wrap:wrap;gap:10px;margin-top:4px}
+.seg{display:inline-flex;align-items:center;gap:9px;padding:12px 18px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.028);font:500 10.5px/1 var(--mono);letter-spacing:.26em;text-transform:uppercase;color:#a9bcda;cursor:pointer;transition:color .4s,border-color .4s,background-color .4s,transform .4s,opacity .3s}
+.seg:hover{color:#fff;border-color:rgba(127,227,200,.55);background-color:rgba(127,227,200,.09);transform:translateY(-2px)}
+.seg:active{transform:translateY(0)}
+.seg:disabled{opacity:.42;cursor:progress}
+.seg .peg{width:5px;height:5px;border-radius:50%;background:var(--teal);opacity:0;transition:opacity .3s}
+.seg .peg.htmx-request{opacity:1;box-shadow:0 0 10px var(--teal)}
+.hint{font:500 10px/1.9 var(--mono);letter-spacing:.12em;color:var(--dim2)}
+.frame{position:relative;margin:0;border:1px solid var(--line);border-radius:22px;overflow:hidden;background:#04060e;box-shadow:0 60px 140px -60px #000,inset 0 1px 0 rgba(255,255,255,.07)}
+#pano-root{position:relative;z-index:1}
+.frame::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(180deg,rgba(255,255,255,.07),transparent 18%),radial-gradient(130% 130% at 50% 0%,transparent 52%,rgba(0,0,0,.55))}
+.frame figcaption{position:relative;z-index:3;display:flex;justify-content:space-between;gap:14px;padding:13px 17px;border-top:1px solid var(--line2);font:500 9.5px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--dim2)}
+.pano{display:block;width:100%;height:auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:clamp(14px,1.8vw,26px);margin-top:clamp(28px,4.4vh,58px)}
+.card{position:relative;display:grid;gap:13px;align-content:start;min-height:300px;padding:22px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.006) 62%);overflow:hidden}
+.card::before{content:"";position:absolute;inset:0;background:radial-gradient(90% 60% at 12% 0%,rgba(163,148,239,.14),transparent 62%);opacity:0;transition:opacity .6s}
+.card:hover::before{opacity:1}
+.card p{font-size:13.5px;line-height:1.72;color:#9fb0cd}
+.card .meta{margin-top:auto;font:500 9.5px/1.75 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--dim2)}
+.viz{display:block;width:100%;height:auto;overflow:visible}
+.skel rect{fill:rgba(255,255,255,.075);animation:shim 2.6s ease-in-out infinite}
+.skel rect:nth-child(2){animation-delay:.3s}
+.skel rect:nth-child(3){animation-delay:.6s}
+.skel rect:nth-child(4){animation-delay:.9s}
+@keyframes shim{0%,100%{opacity:.35}50%{opacity:1}}
+.ind{font:500 9.5px/1 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--teal)}
+.htmx-indicator{opacity:0;transition:opacity .3s}
+.htmx-request.htmx-indicator{opacity:1}
+.loaded{animation:cardin .9s cubic-bezier(.2,.85,.2,1) both}
+@keyframes cardin{from{opacity:0;transform:translateY(14px) scale(.99)}to{opacity:1;transform:none}}
+.atlas{display:grid;grid-template-columns:repeat(auto-fit,minmax(212px,1fr));gap:clamp(12px,1.6vw,22px);margin-top:clamp(28px,4.4vh,58px)}
+.chart{position:relative;padding:18px 18px 15px;border:1px solid var(--line);border-radius:16px;background:radial-gradient(120% 90% at 50% 0%,rgba(163,148,239,.12),transparent 60%);transition:border-color .5s,transform .5s}
+.chart:hover{border-color:rgba(127,227,200,.36);transform:translateY(-3px)}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .links{fill:none;stroke:rgba(160,190,255,.34);stroke-width:1;stroke-dasharray:2 3;stroke-linecap:round}
+.chart .dots circle{fill:#dbe7ff}
+.chart .hot{fill:#fff;filter:drop-shadow(0 0 7px rgba(170,215,255,.95))}
+.chart h3{margin-top:15px;font-size:16px}
+.chart p{font:500 9.5px/1.8 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--dim2)}
+footer{border-top:1px solid var(--line2);background:linear-gradient(180deg,transparent,rgba(0,0,0,.5))}
+.foot{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;justify-content:space-between;max-width:var(--max);margin:0 auto;padding:clamp(30px,5vh,58px) var(--pad) clamp(42px,7vh,74px)}
+.foot .mark{display:flex;align-items:center;gap:13px;font:600 12px/1 var(--mono);letter-spacing:.36em;color:var(--teal)}
+.foot p{font:500 10px/1.9 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim2);max-width:46ch}
+.scene .mw{filter:url(#blurMW);fill:#bcd4ff}
+.scene .tw{animation:tw 5.6s ease-in-out infinite}
+.tw-1{animation-delay:-.4s}.tw-4{animation-delay:-2.6s}
+@keyframes tw{0%,100%{opacity:.6}50%{opacity:1}}
+.bs{animation:tw 8.6s ease-in-out infinite;fill:#f6faff}
+.bs:nth-of-type(2n){animation-delay:-3.1s}
+.aur{transform-box:view-box;transform-origin:50% 50%;mix-blend-mode:screen;filter:url(#blurL);animation:sway 34s ease-in-out infinite}
+.aur-a{fill:url(#aur)}
+.aur-b{fill:url(#aur2);animation-duration:52s;animation-delay:-13s;opacity:.72}
+@keyframes sway{0%,100%{transform:translate3d(-22px,0,0) skewX(2.2deg)}50%{transform:translate3d(26px,-9px,0) skewX(-2.8deg)}}
+.moonG{animation:drift 26s ease-in-out infinite}
+@keyframes drift{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(0,-8px,0)}}
+.halo{transform-box:view-box;transform-origin:63% 23%;animation:breath 15s ease-in-out infinite}
+@keyframes breath{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.03)}}
+.hglow{fill:url(#glow);mix-blend-mode:screen}
+.refl{mix-blend-mode:screen}
+.rip{animation:rip 16s ease-in-out infinite}
+.rip path{fill:none;stroke:url(#fade);stroke-width:1.5}
+@keyframes rip{0%,100%{opacity:.62;transform:translate3d(-11px,0,0)}50%{opacity:1;transform:translate3d(11px,0,0)}}
+.ridgeF{fill:url(#ridgeF)}
+.ridgeN{fill:url(#ridgeN)}
+.spit{fill:#04060d}
+.rimL{fill:none;stroke:url(#rimW);stroke-width:1.2;opacity:.55}
+.hut{fill:#03050c}
+.hutRim{fill:none;stroke:url(#rimW);stroke-width:1.1;opacity:.5}
+.win{fill:#ffcf8a}
+.door{fill:#02040a}
+.warm{mix-blend-mode:screen;animation:lamp 6.5s ease-in-out infinite}
+.warmG{fill:url(#lamp)}
+.warmC{fill:#ffe6b8}
+.warmP{fill:url(#lamp)}
+@keyframes lamp{0%,100%{opacity:.72}38%{opacity:1}57%{opacity:.8}}
+.grain{mix-blend-mode:overlay;opacity:.06}
+.bg-sky{fill:url(#sky)}.bg-dawn{fill:url(#dawn)}.bg-deep{fill:#04060c}.bg-void{fill:#05070f}
+.starfield{fill:#fff}
+.sun-halo{fill:url(#sun);mix-blend-mode:screen}
+.corona{fill:url(#corona);mix-blend-mode:screen}
+.disc{fill:#05070e}
+.rim{fill:none;stroke:url(#rimW);stroke-width:1.6}
+.sun{fill:#ffe7b4}
+.rays path{fill:none;stroke:#ffd9a0;stroke-width:2;opacity:.2}
+.birds path{fill:none;stroke:#2f2242;stroke-width:3;stroke-linecap:round}
+.galfield{fill:#a8c8ff;filter:url(#blurMW)}
+.softf{filter:url(#soft)}
+.gal{fill:url(#gal)}
+.gal2{fill:#eaf2ff}
+.hub{fill:url(#halo)}
+.grid path{fill:none;stroke:rgba(255,255,255,.075);stroke-width:1}
+.orbit{fill:none;stroke:rgba(150,190,255,.3);stroke-width:1;stroke-dasharray:3 5}
+.planet{fill:url(#moonG)}
+.pglow{fill:url(#halo)}
+.sat{fill:#cfe0ff}.sat2{fill:#8fa6d6}
+.tick{fill:none;stroke:rgba(255,255,255,.14);stroke-width:1}
+.spectrum{fill:url(#spec)}
+.abs rect{fill:#05070f}
+.lbl text{fill:#63769b;font:500 9px var(--mono);letter-spacing:.1em}
+.gridl{fill:none;stroke:rgba(255,255,255,.10);stroke-width:1;stroke-dasharray:2 4}
+.curve{fill:none;stroke:url(#line2g);stroke-width:1.6;stroke-linecap:round}
+.dots circle{fill:#cfe4ff}
+.mark{fill:#ffd9a0;filter:drop-shadow(0 0 6px rgba(255,217,160,.9))}
+.star{fill:url(#moonG)}
+.pl{fill:#cfe0ff}.pl2{fill:#8fa6d6}
+tr{display:none}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.6s;animation-timing-function:cubic-bezier(.22,.7,.2,1)}
+@supports (animation-timeline:view()){
+.reveal{animation:rise .9s linear both;animation-timeline:view();animation-range:entry 0% entry 78%}
+@keyframes rise{from{opacity:.001;transform:translateY(26px)}to{opacity:1;transform:none}}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#aeon">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="10.4" fill="none" stroke="currentColor" stroke-width=".8" opacity=".45"/>
+      <path d="M12 2.6 L13.5 10.5 L21.4 12 L13.5 13.5 L12 21.4 L10.5 13.5 L2.6 12 L10.5 10.5 Z"/>
+    </svg>
+    <span>AEON</span>
+  </a>
+  <nav>
+    <a href="#observatory">Observatory</a>
+    <a href="#plates">Plates</a>
+    <a href="#atlas">Atlas</a>
+  </nav>
+  <p class="feed"><i></i>aperture open</p>
+</header>
+
+<section class="hero" id="aeon">
+  <svg class="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="A moon above a still lake, with aurora light and a small lit window on a far shore">
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#05070f"/>
+        <stop offset=".3" stop-color="#080e26"/>
+        <stop offset=".55" stop-color="#111a44"/>
+        <stop offset=".71" stop-color="#232457"/>
+        <stop offset=".81" stop-color="#3a3166"/>
+        <stop offset=".87" stop-color="#0d1230"/>
+        <stop offset="1" stop-color="#05070f"/>
+      </linearGradient>
+      <linearGradient id="dawn" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#150d33"/>
+        <stop offset=".38" stop-color="#3a1f5e"/>
+        <stop offset=".64" stop-color="#8a3b6a"/>
+        <stop offset=".84" stop-color="#cf6a4f"/>
+        <stop offset="1" stop-color="#e8a86a"/>
+      </linearGradient>
+      <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+        <stop offset="0" stop-color="#8ee8f6" stop-opacity=".42"/>
+        <stop offset=".42" stop-color="#7a6cf0" stop-opacity=".16"/>
+        <stop offset="1" stop-color="#3a2f80" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="halo" cx=".5" cy=".5" r=".5">
+        <stop offset="0" stop-color="#fff4d8" stop-opacity=".72"/>
+        <stop offset=".42" stop-color="#ffdfa4" stop-opacity=".18"/>
+        <stop offset="1" stop-color="#ffd79a" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="moonG" cx=".35" cy=".3" r=".82">
+        <stop offset="0" stop-color="#fffdf6"/>
+        <stop offset=".46" stop-color="#ffeecf"/>
+        <stop offset=".8" stop-color="#efd0a2"/>
+        <stop offset="1" stop-color="#c3a077"/>
+      </radialGradient>
+      <linearGradient id="term" x1=".15" y1=".12" x2=".92" y2=".95">
+        <stop offset=".2" stop-color="#2a1c3d" stop-opacity="0"/>
+        <stop offset=".68" stop-color="#1d1330" stop-opacity=".14"/>
+        <stop offset="1" stop-color="#120a22" stop-opacity=".5"/>
+      </linearGradient>
+      <linearGradient id="aur" x1="0" y1="0" x2="0" y2="1">
+        <stop offset=".02" stop-color="#9ff0d8" stop-opacity="0"/>
+        <stop offset=".34" stop-color="#79d8c2" stop-opacity=".1"/>
+        <stop offset=".72" stop-color="#4fb79e" stop-opacity=".2"/>
+        <stop offset=".93" stop-color="#a5f2da" stop-opacity=".4"/>
+        <stop offset="1" stop-color="#a5f2da" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="aur2" x1="0" y1="0" x2="0" y2="1">
+        <stop offset=".02" stop-color="#b9a6ff" stop-opacity="0"/>
+        <stop offset=".5" stop-color="#9d8cf0" stop-opacity=".12"/>
+        <stop offset=".9" stop-color="#c2b2ff" stop-opacity=".28"/>
+        <stop offset="1" stop-color="#c2b2ff" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0c1436"/>
+        <stop offset=".14" stop-color="#080c20"/>
+        <stop offset=".6" stop-color="#050814"/>
+        <stop offset="1" stop-color="#04060f"/>
+      </linearGradient>
+      <linearGradient id="col" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffeccb" stop-opacity=".8"/>
+        <stop offset=".55" stop-color="#ffdfa4" stop-opacity=".26"/>
+        <stop offset="1" stop-color="#ffd79a" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="fade" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1600" y2="0">
+        <stop offset=".28" stop-color="#cfeaff" stop-opacity="0"/>
+        <stop offset=".63" stop-color="#f2f9ff" stop-opacity=".95"/>
+        <stop offset="1" stop-color="#cfeaff" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="ridgeF" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1d2653"/>
+        <stop offset="1" stop-color="#070b1e"/>
+      </linearGradient>
+      <linearGradient id="ridgeN" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0a1026"/>
+        <stop offset="1" stop-color="#020409"/>
+      </linearGradient>
+      <linearGradient id="rimW" x1="0" y1="0" x2="1" y2=".45">
+        <stop offset="0" stop-color="#a9e6ff" stop-opacity=".8"/>
+        <stop offset=".55" stop-color="#7c8fe0" stop-opacity=".22"/>
+        <stop offset="1" stop-color="#7c8fe0" stop-opacity="0"/>
+      </linearGradient>
+      <radialGradient id="lamp" cx=".5" cy=".5" r=".5">
+        <stop offset="0" stop-color="#ffd08a" stop-opacity=".8"/>
+        <stop offset=".4" stop-color="#ffb765" stop-opacity=".2"/>
+        <stop offset="1" stop-color="#ff9c3d" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="corona" cx=".5" cy=".5" r=".5">
+        <stop offset=".42" stop-color="#fff6e2" stop-opacity="0"/>
+        <stop offset=".58" stop-color="#fff2d8" stop-opacity=".5"/>
+        <stop offset=".78" stop-color="#ffe0a8" stop-opacity=".16"/>
+        <stop offset="1" stop-color="#ffce7a" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="sun" cx=".5" cy=".5" r=".5">
+        <stop offset="0" stop-color="#ffe9b8" stop-opacity=".82"/>
+        <stop offset=".34" stop-color="#ffb469" stop-opacity=".3"/>
+        <stop offset="1" stop-color="#ff8a4a" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="gal" x1="0" y1="0" x2="1" y2=".3">
+        <stop offset="0" stop-color="#cfe2ff" stop-opacity="0"/>
+        <stop offset=".5" stop-color="#eaf2ff" stop-opacity=".62"/>
+        <stop offset="1" stop-color="#a9c1ff" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="spec" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#4a2a9e"/>
+        <stop offset=".24" stop-color="#2a6fe0"/>
+        <stop offset=".48" stop-color="#2fd6c0"/>
+        <stop offset=".7" stop-color="#f2d24e"/>
+        <stop offset=".88" stop-color="#ff7a45"/>
+        <stop offset="1" stop-color="#8f1f2e"/>
+      </linearGradient>
+      <linearGradient id="line2g" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#7fe3c8" stop-opacity=".25"/>
+        <stop offset=".5" stop-color="#bfe8ff" stop-opacity=".95"/>
+        <stop offset="1" stop-color="#a394ef" stop-opacity=".35"/>
+      </linearGradient>
+      <radialGradient id="vig" cx=".5" cy=".44" r=".74">
+        <stop offset=".42" stop-color="#000" stop-opacity="0"/>
+        <stop offset=".78" stop-color="#000" stop-opacity=".26"/>
+        <stop offset="1" stop-color="#000" stop-opacity=".6"/>
+      </radialGradient>
+      <filter id="soft" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="16"/></filter>
+      <filter id="blurL" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="30"/></filter>
+      <filter id="blurMW" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="22"/></filter>
+      <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".82" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+      <clipPath id="mclip"><circle cx="1010" cy="206" r="97"/></clipPath>
+    </defs>
+    <rect width="1600" height="900" fill="url(#sky)"/>
+    <g class="mw">
+      <ellipse cx="986" cy="308" rx="42" ry="25" opacity="0.079"/>
+      <ellipse cx="818" cy="366" rx="31" ry="19" opacity="0.111"/>
+      <ellipse cx="1575" cy="192" rx="80" ry="48" opacity="0.053"/>
+      <ellipse cx="159" cy="409" rx="33" ry="20" opacity="0.113"/>
+      <ellipse cx="766" cy="317" rx="69" ry="41" opacity="0.058"/>
+      <ellipse cx="821" cy="379" rx="39" ry="23" opacity="0.078"/>
+      <ellipse cx="705" cy="315" rx="40" ry="24" opacity="0.072"/>
+      <ellipse cx="1380" cy="152" rx="44" ry="26" opacity="0.119"/>
+      <ellipse cx="1420" cy="275" rx="29" ry="17" opacity="0.081"/>
+      <ellipse cx="505" cy="452" rx="48" ry="29" opacity="0.058"/>
+      <ellipse cx="1368" cy="284" rx="53" ry="32" opacity="0.089"/>
+      <ellipse cx="1384" cy="189" rx="40" ry="24" opacity="0.097"/>
+      <ellipse cx="-17" cy="408" rx="50" ry="30" opacity="0.059"/>
+      <ellipse cx="1605" cy="275" rx="31" ry="19" opacity="0.119"/>
+      <ellipse cx="1187" cy="247" rx="77" ry="46" opacity="0.052"/>
+      <ellipse cx="654" cy="515" rx="41" ry="25" opacity="0.082"/>
+      <ellipse cx="1541" cy="255" rx="30" ry="18" opacity="0.124"/>
+      <ellipse cx="105" cy="417" rx="49" ry="29" opacity="0.071"/>
+      <ellipse cx="1373" cy="218" rx="38" ry="23" opacity="0.076"/>
+      <ellipse cx="999" cy="430" rx="78" ry="47" opacity="0.098"/>
+      <ellipse cx="1368" cy="287" rx="82" ry="49" opacity="0.081"/>
+      <ellipse cx="248" cy="467" rx="44" ry="26" opacity="0.129"/>
+    </g>
+    <g Fill="#f6faff">
+      <g class="tw tw-1">
+        <circle cx="106.9" cy="159.9" r="1.6" opacity="0.49"/>
+        <circle cx="810.4" cy="411.5" r="0.55" opacity="0.68"/>
+        <circle cx="642.3" cy="214.5" r="0.5" opacity="0.55"/>
+        <circle cx="1347.0" cy="456.0" r="0.7" opacity="0.5"/>
+        <circle cx="734.1" cy="404.3" r="1.4" opacity="0.26"/>
+        <circle cx="26.9" cy="271.3" r="0.8" opacity="0.33"/>
+        <circle cx="980.0" cy="483.3" r="1.2" opacity="0.52"/>
+        <circle cx="491.9" cy="183.1" r="1.4" opacity="0.37"/>
+        <circle cx="557.6" cy="413.4" r="1.0" opacity="0.59"/>
+        <circle cx="702.9" cy="208.8" r="0.55" opacity="0.71"/>
+        <circle cx="476.7" cy="430.5" r="0.6" opacity="0.42"/>
+        <circle cx="471.5" cy="191.9" r="1.6" opacity="0.53"/>
+        <circle cx="1214.0" cy="401.0" r="0.7" opacity="0.29"/>
+        <circle cx="206.0" cy="156.0" r="0.5" opacity="0.56"/>
+      </g>
+      <g class="tw tw-2">
+        <circle cx="11.3" cy="430.1" r="0.8" opacity="0.69"/>
+        <circle cx="1429.4" cy="318.2" r="1.4" opacity="0.31"/>
+        <circle cx="54.0" cy="363.9" r="1.4" opacity="0.39"/>
+        <circle cx="330.4" cy="374.2" r="0.7" opacity="0.8"/>
+        <circle cx="1185.4" cy="455.1" r="0.6" opacity="0.28"/>
+        <circle cx="287.0" cy="359.3" r="0.6" opacity="0.84"/>
+        <circle cx="759.8" cy="394.1" r="0.8" opacity="0.17"/>
+        <circle cx="57.4" cy="436.6" r="0.55" opacity="0.67"/>
+        <circle cx="1049.1" cy="460.9" r="1.0" opacity="0.14"/>
+        <circle cx="466.8" cy="390.6" r="1.2" opacity="0.21"/>
+        <circle cx="38.7" cy="564.9" r="1.4" opacity="0.09"/>
+      </g>
+      <g class="tw tw-3">
+        <circle cx="3.5" cy="228.3" r="0.9" opacity="0.74"/>
+        <circle cx="188.7" cy="575.7" r="0.9" opacity="0.28"/>
+        <circle cx="540.7" cy="495.1" r="0.7" opacity="0.38"/>
+        <circle cx="49.6" cy="443.8" r="1.4" opacity="0.4"/>
+        <circle cx="714.7" cy="597.7" r="0.55" opacity="0.33"/>
+        <circle cx="893.7" cy="380.1" r="0.6" opacity="0.33"/>
+        <circle cx="381.9" cy="210.2" r="1.6" opacity="0.83"/>
+        <circle cx="1513.8" cy="1.5" r="0.7" opacity="0.48"/>
+        <circle cx="1198.7" cy="494.0" r="1.2" opacity="0.15"/>
+        <circle cx="797.5" cy="483.6" r="0.7" opacity="0.58"/>
+        <circle cx="1458.1" cy="432.0" r="0.5" opacity="0.55"/>
+        <circle cx="857.3" cy="322.0" r="0.9" opacity="0.73"/>
+        <circle cx="292.9" cy="208.8" r="0.7" opacity="0.32"/>
+        <circle cx="307.8" cy="369.5" r="1.2" opacity="0.81"/>
+        <circle cx="90.6" cy="607.0" r="1.6" opacity="0.22"/>
+        <circle cx="284.9" cy="359.7" r="1.6" opacity="0.28"/>
+        <circle cx="750.8" cy="61.8" r="1.6" opacity="0.21"/>
+        <circle cx="148.6" cy="508.6" r="0.9" opacity="0.27"/>
+        <circle cx="604.8" cy="573.4" r="0.4" opacity="0.39"/>
+        <circle cx="703.1" cy="214.0" r="0.7" opacity="0.75"/>
+        <circle cx="222.7" cy="516.6" r="0.6" opacity="0.49"/>
+        <circle cx="1332.2" cy="123.2" r="0.4" opacity="0.28"/>
+        <circle cx="565.0" cy="486.2" r="0.8" opacity="0.55"/>
+        <circle cx="332.5" cy="510.1" r="0.55" opacity="0.5"/>
+        <circle cx="658.7" cy="419.6" r="1.0" opacity="0.39"/>
+        <circle cx="915.2" cy="531.3" r="1.6" opacity="0.19"/>
+      </g>
+      <g class="tw tw-4">
+        <circle cx="1370.6" cy="204.5" r="0.5" opacity="0.74"/>
+        <circle cx="175.5" cy="-1.4" r="1.4" opacity="0.72"/>
+        <circle cx="1502.5" cy="240.4" r="1.4" opacity="0.52"/>
+        <circle cx="1226.8" cy="298.2" r="0.9" opacity="0.4"/>
+        <circle cx="86.4" cy="308.3" r="0.9" opacity="0.42"/>
+        <circle cx="286.8" cy="444.9" r="1.0" opacity="0.44"/>
+        <circle cx="416.3" cy="12.3" r="1.0" opacity="0.93"/>
+        <circle cx="47.9" cy="348.7" r="1.6" opacity="0.87"/>
+        <circle cx="562.0" cy="372.3" r="0.4" opacity="0.52"/>
+        <circle cx="44.5" cy="432.2" r="1.6" opacity="0.59"/>
+        <circle cx="1532.4" cy="357.8" r="0.6" opacity="0.45"/>
+        <circle cx="1224.4" cy="112.3" r="1.4" opacity="0.28"/>
+        <circle cx="15.9" cy="30.2" r="1.4" opacity="0.48"/>
+        <circle cx="441.8" cy="76.1" r="0.5" opacity="0.45"/>
+        <circle cx="288.2" cy="198.5" r="0.4" opacity="0.3"/>
+        <circle cx="437.9" cy="160.0" r="0.4" opacity="0.39"/>
+        <circle cx="367.6" cy="308.6" r="1.4" opacity="0.63"/>
+        <circle cx="1353.6" cy="282.1" r="1.6" opacity="0.45"/>
+        <circle cx="385.1" cy="140.9" r="0.4" opacity="0.59"/>
+        <circle cx="357.3" cy="453.7" r="0.4" opacity="0.24"/>
+      </g>
+      <g class="tw tw-5">
+        <circle cx="1308.9" cy="586.6" r="0.55" opacity="0.08"/>
+        <circle cx="762.3" cy="583.3" r="0.5" opacity="0.21"/>
+        <circle cx="-27.7" cy="535.3" r="0.6" opacity="0.28"/>
+        <circle cx="1321.7" cy="180.6" r="0.7" opacity="0.55"/>
+        <circle cx="491.3" cy="311.0" r="0.6" opacity="0.72"/>
+        <circle cx="178.5" cy="152.3" r="0.4" opacity="0.76"/>
+        <circle cx="1044.0" cy="439.0" r="0.6" opacity="0.58"/>
+        <circle cx="734.6" cy="510.5" r="0.55" opacity="0.47"/>
+        <circle cx="-15.9" cy="558.4" r="0.7" opacity="0.08"/>
+      </g>
+      <g class="tw tw-6">
+        <circle cx="1605.1" cy="602.0" r="0.9" opacity="0.2"/>
+        <circle cx="1470.5" cy="237.6" r="0.6" opacity="0.37"/>
+        <circle cx="603.3" cy="336.5" r="1.0" opacity="0.78"/>
+        <circle cx="845.5" cy="297.6" r="0.7" opacity="0.71"/>
+        <circle cx="706.3" cy="184.8" r="0.55" opacity="0.77"/>
+        <circle cx="197.6" cy="504.2" r="0.7" opacity="0.52"/>
+        <circle cx="1327.6" cy="52.3" r="1.4" opacity="0.48"/>
+        <circle cx="670.1" cy="417.2" r="0.7" opacity="0.47"/>
+        <circle cx="558.6" cy="490.9" r="0.7" opacity="0.48"/>
+        <circle cx="1209.3" cy="446.9" r="1.6" opacity="0.34"/>
+        <circle cx="1143.4" cy="572.3" r="0.7" opacity="0.17"/>
+        <circle cx="613.1" cy="529.0" r="0.55" opacity="0.29"/>
+        <circle cx="1223.8" cy="161.2" r="1.2" opacity="0.74"/>
+        <circle cx="1222.1" cy="302.5" r="1.6" opacity="0.57"/>
+        <circle cx="421.5" cy="529.7" r="0.9" opacity="0.4"/>
+        <circle cx="1471.8" cy="605.4" r="0.9" opacity="0.26"/>
+      </g>
+    </g>
+    <g>
+      <g class="bs" transform="translate(1520 148) scale(1.0)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(1362 302) scale(0.95)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(268 140) scale(0.9)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(622 60) scale(0.85)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(1618 392) scale(0.8)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(1180 58) scale(0.75)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(100 352) scale(0.7)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(1720 244) scale(0.68)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(452 576) scale(0.62)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(940 442) scale(0.6)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(1452 560) scale(0.58)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+      <g class="bs" transform="translate(54 466) scale(0.55)">
+        <circle r="15" fill="url(#halo)" opacity=".4"/>
+        <path d="M0 -14 L1.6 -1.6 L14 0 L1.6 1.6 L0 14 L-1.6 1.6 L-14 0 L-1.6 -1.6 Z"/>
+      </g>
+    </g>
+    <g class="aur aur-b">
+      <path d="M -160 -70 L 700 -70 L 680 178 L 620 170 L 560 170 L 500 177 L 440 192 L 380 214 L 320 239 L 260 265 L 200 288 L 140 306 L 80 318 L 20 323 L -40 324 L -100 322 L -160 320 Z"/>
+    </g>
+    <g class="aur aur-a">
+      <rect x="713" y="-60" width="15" height="343" opacity="0.16"/>
+      <rect x="787" y="-60" width="15" height="417" opacity="0.12"/>
+      <rect x="840" y="-60" width="7" height="405" opacity="0.05"/>
+      <rect x="904" y="-60" width="19" height="286" opacity="0.17"/>
+      <rect x="995" y="-60" width="10" height="370" opacity="0.12"/>
+      <rect x="1075" y="-60" width="17" height="411" opacity="0.09"/>
+      <rect x="1136" y="-60" width="14" height="330" opacity="0.17"/>
+      <rect x="1196" y="-60" width="6" height="344" opacity="0.15"/>
+      <rect x="1262" y="-60" width="18" height="223" opacity="0.07"/>
+      <rect x="1360" y="-60" width="17" height="287" opacity="0.17"/>
+      <rect x="1413" y="-60" width="18" height="230" opacity="0.14"/>
+      <rect x="1482" y="-60" width="14" height="240" opacity="0.16"/>
+      <rect x="1564" y="-60" width="19" height="384" opacity="0.19"/>
+      <rect x="1639" y="-60" width="14" height="328" opacity="0.17"/>
+      <path d="M 660 -70 L 1700 -70 L 1680 351 L 1620 349 L 1560 342 L 1500 329 L 1440 311 L 1380 289 L 1320 269 L 1260 255 L 1200 250 L 1140 257 L 1080 275 L 1020 305 L 960 341 L 900 378 L 840 413 L 780 441 L 720 460 L 660 469 Z"/>
+    </g>
+    <ellipse class="hglow" cx="900" cy="692" rx="900" ry="130" opacity=".5"/>
+    <g class="moonG">
+      <g class="halo">
+        <circle cx="1010" cy="206" r="760" fill="url(#halo)" opacity=".05"/>
+        <circle cx="1010" cy="206" r="430" fill="url(#halo)" opacity=".09"/>
+        <circle cx="1010" cy="206" r="230" fill="url(#halo)" opacity=".17"/>
+      </g>
+      <circle cx="1010" cy="206" r="97" fill="url(#moonG)"/>
+      <g clip-path="url(#mclip)" fill="#fff">
+        <ellipse cx="978" cy="186" rx="20" ry="18" opacity=".07"/>
+        <ellipse cx="1046" cy="230" rx="14" ry="13" opacity=".06"/>
+        <ellipse cx="1004" cy="252" rx="10" ry="9" opacity=".07"/>
+        <ellipse cx="960" cy="248" rx="7.5" ry="7" opacity=".06"/>
+        <ellipse cx="1064" cy="182" rx="8.5" ry="8" opacity=".05"/>
+        <ellipse cx="1022" cy="148" rx="12" ry="11" opacity=".07"/>
+        <ellipse cx="980" cy="136" rx="5.5" ry="5" opacity=".05"/>
+        <ellipse cx="1052" cy="262" rx="6" ry="5.5" opacity=".05"/>
+      </g>
+      <g clip-path="url(#mclip)">
+        <circle cx="1010" cy="206" r="97" fill="url(#term)"/>
+      </g>
+      <circle cx="1010" cy="206" r="97" fill="none" stroke="url(#rimW)" stroke-width="1.3" opacity=".65"/>
+    </g>
+    <path class="ridgeF" d="M -80 698 Q 46 673 108 645 Q 171 617 234 650 Q 297 683 360 612 Q 423 542 486 603 Q 549 664 611 615 Q 674 566 737 616 Q 800 666 863 633 Q 926 600 988 629 Q 1051 658 1114 618 Q 1177 579 1240 617 Q 1303 655 1366 612 Q 1429 569 1491 611 Q 1554 653 1617 675 L 1680 698 L 1680 960 L -80 960 Z"/>
+    <path class="ridgeN" d="M -80 710 L 8 649 L 96 577 L 184 686 L 272 495 L 360 694 L 448 553 L 536 665 L 624 530 L 712 692 L 800 527 L 888 669 L 976 491 L 1064 700 L 1152 473 L 1240 691 L 1328 497 L 1416 668 L 1504 493 L 1592 690 L 1680 710 L 1680 960 L -80 960 Z"/>
+    <rect y="690" width="1600" height="210" fill="url(#water)"/>
+    <ellipse class="hglow" cx="1010" cy="690" rx="620" ry="26" opacity=".45"/>
+    <g class="refl">
+      <rect x="992" y="692" width="36" height="176" fill="url(#col)" opacity=".26" filter="url(#soft)"/>
+      <ellipse cx="1010" cy="706" rx="120" ry="14" fill="url(#halo)" opacity=".4" filter="url(#soft)"/>
+      <ellipse cx="1010" cy="760" rx="70" ry="9" fill="url(#halo)" opacity=".18" filter="url(#soft)"/>
+    </g>
+    <g class="rip">
+      <path d="M 975 700 Q 1010 692 1143 700" opacity="0.15"/>
+      <path d="M 832 713 Q 1010 705 1052 713" opacity="0.19"/>
+      <path d="M 945 730 Q 1010 721 1207 730" opacity="0.22"/>
+      <path d="M 850 742 Q 1010 733 1150 742" opacity="0.26"/>
+      <path d="M 830 754 Q 1010 744 1191 754" opacity="0.29"/>
+      <path d="M 847 772 Q 1010 761 1283 772" opacity="0.33"/>
+      <path d="M 750 785 Q 1010 774 1226 785" opacity="0.37"/>
+      <path d="M 675 799 Q 1010 787 1220 799" opacity="0.4"/>
+      <path d="M 709 814 Q 1010 801 1315 814" opacity="0.44"/>
+      <path d="M 709 827 Q 1010 814 1364 827" opacity="0.47"/>
+      <path d="M 734 841 Q 1010 828 1407 841" opacity="0.51"/>
+      <path d="M 591 854 Q 1010 840 1346 854" opacity="0.55"/>
+      <path d="M 667 865 Q 1010 850 1415 865" opacity="0.58"/>
+      <path d="M 685 882 Q 1010 867 1464 882" opacity="0.62"/>
+    </g>
+    <path class="spit" d="M 1660 706 L 1576 696 L 1494 686 L 1408 682 L 1330 690 L 1262 706 L 1204 730 L 1156 764 L 1120 820 L 1102 900 L 1660 900 Z"/>
+    <path class="rimL" d="M 1204 730 L 1262 706 L 1330 690 L 1408 682"/>
+    <g class="hut" transform="translate(1400 682)">
+      <path d="M -36 0 L -36 -26 L 0 -46 L 36 -26 L 36 0 Z"/>
+      <path class="hutRim" d="M -36 -26 L 0 -46 L 36 -26"/>
+      <rect class="door" x="12" y="-16" width="9" height="16"/>
+      <rect class="win" x="-10" y="-20" width="10" height="8"/>
+    </g>
+    <g class="warm">
+      <circle class="warmP" cx="1338" cy="686" r="52"/>
+      <circle class="warmC" cx="1394" cy="666" r="1.7"/>
+      <ellipse class="warmP" cx="1400" cy="686" rx="44" ry="7"/>
+    </g>
+    <rect width="1600" height="900" fill="url(#vig)"/>
+    <rect class="grain" width="1600" height="900" filter="url(#grain)"/>
+  </svg>
+  <div class="copy">
+    <p class="eyebrow">single file observatory</p>
+    <h1>AEON</h1>
+    <p class="lede">A quiet instrument for watching the sky turn. No photograph was taken; the light you are looking at was drawn.</p>
+  </div>
+  <p class="cue"><span>scroll</span><i></i></p>
+</section>
+
+<section class="wrap obs" id="observatory">
+  <div class="lead reveal">
+    <p class="kicker">01 — the instrument</p>
+    <h2>Five skies,<br>one aperture.</h2>
+    <p class="body">Each plate is fetched, parsed and swapped into the frame by htmx 4 — no reload, no photographer. The aperture is a single svg element, and the new sky arrives the way a server would send it.</p>
+    <div class="switch" hx-target:inherited="#pano-root" hx-swap:inherited="innerHTML transition:true">
+      <button class="seg" type="button" hx-get="data:text/html,
+<svg class='pano' viewBox='0 0 1600 560' preserveAspectRatio='xMidYMid slice'>
+  <rect class='bg-sky' width='1600' height='560'/>
+  <g class='starfield'>
+    <circle cx='210' cy='84' r='1.5' opacity='.7'/>
+    <circle cx='392' cy='152' r='1' opacity='.45'/>
+    <circle cx='1286' cy='96' r='1.3' opacity='.68'/>
+    <circle cx='1424' cy='210' r='.9' opacity='.4'/>
+    <circle cx='1152' cy='60' r='1.6' opacity='.85'/>
+    <circle cx='640' cy='46' r='.8' opacity='.5'/>
+    <circle cx='960' cy='128' r='1.1' opacity='.58'/>
+    <circle cx='164' cy='228' r='.9' opacity='.42'/>
+    <circle cx='760' cy='22' r='.7' opacity='.55'/>
+    <circle cx='1348' cy='30' r='1.2' opacity='.6'/>
+  </g>
+  <g transform='translate(800 236)'>
+    <circle class='corona' r='430' opacity='.45'/>
+    <circle class='corona' r='262' opacity='.75'/>
+    <circle class='corona' r='186'/>
+    <circle class='disc' r='124'/>
+    <circle class='rim' r='124'/>
+  </g>
+  <ellipse class='hglow' cx='800' cy='560' rx='1020' ry='190' opacity='.36'/>
+  <path class='ridge' d='M -40 560 L 214 452 L 418 512 L 636 424 L 878 508 L 1122 430 L 1338 498 L 1640 448 L 1640 572 L -40 572 Z'/>
+</svg>" hx-disable="global .seg" hx-indicator="find .peg">Eclipse<i class="peg"></i></button>
+      <button class="seg" type="button" hx-get="data:text/html,
+<svg class='pano' viewBox='0 0 1600 560' preserveAspectRatio='xMidYMid slice'>
+  <rect class='bg-dawn' width='1600' height='560'/>
+  <g class='sun-halo'>
+    <circle cx='800' cy='452' r='430'/>
+    <circle cx='800' cy='452' r='250' opacity='.7'/>
+  </g>
+  <g class='rays'>
+    <path d='M800 452 L1616 300'/>
+    <path d='M800 452 L1440 92'/>
+    <path d='M800 452 L1088 -40'/>
+    <path d='M800 452 L400 -32'/>
+    <path d='M800 452 L180 116'/>
+    <path d='M800 452 L-16 320'/>
+  </g>
+  <circle class='sun' cx='800' cy='452' r='76'/>
+  <path class='ridge' d='M -40 566 L 240 470 L 470 522 L 720 436 L 960 516 L 1200 442 L 1400 506 L 1640 460 L 1640 580 L -40 580 Z'/>
+  <g class='birds'>
+    <path d='M1152 168 q10 -8 20 0 q10 -8 20 0'/>
+    <path d='M1236 116 q8 -7 16 0 q8 -7 16 0'/>
+    <path d='M1084 106 q7 -6 14 0 q7 -6 14 0'/>
+  </g>
+</svg>" hx-disable="global .seg" hx-indicator="find .peg">Solstice<i class="peg"></i></button>
+      <button class="seg" type="button" hx-get="data:text/html,
+<svg class='pano' viewBox='0 0 1600 560' preserveAspectRatio='xMidYMid slice'>
+  <rect class='bg-deep' width='1600' height='560'/>
+  <g class='galfield'>
+    <ellipse cx='1228' cy='130' rx='5.8' ry='1.1' opacity='.26' transform='rotate(-12 1228 130)'/>
+    <ellipse cx='1416' cy='185' rx='12.2' ry='5.8' opacity='.28' transform='rotate(-61 1416 185)'/>
+    <ellipse cx='1094' cy='501' rx='18' ry='5.9' opacity='.72' transform='rotate(-15 1094 501)'/>
+    <ellipse cx='1314' cy='271' rx='7' ry='3.1' opacity='.58' transform='rotate(-42 1314 271)'/>
+    <ellipse cx='425' cy='430' rx='3.3' ry='1.5' opacity='.63' transform='rotate(-39 425 430)'/>
+    <ellipse cx='1225' cy='72' rx='15.4' ry='4.6' opacity='.5' transform='rotate(17 1225 72)'/>
+    <ellipse cx='1160' cy='239' rx='17.1' ry='7.7' opacity='.69' transform='rotate(69 1160 239)'/>
+    <ellipse cx='436' cy='38' rx='20.6' ry='5.9' opacity='.62' transform='rotate(40 436 38)'/>
+    <ellipse cx='1243' cy='146' rx='13.5' ry='3.1' opacity='.71' transform='rotate(52 1243 146)'/>
+    <ellipse cx='763' cy='341' rx='11.6' ry='5' opacity='.45' transform='rotate(46 763 341)'/>
+    <ellipse cx='885' cy='371' rx='4.8' ry='1.7' opacity='.29' transform='rotate(47 885 371)'/>
+    <ellipse cx='567' cy='321' rx='14.1' ry='4.3' opacity='.59' transform='rotate(-39 567 321)'/>
+    <ellipse cx='231' cy='457' rx='20.4' ry='7.6' opacity='.55' transform='rotate(59 231 457)'/>
+    <ellipse cx='458' cy='231' rx='10.7' ry='3.1' opacity='.37' transform='rotate(28 458 231)'/>
+    <ellipse cx='1309' cy='309' rx='12' ry='4.3' opacity='.68' transform='rotate(-56 1309 309)'/>
+    <ellipse cx='1149' cy='237' rx='21.4' ry='6.3' opacity='.23' transform='rotate(-12 1149 237)'/>
+    <ellipse cx='1495' cy='538' rx='19.1' ry='7.3' opacity='.6' transform='rotate(-69 1495 538)'/>
+    <ellipse cx='92' cy='123' rx='15.9' ry='4.1' opacity='.6' transform='rotate(-25 92 123)'/>
+    <ellipse cx='1000' cy='499' rx='4.4' ry='1.6' opacity='.7' transform='rotate(70 1000 499)'/>
+    <ellipse cx='81' cy='424' rx='19.1' ry='9.2' opacity='.56' transform='rotate(25 81 424)'/>
+    <ellipse cx='1350' cy='124' rx='13' ry='3.5' opacity='.24' transform='rotate(35 1350 124)'/>
+    <ellipse cx='521' cy='122' rx='17' ry='4.1' opacity='.23' transform='rotate(-57 521 122)'/>
+    <ellipse cx='234' cy='441' rx='16.8' ry='8.2' opacity='.31' transform='rotate(52 234 441)'/>
+    <ellipse cx='383' cy='293' rx='21.8' ry='4.2' opacity='.64' transform='rotate(-67 383 293)'/>
+    <ellipse cx='1428' cy='361' rx='19' ry='4.7' opacity='.42' transform='rotate(-53 1428 361)'/>
+    <ellipse cx='810' cy='375' rx='15' ry='6.5' opacity='.7' transform='rotate(-13 810 375)'/>
+  </g>
+  <g transform='translate(1120 250)'>
+    <ellipse class='gal' rx='238' ry='68'/>
+    <ellipse class='gal2 softf' rx='112' ry='30' opacity='.5'/>
+    <circle class='hub' r='34'/>
+  </g>
+  <g fill='#fff'>
+    <circle cx='318' cy='76' r='1.7' opacity='.85'/>
+    <circle cx='1420' cy='470' r='1.4' opacity='.7'/>
+    <circle cx='662' cy='498' r='1.2' opacity='.6'/>
+    <circle cx='1560' cy='88' r='1' opacity='.55'/>
+  </g>
+</svg>" hx-disable="global .seg" hx-indicator="find .peg">Deep field<i class="peg"></i></button>
+      <button class="seg" type="button" hx-get="data:text/html,
+<svg class='pano' viewBox='0 0 1600 560' preserveAspectRatio='xMidYMid slice'>
+  <rect class='bg-void' width='1600' height='560'/>
+  <g class='grid'>
+    <path d='M0 80 H1600 M0 480 H1600 M0 280 H1600 M800 0 V560'/>
+    <path d='M400 0 V560 M1200 0 V560'/>
+  </g>
+  <g transform='translate(800 280)'>
+    <ellipse class='orbit' rx='540' ry='156'/>
+    <ellipse class='orbit' rx='366' ry='106'/>
+    <ellipse class='orbit' rx='206' ry='60'/>
+    <circle class='pglow' r='122' opacity='.45'/>
+    <circle class='planet' r='52'/>
+    <g>
+      <animateTransform attributeName='transform' type='rotate' from='0' to='360' dur='34s' repeatCount='indefinite'/>
+      <circle class='sat' cx='540' cy='0' r='15'/>
+      <circle class='sat2' cx='-366' cy='0' r='11'/>
+      <circle class='sat2' cx='0' cy='106' r='8'/>
+    </g>
+  </g>
+  <path class='tick' d='M60 516 H1540 M120 496 V536 M400 496 V536 M800 496 V536 M1200 496 V536 M1480 496 V536'/>
+</svg>" hx-disable="global .seg" hx-indicator="find .peg">Orbit<i class="peg"></i></button>
+    </div>
+    <p class="hint">hx-get · hx-target:inherited · hx-swap transition · hx-disable · hx-indicator</p>
+  </div>
+  <figure class="frame reveal">
+    <div id="pano-root">
+      <svg class="pano" viewBox="0 0 1600 560" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Aurora over a dark ridge">
+        <rect class="bg-sky" width="1600" height="560"/>
+        <g class="starfield">
+          <circle cx="180" cy="72" r="1.4" opacity=".7"/>
+          <circle cx="336" cy="128" r="1" opacity=".5"/>
+          <circle cx="1330" cy="64" r="1.5" opacity=".75"/>
+          <circle cx="1476" cy="180" r="1" opacity=".45"/>
+          <circle cx="1052" cy="42" r="1.2" opacity=".62"/>
+          <circle cx="700" cy="96" r=".9" opacity=".5"/>
+          <circle cx="930" cy="176" r=".8" opacity=".55"/>
+          <circle cx="236" cy="196" r=".8" opacity=".42"/>
+          <circle cx="1198" cy="120" r="1.1" opacity=".58"/>
+          <circle cx="512" cy="30" r="1" opacity=".66"/>
+        </g>
+        <g class="aur aur-a">
+          <path d="M -60 -40 L 1660 -40 L 1640 250 L 1520 268 L 1400 300 L 1280 320 L 1160 322 L 1040 300 L 920 268 L 800 300 L 680 340 L 560 360 L 440 350 L 320 330 L 200 318 L 80 300 L -20 280 L -60 270 Z"/>
+        </g>
+        <ellipse class="hglow" cx="800" cy="560" rx="980" ry="200" opacity=".42"/>
+        <path class="ridge" d="M -40 560 L 180 452 L 360 506 L 540 418 L 740 498 L 960 424 L 1160 492 L 1380 430 L 1600 500 L 1660 560 Z"/>
+      </svg>
+    </div>
+    <figcaption><span>live plate · plate i</span><span>rendered in the browser</span></figcaption>
+  </figure>
+</section>
+
+<section class="wrap" id="plates">
+  <div class="rule reveal"></div>
+  <div class="lead reveal" style="margin-top:clamp(34px,5vh,64px)">
+    <p class="kicker">02 — plates</p>
+    <h2>Observations, logged.</h2>
+    <p class="body">Three plates from the archive. Each one is unbound from the server only when it crosses the edge of the viewport, and each one arrives as markup, not as data.</p>
+  </div>
+  <div class="cards">
+    <article class="card reveal" hx-get="data:text/html,
+<article class='card loaded'>
+  <svg class='viz' viewBox='0 0 240 116' aria-hidden='true'>
+    <rect class='spectrum' x='10' y='22' width='220' height='30'/>
+    <g class='abs'>
+      <rect x='53' y='22' width='1.6' height='30' opacity='.85'/>
+      <rect x='89' y='22' width='1.2' height='30' opacity='.55'/>
+      <rect x='122' y='22' width='2.2' height='30' opacity='.9'/>
+      <rect x='167' y='22' width='1.4' height='30' opacity='.68'/>
+    </g>
+    <path class='gridl' d='M10 66 H230 M10 100 H230'/>
+    <g class='lbl'>
+      <text x='10' y='82'>H</text>
+      <text x='86' y='82'>Na</text>
+      <text x='118' y='82'>O₂</text>
+      <text x='162' y='82'>Hα</text>
+    </g>
+  </svg>
+  <h3>Absorption plate</h3>
+  <p>Four dark lines, ruled at twelve hundred lines to the millimetre, hold the signature of everything between the star and the glass.</p>
+  <p class='meta'>grating 1200 l/mm · 380–780 nm</p>
+</article>" hx-trigger="revealed" hx-swap="outerHTML" hx-indicator="find .ind">
+      <svg class="skel" viewBox="0 0 200 92" aria-hidden="true">
+        <rect x="0" y="16" width="118" height="7" rx="3.5"/>
+        <rect x="0" y="36" width="178" height="6" rx="3"/>
+        <rect x="0" y="54" width="92" height="6" rx="3"/>
+        <rect x="0" y="72" width="146" height="6" rx="3"/>
+      </svg>
+      <p class="ind htmx-indicator">receiving</p>
+    </article>
+    <article class="card reveal" hx-get="data:text/html,
+<article class='card loaded'>
+  <svg class='viz' viewBox='0 0 240 116' aria-hidden='true'>
+    <path class='gridl' d='M10 30 H230 M10 86 H230'/>
+    <path class='curve' d='M12 48 L40 46 L64 49 L92 47 C104 47 108 84 122 84 C136 84 140 47 152 48 L182 46 L228 48'/>
+    <path class='curve' d='M12 52 L40 50 L64 53 L92 51 C104 51 108 88 122 88 C136 88 140 51 152 52 L182 50 L228 52' opacity='.28'/>
+    <g class='dots'>
+      <circle cx='12' cy='48' r='2'/>
+      <circle cx='92' cy='47' r='2'/>
+      <circle cx='152' cy='48' r='2'/>
+      <circle cx='228' cy='48' r='2'/>
+    </g>
+    <circle class='mark' cx='122' cy='84' r='3'/>
+  </svg>
+  <h3>Transit</h3>
+  <p>A body the size of a small sea crosses its star and takes eight hours to do it. The dip is barely there, and it is enough.</p>
+  <p class='meta'>depth 0.8% · period 3.42 d</p>
+</article>" hx-trigger="revealed" hx-swap="outerHTML" hx-indicator="find .ind">
+      <svg class="skel" viewBox="0 0 200 92" aria-hidden="true">
+        <rect x="0" y="16" width="98" height="7" rx="3.5"/>
+        <rect x="0" y="36" width="156" height="6" rx="3"/>
+        <rect x="0" y="54" width="122" height="6" rx="3"/>
+        <rect x="0" y="72" width="84" height="6" rx="3"/>
+      </svg>
+      <p class="ind htmx-indicator">receiving</p>
+    </article>
+    <article class="card reveal" hx-get="data:text/html,
+<article class='card loaded'>
+  <svg class='viz' viewBox='0 0 240 116' aria-hidden='true'>
+    <ellipse class='orbit' cx='120' cy='58' rx='98' ry='36'/>
+    <ellipse class='orbit' cx='120' cy='58' rx='59' ry='21'/>
+    <path class='gridl' d='M22 58 H218'/>
+    <circle class='pglow' cx='120' cy='58' r='36' opacity='.5'/>
+    <circle class='star' cx='120' cy='58' r='8'/>
+    <circle class='pl' cx='218' cy='58' r='6'/>
+    <circle class='pl2' cx='179' cy='58' r='3.2'/>
+  </svg>
+  <h3>Two-body</h3>
+  <p>Two wanderers locked in step, circling a point that belongs to neither of them. The arithmetic is old and still beautiful.</p>
+  <p class='meta'>a 0.72 au · e 0.14</p>
+</article>" hx-trigger="revealed" hx-swap="outerHTML" hx-indicator="find .ind">
+      <svg class="skel" viewBox="0 0 200 92" aria-hidden="true">
+        <rect x="0" y="16" width="132" height="7" rx="3.5"/>
+        <rect x="0" y="36" width="168" height="6" rx="3"/>
+        <rect x="0" y="54" width="76" height="6" rx="3"/>
+        <rect x="0" y="72" width="140" height="6" rx="3"/>
+      </svg>
+      <p class="ind htmx-indicator">receiving</p>
+    </article>
+  </div>
+</section>
+
+<section class="wrap" id="atlas">
+  <div class="rule reveal"></div>
+  <div class="lead reveal" style="margin-top:clamp(34px,5vh,64px)">
+    <p class="kicker">03 — atlas</p>
+    <h2>Maps of the familiar dark.</h2>
+    <p class="body">Four figures, plotted from the same coordinates for two thousand years. The faint line is the path the eye is meant to travel.</p>
+  </div>
+  <div class="atlas">
+    <figure class="chart reveal" style="margin:0">
+      <svg viewBox="0 0 200 140" aria-label="Lyra">
+        <path class="links" d="M183 11 L183 61 L166 83 L56 121 L45 76 L43 58 L155 17"/>
+        <g class="dots">
+          <circle cx="183" cy="11" r="2.6" class="hot"/>
+          <circle cx="183" cy="61" r="1.8"/>
+          <circle cx="166" cy="83" r="1.8"/>
+          <circle cx="56" cy="121" r="1.8"/>
+          <circle cx="45" cy="76" r="1.8"/>
+          <circle cx="43" cy="58" r="1.8"/>
+          <circle cx="155" cy="17" r="1.8"/>
+          <circle cx="146" cy="30" r="1.3"/>
+          <circle cx="188" cy="129" r="1.3"/>
+        </g>
+      </svg>
+      <h3>Lyra</h3>
+      <p>18h 46m · +36° 41′</p>
+    </figure>
+    <figure class="chart reveal" style="margin:0">
+      <svg viewBox="0 0 200 140" aria-label="Vela">
+        <path class="links" d="M120 66 L63 67 L90 93 L121 115 L152 107 L175 24"/>
+        <g class="dots">
+          <circle cx="120" cy="66" r="2.6" class="hot"/>
+          <circle cx="63" cy="67" r="1.8"/>
+          <circle cx="121" cy="115" r="1.8"/>
+          <circle cx="90" cy="93" r="1.8"/>
+          <circle cx="152" cy="107" r="1.8"/>
+          <circle cx="12" cy="55" r="1.3"/>
+          <circle cx="40" cy="117" r="1.3"/>
+          <circle cx="175" cy="24" r="1.8"/>
+          <circle cx="116" cy="25" r="1.3"/>
+        </g>
+      </svg>
+      <h3>Vela</h3>
+      <p>09h 22m · −54° 24′</p>
+    </figure>
+    <figure class="chart reveal" style="margin:0">
+      <svg viewBox="0 0 200 140" aria-label="Orion">
+        <path class="links" d="M10 16 L19 55 L63 69 L83 47 L78 19 L43 129 L122 123 L164 86"/>
+        <g class="dots">
+          <circle cx="10" cy="16" r="2.6" class="hot"/>
+          <circle cx="19" cy="55" r="1.8"/>
+          <circle cx="83" cy="47" r="1.8"/>
+          <circle cx="78" cy="19" r="1.8"/>
+          <circle cx="11" cy="130" r="1.3"/>
+          <circle cx="63" cy="69" r="1.8"/>
+          <circle cx="43" cy="129" r="1.8"/>
+          <circle cx="122" cy="123" r="1.8"/>
+          <circle cx="164" cy="86" r="1.8"/>
+        </g>
+      </svg>
+      <h3>Orion</h3>
+      <p>05h 35m · −05° 23′</p>
+    </figure>
+    <figure class="chart reveal" style="margin:0">
+      <svg viewBox="0 0 200 140" aria-label="Corvus">
+        <path class="links" d="M16 34 L47 85 L61 123 L102 79 L160 27 L156 36 L66 66"/>
+        <g class="dots">
+          <circle cx="61" cy="123" r="2.6" class="hot"/>
+          <circle cx="66" cy="66" r="1.8"/>
+          <circle cx="160" cy="27" r="1.8"/>
+          <circle cx="83" cy="47" r="1.3"/>
+          <circle cx="102" cy="79" r="1.8"/>
+          <circle cx="16" cy="34" r="1.8"/>
+          <circle cx="156" cy="36" r="1.3"/>
+          <circle cx="17" cy="67" r="1.3"/>
+          <circle cx="47" cy="85" r="1.8"/>
+        </g>
+      </svg>
+      <h3>Corvus</h3>
+      <p>12h 26m · −18° 12′</p>
+    </figure>
+  </div>
+</section>
+
+<footer>
+  <div class="foot">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <circle cx="12" cy="12" r="10.4" fill="none" stroke="currentColor" stroke-width=".8" opacity=".45"/>
+        <path d="M12 2.6 L13.5 10.5 L21.4 12 L13.5 13.5 L12 21.4 L10.5 13.5 L2.6 12 L10.5 10.5 Z" fill="currentColor"/>
+      </svg>
+      <span>AEON</span>
+    </div>
+    <p>one html file · hand-written svg · css · htmx 4.0.0 · no build step, no photograph</p>
+  </div>
+</footer>
+<script>var htmx=(()=>{const e={parse(t){if(!t)return{};if(t.startsWith("{"))return JSON.parse(t);let r=/(?:"([^"]+)"|'([^']+)'|([^\s,:]+))(?:\s*:\s*(?:"([^"]*)"|'([^']*)'|<((?:[^/]|\/(?!>))+)\/>|([^\s,]+)))?(?=\s|,|$)/g,i={};for(let s of t.matchAll(r)){let[,t,r,n,o,a,l,h]=s,c=t??r??n,u=(o??a??l??h??"true").trim();try{u=JSON.parse(u)}catch{}let d=n?.includes("."),f=d?c.split(".").reduceRight((e,t)=>({[t]:e}),u):{[c]:u};e.merge(f,i)}return i},split:e=>e.split(/,(?![^\[]*\])(?![^(]*\))(?![^<]*\/>)(?=(?:[^"']|"[^"]*"|'[^']*')*$)/),merge(t,r){"string"==typeof t&&(t=e.parse(t));for(let[i,s]of Object.entries(t)){if(["__proto__","constructor","prototype"].includes(i))continue;let t=s?.constructor===Object,n=r[i]?.constructor===Object;t&&n?e.merge(s,r[i]):r[i]=s}return r}};class t{#e=null;#t=[];admit(e,t,r){if(!this.#e)return this.#e={strategy:e,abort:r},"run";if("replace"===e||"abort"!==e&&"abort"===this.#e.strategy)return this.#t=[],this.#e.abort?.(),this.#e={strategy:e,abort:r},"run";if("queue all"===e)this.#t.push(t);else if("queue last"===e)this.#t=[t];else{if("abort"===e||"drop"===e||0!==this.#t.length)return"dropped";this.#t.push(t)}return"queued"}continue(){this.#e=null,this.#t.shift()?.()}abort(){this.#e?.abort?.()}}return new class{#r=e;#i=new Map;#s="";#n=new Set;_loc=window.location;#o;#a=Function;#l=Object.getPrototypeOf(async function(){}).constructor;#h={createHTML:e=>e,createScript:e=>e};#c;#u="a,form";#d=["get","post","put","patch","delete","query"];#f;#m;#p;#g;#x;constructor(){this.#b(),this.#y(),this.#c=this.#S("[hx-action],[hx-get],[hx-post],[hx-put],[hx-patch],[hx-delete],[hx-query]"),this.#f=(new XPathEvaluator).createExpression(`.//*[@*[${this.#v("hx-on").map(e=>`starts-with(name(), "${e}")`).join(" or ")}]]`),this.#o={HCON:e,attributeValue:this.#E.bind(this),parseTriggerSpecs:this.#w.bind(this),determineMethodAndAction:this.#A.bind(this),createRequestContext:this.#T.bind(this),collectFormData:this.#C.bind(this),getAttributeObject:this.#q.bind(this),insertContent:this.#N.bind(this),morph:this.#I.bind(this),isSoftMatch:this.#M.bind(this),initSecurity:(e,t,r)=>{e&&(this.#h=e),t&&(this.#a=t),r&&(this.#l=r)},onTrigger:this.#O.bind(this),htmxProp:this.#H.bind(this),triggerHtmxEvent:this.#L.bind(this),executeJavaScript:this.#k.bind(this)};let t=()=>this.initialize();"loading"===document.readyState?document.addEventListener("DOMContentLoaded",t):setTimeout(t)}#b(){this.version="4.0.0",this.config={logAll:!1,prefix:"data-hx-",transitions:!1,history:!0,mode:"same-origin",defaultSwap:"innerHTML",defaultFocusScroll:!1,indicatorClass:"htmx-indicator",requestClass:"htmx-request",includeIndicatorCSS:!0,defaultTimeout:6e4,extensions:"",morphIgnore:["data-htmx-powered"],morphSkip:"[hx-morph-skip]",morphSkipChildren:"[hx-morph-skip-children]",morphScanLimit:10,noSwap:[204,304],implicitInheritance:!1,defaultSettleDelay:1,allowEmptySwapAfterOOB:!1};let t=document.querySelector('meta[name="htmx-config"]');t&&e.merge(t.content,this.config),this.#s=this.config.extensions}#y(){if(!1!==this.config.includeIndicatorCSS){let e=this.config.indicatorClass,t=this.config.requestClass,r=new CSSStyleSheet;r.replaceSync(`.${e}{opacity:0;visibility: hidden} .${t} .${e}, .${t}.${e}{opacity:1;visibility: visible;transition: opacity 200ms ease-in}`),document.adoptedStyleSheets=[...document.adoptedStyleSheets,r]}}registerExtension(e,t){return!(this.#s&&!this.#s.split(/,\s*/).includes(e))&&(!this.#n.has(e)&&(this.#n.add(e),t.init&&t.init(this.#o),void Object.entries(t).forEach(([e,t])=>{this.#i.get(e)?.push(t)||this.#i.set(e,[t])})))}#V(e){let t=this.config.prefix;return!e.closest||null!=e.closest("[hx-ignore]")||t&&null!=e.closest(`[${t}ignore]`)}#P(e,t){let r=this.config.prefix;return e.getAttribute(t)??(r?e.getAttribute(t.replace("hx-",r)):null)}#R(e,t){let r=this.config.prefix&&t.replace("hx-",this.config.prefix);return e.hasAttribute(t)?t:r&&e.hasAttribute(r)?r:null}#S(e){return this.#v(e).join(",")}#v(e){let t=[e];return this.config.prefix&&t.push(e.replaceAll("hx-",this.config.prefix)),t}#j(e,t){let r=[...e.querySelectorAll?.(t)??[]];return e.matches?.(t)&&r.unshift(e),r}#B(e){return"before"===e?"beforebegin":"after"===e?"afterend":"prepend"===e?"afterbegin":"append"===e?"beforeend":e}#F(e,t){let r=[];return this.#E(e,t,void 0,(e,t)=>{e?.split(/\s*[,:]\s*/).includes("this")&&r.push(t)}),r}#E(e,t,r,i){t=this.#z(t);let s=this.#z(":inherited"),n=this.#z(":append"),o=this.#P(e,t)??this.#P(e,t+s);if(null!=o)return i?i(o,e):o;let a=CSS.escape(this.config.implicitInheritance?t:t+s),l=CSS.escape(t+s+n),h=this.#S(`[${a}],[${l}]`),c=this.#R(e,t+n)??this.#R(e,t+s+n);if(c){let r=e.getAttribute(c),s=e.parentNode?.closest?.(h);if(i&&i(r,e),s){let e=this.#E(s,t,void 0,i);return e?(e+","+r).replace(/[{}]/g,""):r}return r}let u=e.parentNode?.closest?.(h);return u?(o=this.#E(u,t,void 0,i),!i&&o&&this.config.implicitInheritance&&this.#_(e,"htmx:after:implicitInheritance",{elt:e,name:t,parent:u}),o):r}#w(t){return e.split(t).flatMap(t=>{let[,r,i]=t.match(/^\s*(\S+\[[^\]]*\]|\S+)\s*(.*?)\s*$/)??[];if(!r)return[];if(/\[[^\]]*$/.test(r))throw"unterminated:"+r;return[{name:r,...e.parse(i)}]})}#A(e,t){let r=this.#E(e,"hx-method"),i=this.#E(e,"hx-action");if(!i)for(let t of this.#d){let s=this.#E(e,"hx-"+t);if(null!=s){i=s,r=t;break}}return this.#D(e)&&(i||=t.submitter?.getAttribute?.("formAction")||e.getAttribute(e.matches("a")?"href":"action")),r||=t.submitter?.getAttribute?.("formmethod")||e.getAttribute("method")||"GET",{action:i,method:r.toUpperCase()}}#H(e){return e._htmx||(e._htmx={listeners:[],triggerSpecs:[]},e.setAttribute("data-htmx-powered","true")),e._htmx}#$(e){return e._htmx_state||={}}#W(e){if(this.#U(e)&&this.#L(e,"htmx:before:init",{},!0)){let t=this.#H(e);t.initialized=!0,t.eventHandler=this.#Q(e),this.#J(e),this.#L(e,"htmx:after:init",{},!0)}}#Q(e){return async t=>{try{let r=this.#T(e,t);await this.#X(r)}catch(t){this.#L(e,"htmx:error",{error:t})}}}#T(t,r){let{action:i,method:s}=this.#A(t,r),[n,o]=(i||"").split("#"),a=new AbortController,l={sourceElement:t,sourceEvent:r,status:"created",select:this.#E(t,"hx-select"),selectOOB:this.#E(t,"hx-select-oob"),target:this.#E(t,"hx-target"),swap:this.#E(t,"hx-swap")??this.config.defaultSwap,push:this.#E(t,"hx-push-url"),replace:this.#E(t,"hx-replace-url"),transition:this.config.transitions,confirm:this.#E(t,"hx-confirm"),request:{validate:"true"===this.#E(t,"hx-validate",!t.matches("form")||t.noValidate||r.submitter?.formNoValidate?"false":"true"),action:n,anchor:o,method:s,headers:this.#G(t),abort:a.abort.bind(a),credentials:"same-origin",signal:a.signal,mode:this.config.mode}};t._htmx?.boosted&&e.merge(t._htmx.boosted,l),l.target=this.#K(t,l.target),l.target&&(l.request.headers["HX-Target"]=this.#Y(l.target));let h=this.#E(t,"hx-config");return h&&(e.merge(h,l.request),l.request.mode=this.config.mode),l}#Y(e){return`${e.tagName.toLowerCase()}${e.id?"#"+encodeURI(e.id):""}`}#G(e){let t={"HX-Request":"true","HX-Source":this.#Y(e),"HX-Current-URL":location.href,Accept:"text/html"};return this.#D(e)&&(t["HX-Boosted"]="true"),t}#Z(e,t){return this.#q(e,"hx-headers",e=>{for(let r in e)t.request.headers[r]=String(e[r])},{ctx:t})}#K(e,t){return t instanceof Element?t:null!=t?this.#ee(e,t,"hx-target"):this.#D(e)?document.body:e}#D(e){return e?._htmx?.boosted}async#X(e){let t=e.sourceElement,r=e.sourceEvent;if(!t.isConnected)return;if(this.#te(r))return;this.#re(r)&&r.preventDefault();let i=/GET|DELETE/.test(e.request.method),s=i?t.matches("form")?t:null:t.form||t.closest("form"),n=this.#C(t,s,r.submitter,e.request.validate,i);if(!n)return;let o=this.#q(t,"hx-vals",t=>{e.vals=t;for(let e in t)n.set(e,t[e])},{ctx:e});if(o&&await o,e.values)for(let t in e.values)n.delete(t),n.append(t,e.values[t]);let a=this.#Z(t,e);if(a&&await a,Object.assign(e.request,{form:s,submitter:r.submitter,body:n}),!this.#L(t,"htmx:config:request",{ctx:e}))return;if("DIALOG"===e.request.method)return;let l=this.#ie(e.request.action);if(null!=l){let t=Object.fromEntries(e.request.body);return void await this.#k(e.sourceElement,t,l,!1)}if(i){let t=new URL(e.request.action,document.baseURI);for(let r of e.request.body.keys())t.searchParams.delete(r);for(let[r,i]of e.request.body)t.searchParams.append(r,i);t.origin===location.origin?e.request.action=t.pathname+t.search:e.request.action=t.href,e.request.body=null}else"multipart/form-data"!==(this.#E(t,"hx-encoding")??s?.enctype)&&(e.request.body=new URLSearchParams(e.request.body));await this.#se(e)}async#se(e){let t=e.sourceElement,r=this.#ne(t),i=this.#oe(t);if(this.#ae(t),"run"!==i.admit(r,()=>this.#se(e),()=>e.request?.abort?.()))return;e.status="issuing";let s=[],n=[];try{if(e.confirm){if(!await new Promise(r=>{let i={ctx:e,issueRequest:()=>r(!0),dropRequest:()=>r(!1)};if(this.#L(t,"htmx:confirm",i)){let i=this.#ie(e.confirm);r(i?this.#k(t,{ctx:e},i,!0):window.confirm(e.confirm))}}))return}if(this.#le(e),s=this.#he(t),n=this.#ce(t),e.fetch||=window.fetch.bind(window),e.request.headers["HX-Request-Type"]=e.target===document.body||e.select?"full":"partial",!this.#L(t,"htmx:before:request",{ctx:e}))return;let r=await e.fetch(e.request.action,e.request);if(e.response={raw:r,status:r.status,headers:r.headers},this.#ue(e),!this.#L(t,"htmx:before:response",{ctx:e}))return;if(e.text=await r.text(),!this.#L(t,"htmx:after:request",{ctx:e}))return;if(e.response.status>=400&&this.#L(t,"htmx:response:error",{ctx:e}),this.#de(e))return void(e.keepIndicators=!0);"issuing"===e.status&&(e.hx.retarget&&(e.target=e.hx.retarget),e.hx.reswap&&(e.swap=e.hx.reswap),e.hx.reselect&&(e.select=e.hx.reselect),e.status="response received",this.#fe(e),await this.swap(e),e.status="swapped")}catch(r){e.status="error: "+r,this.#L(t,"htmx:error",{ctx:e,error:r})}finally{await(e.extensionPromise?.catch(()=>{})),clearTimeout(e.requestTimeout),e.hx?.trigger&&this.#me(e.hx.trigger,e.sourceElement),this.#L(t,"htmx:finally:request",{ctx:e}),e.keepIndicators||(this.#pe(s),this.#ge(n)),i.continue()}}#ue(e){e.hx={};for(let[t,r]of e.response.raw.headers)t.toLowerCase().startsWith("hx-")&&(e.hx[t.slice(3).toLowerCase().replace(/-/g,"")]=r)}#de(t){if("true"===t.hx.refresh)return this._loc.reload(),!0;if(t.hx.redirect)return this._loc.href=t.hx.redirect,!0;if(t.hx.location){let r=t.hx.location,i={},s=e.parse(r);return"{"!==r[0]&&null==s.path||(i=s,r=i.path,delete i.path),null==i.push&&null==i.replace&&(i.push="true"),this.ajax("GET",r,i),!0}}#le(e){let t=null!=e.request.timeout?this.parseInterval(e.request.timeout):this.config.defaultTimeout;t&&(e.requestTimeout=setTimeout(()=>e.request?.abort?.(),t))}#ne(e){let t=this.#E(e,"hx-sync");if(!t)return"queue first";let r=t.split(":").pop().trim();return/^(drop|abort|replace|queue)/.test(r)?r:"queue first"}#oe(e){let r=this.#E(e,"hx-sync"),i=e;if(r){let t=r.includes(":")?r.slice(0,r.lastIndexOf(":")).trim():/^(drop|abort|replace|queue)/.test(r)?null:r;t&&(i=this.#ee(e,t,"hx-sync")||e)}return this.#$(i).rq||=new t}#te(e){return"click"===e.type&&(e.ctrlKey||e.metaKey||e.shiftKey)&&!!e.currentTarget?.closest?.("a[href]")}#re(e){let t=e.currentTarget;if("submit"===e.type&&"FORM"===t?.tagName)return!0;if(!("click"===e.type&&0===e.button))return!1;let r=t?.closest?.('button, input[type="submit"], input[type="image"]'),i=r?.form||r?.closest("form");if(r&&!r.disabled&&i&&("submit"===r.type||"image"===r.type||!r.type&&"BUTTON"===r.tagName))return!0;let s=t?.closest?.("a");if(!s||!s.href)return!1;let n=s.getAttribute("href");return!(n&&n.startsWith("#")&&n.length>1)}#J(e,t=e._htmx.eventHandler){let r=this.#E(e,"hx-trigger")||(e.matches("form")?"submit":e.matches("input:not([type=button]):not([type=submit]),select,textarea")?"change":"click");this.#O(e,r,t)}#O(e,t,r){let i=this.#w(t);this.#H(e).triggerSpecs.push(...i);for(let t of i){t.listeners=[];let[i,s]=this.#xe(t.name),n=[e];"outside"===t.from?n=[document]:t.from&&"self"!==t.from&&(n=this.#be(e,t.from));let o=e=>{if((t.halt||t.prevent)&&e.preventDefault(),(t.halt||t.stop||t.consume)&&e.stopPropagation(),t.once)for(let e of t.listeners)e.fromElt.removeEventListener(e.eventName,e.handler,e);r(e)},a=o;if(t.delay?a=e=>{clearTimeout(t.timeout),t.timeout=setTimeout(()=>o(e),this.parseInterval(t.delay))}:t.throttle&&(a=e=>{t.throttled?t.throttledEvent=e:(t.throttled=!0,o(e),t.throttleTimeout=setTimeout(()=>{if(t.throttled=!1,t.throttledEvent){let e=t.throttledEvent;t.throttledEvent=null,a(e)}},this.parseInterval(t.throttle)))}),t.handler=r=>{if(("self"!==t.from||r.target===e)&&("outside"!==t.from||!e.contains(r.target))&&(!t.target||r.target?.matches?.(t.target))){if(t.changed){let e=t.values??=new WeakMap,r=!1;for(let t of n)e.get(t)!==t.value&&(r=!0,e.set(t,t.value));if(!r)return}if(s){this.#re(r)&&r.preventDefault();let t={};for(let e in r)t[e]=r[e];if(!this.#k(e,t,s,!0,!1))return}a(r)}},"intersect"===i||"revealed"===i){let r={rootMargin:t.rootMargin};t.root&&(r.root=this.#ee(e,t.root)),t.threshold&&(r.threshold=parseFloat(t.threshold));let s="revealed"===i;t.observer=new IntersectionObserver(r=>{for(let i=0;i<r.length;i++)if(r[i].isIntersecting){this.trigger(e,"intersect",{},!1),s&&t.observer.disconnect();break}},r),i="intersect",t.observer.observe(e)}if("every"===i){let r=Object.keys(t).find(e=>"name"!==e);t.interval=setInterval(()=>{e.isConnected?this.#L(e,"every",{},!1):clearInterval(t.interval)},this.parseInterval(r))}if("load"!==i)for(let r of n){let s={fromElt:r,eventName:i,handler:t.handler,capture:!!t.capture,passive:!!t.passive};e._htmx.listeners.push(s),t.listeners.push(s),r.addEventListener(i,t.handler,s)}else t.handler(new CustomEvent("load"))}}#xe(e){let t=e.match(/^([^\[]*)\[([^\]]*)]/);return t?[t[1],t[2]]:[e,null]}#me(t,r){if("{"===t[0]){let i=e.parse(t);for(let e in i){let t=i[e],s=r;t?.target&&(s=this.find(t.target)),this.trigger(s,e,"object"==typeof t?t:{value:t})}}else t.split(",").forEach(e=>this.trigger(r,e.trim(),{}))}#ye(e){let t={},r=Object.getPrototypeOf(this);for(let i of Object.getOwnPropertyNames(r))"constructor"!==i&&"function"==typeof this[i]&&(["find","findAll"].includes(i)?t[i]=(t,r)=>void 0===r?this[i](e,t):this[i](t,r):t[i]=this[i].bind(this));return t}#k(e,t,r,i=!0,s=!0,n=!1){let o={};Object.assign(o,this.#ye(e));let a={},l={scope:a,code:r};this.#_(e,"htmx:scope",l),r=l.code,Object.assign(o,a),Object.assign(o,t);let h=Object.keys(o),c=Object.values(o),u=new(s?this.#l:this.#a)(...h,i?`return (${r})`:r);return n?()=>u.call(e,...c):u.call(e,...c)}process(e,t){if(!e?.isConnected)return;if(!(e instanceof Element)){for(let r of e.children||[])this.process(r,t);return}if(t&&this.#Se(e,!0),this.#V(e))return;if(!this.#L(e,"htmx:before:process"))return;let r=[e],i=this.#f.evaluate(e),s=null;for(;s=i.iterateNext();)r.push(s);for(let e of r)!this.#V(e)&&this.#L(e,"htmx:before:on:init",{},!0)&&this.#ve(e);for(let t of this.#j(e,this.#c))this.#W(t);for(let t of this.#j(e,this.#u))this.#Ee(t);this.#L(e,"htmx:after:process")}#Ee(e){let t=this.#E(e,"hx-boost");if(t&&"false"!==t&&this.#we(e)&&this.#L(e,"htmx:before:init",{},!0)){let r=this.#H(e);r.initialized=!0,r.eventHandler=this.#Q(e),r.boosted=t;let i=e.matches("a")?"click":"submit";e._htmx.listeners.push({fromElt:e,eventName:i,handler:e._htmx.eventHandler}),e.addEventListener(i,e._htmx.eventHandler),this.#L(e,"htmx:after:init",{},!0)}}#we(e){if(this.#U(e))if("A"===e.tagName){if(""===e.target||"_self"===e.target)return!e.hasAttribute("download")&&!e.getAttribute("href")?.startsWith?.("#")&&this.#Ae(e.href)}else if("FORM"===e.tagName)return"dialog"!==e.method&&this.#Ae(e.action)}#Ae(e){try{return new URL(e,window.location.href).origin===window.location.origin}catch(e){return!1}}#U(e){return!e._htmx?.initialized&&!this.#V(e)}#Se(e,t){let r=[e,...e.querySelectorAll?.("[data-htmx-powered]")??[]];for(let e of r)if(e._htmx){this.#L(e,"htmx:before:cleanup");for(let t of e._htmx.triggerSpecs||[])t.interval&&clearInterval(t.interval),t.timeout&&clearTimeout(t.timeout),t.throttleTimeout&&clearTimeout(t.throttleTimeout),t.observer?.disconnect();for(let t of e._htmx.listeners||[])t.fromElt.removeEventListener(t.eventName,t.handler,t);e.removeAttribute("data-htmx-powered"),this.#L(e,"htmx:after:cleanup"),t&&delete e._htmx}}#Te(e){let t=document.createElement("div");t.hidden=!0,document.body.insertAdjacentElement("afterend",t);let r=e.querySelectorAll?.(this.#S("[hx-preserve]"))||[];for(let e of r){let r=document.getElementById(e.id);r&&this.#Ce(t,r,null)}return t}#qe(e){for(let t of[...e.children]){let e=document.getElementById(t.id);e&&(this.#Ce(e.parentNode,t,e),this.#Se(e),e.remove())}e.remove()}#Ne(e){let t=this.#h.createHTML(e);return Document.parseHTMLUnsafe?.(t)||(new DOMParser).parseFromString(t,"text/html")}#Ie(e){let t=e.replace(/<hx-([a-z]+)(\s+|>)/gi,'<template hx type="$1"$2').replace(/<\/hx-[a-z]+>/gi," "),r="";t=t.replace(/<head(\s[^>]*)?>[\s\S]*?<\/head>/i,e=>(r=this.#Ne(e).title,""));let i,s,n=t.match(/<([a-z][^\/>\x20\t\r\n\f]*)/i)?.[1]?.toLowerCase();if("html"===n||"body"===n?(i=this.#Ne(t),s=document.createDocumentFragment(),s.append(i.body)):(i=this.#Ne(` ${t} `),s=i.querySelector("template").content),!r){let e=s.querySelector("title:not(svg title)");e&&(r=e.textContent,e.remove())}return this.#Me(s),{fragment:s,title:r}}#Oe(e,t,r,i){let s=t.id?"#"+CSS.escape(t.id):null;"true"!==r&&r&&!r.includes(" ")&&([r,s=s]=r.split(/:(.*)/)),"true"!==r&&r||(r="outerHTML");let n=this.#He(r);if(s=n.target||s,n.strip??=!n.style.startsWith("outer"),!s)return;let o=[...document.querySelectorAll(s)];for(let r of o){let s=document.createDocumentFragment();s.append(t.cloneNode(!0)),e.push({type:"oob",fragment:s,target:r,swapSpec:n,sourceElement:i})}t.remove()}#Le(e,t,r){let i=[];if(r)for(let s of r.split(",")){let[r,n="true"]=s.split(/:(.*)/);for(let s of e.querySelectorAll(r))this.#Oe(i,s,n,t)}for(let r of e.querySelectorAll(this.#S("[hx-swap-oob]"))){let e=this.#R(r,"hx-swap-oob"),s=r.getAttribute(e);r.removeAttribute(e),this.#Oe(i,r,s,t)}return i}#ke(e,t,r){t?t.before(...r.childNodes):e.append(...r.childNodes)}#He(t){t=t.trim();let r=this.config.defaultSwap;if(t&&!/^\S*:/.test(t)){let e=t.match(/^(\S+)\s*(.*)$/);r=e[1],t=e[2]}return{style:this.#B(r),...e.parse(t)}}#Ve(e,t){let r=[];for(let i of e.querySelectorAll("template[hx]")){let e=i.getAttribute("type");if("partial"===e){let e=this.#P(i,"hx-target")||(i.id?"#"+CSS.escape(i.id):null);if(e){this.#Me(i.content);let s=this.#He(this.#P(i,"hx-swap")||this.config.defaultSwap),n=this.#be(t.sourceElement,e);for(let e of n.length?n:[null])r.push({type:"partial",fragment:i.content.cloneNode(!0),target:e,swapSpec:s,sourceElement:t.sourceElement})}}else this.#_(i,"htmx:process:"+e,{ctx:t,tasks:r});i.remove()}return r}#Pe(e,t,r,i){try{null!=r&&e.setSelectionRange&&e.setSelectionRange(r,i),e.focus(t)}catch(e){}}#Re(e){let t=this.#j(e,"[autofocus]")[0];t&&this.#Pe(t)}#je(e,t){if(e.scroll){let r=e.scrollTarget?this.#Be(e.scrollTarget):t;r&&("top"===e.scroll?r.scrollTop=0:"bottom"===e.scroll&&(r.scrollTop=r.scrollHeight))}if("top"===e.show||"bottom"===e.show){let r=e.showTarget?this.#Be(e.showTarget):t;r?.scrollIntoView?.("top"===e.show)}}#Fe(e){e.request?.anchor&&document.getElementById(e.request.anchor)?.scrollIntoView({block:"start",behavior:"auto"})}#Me(e){let t=this.#j(e,"script");for(let e of t){let t=document.createElement("script");for(let r of e.attributes)t.setAttribute(r.name,r.value);this.config.inlineScriptNonce&&(t.nonce=this.config.inlineScriptNonce),t.textContent=this.#h.createScript(e.textContent),e.replaceWith(t)}}initialize(){this.config.history&&!this.#g&&(this.#g=!0,history.state||history.replaceState({htmx:!0},"",location.href),window.navigation&&!/firefox/i.test(navigator.userAgent)?navigation.addEventListener("navigate",e=>{"traverse"===e.navigationType&&e.canIntercept&&!e.hashChange&&e.intercept({handler:()=>this.#ze()})}):window.addEventListener("popstate",e=>this.#ze(e.state))),this.process(document.body)}async swap(e){try{this.#_e(e);let{fragment:t,title:r}=this.#Ie(e.text);e.title=r;let i=[],s=this.#Le(t,e.sourceElement,e.selectOOB),n=this.#Ve(t,e);i.push(...s,...n);let o=n.length||s.length&&!this.config.allowEmptySwapAfterOOB,a=this.#De(e,t,o);if(a&&i.unshift(a),!this.#L(e.sourceElement,"htmx:before:swap",{ctx:e,tasks:i}))return;let l=[],h=[];for(let t of i)t.swapSpec?.transition??a?.transition??e.transition?h.push(t):l.push(this.#N(t));if(h.length>0){let t=async()=>{for(let e of h)await this.#N(e,!1)};l.push(this.#$e(t,e))}await Promise.all(l),!e.sourceElement?.isConnected&&a?.target?.isConnected&&(e.sourceElement=a.target),this.#L(e.sourceElement,"htmx:after:swap",{ctx:e}),e.title&&!a?.swapSpec?.ignoreTitle&&(document.title=e.title),this.#Fe(e)}finally{this.#L(e.sourceElement,"htmx:finally:swap",{ctx:e})}}#De(e,t,r){let i=this.#He(e.swap||this.config.defaultSwap);if("delete"===i.style||t.childElementCount>0||t.textContent.trim()||(i.swapEmpty??!r)){if(e.select){let r=t.querySelectorAll(e.select);(t=document.createDocumentFragment()).append(...r)}return this.#D(e.sourceElement)&&(i.show||="top"),{type:"main",fragment:t,target:this.#K(e.sourceElement||document.body,i.target||e.target),swapSpec:i,sourceElement:e.sourceElement,transition:e.transition&&!1!==i.transition}}}async#N(e,t=!0){let{target:r,swapSpec:i,fragment:s}=e;if("string"==typeof r&&(r=document.querySelector(r)),!r)return;"string"==typeof i&&(i=this.#He(i));let n,o=i.style;if("none"===o)return;if("BODY"===s.firstElementChild?.tagName){const e=r===document.body&&o.startsWith("outer");e&&"outerHTML"===o&&(o="outerSync"),i.strip??=!e}if(i.strip&&s.firstElementChild&&(s=document.createDocumentFragment(),s.append(...(e.fragment.firstElementChild.content||e.fragment.firstElementChild).childNodes)),this.#We(r,"htmx-swapping"),t&&e.swapSpec?.swap&&await this.timeout(e.swapSpec?.swap),"delete"===o)return void(r.parentNode&&(this.#Se(r),r.parentNode.removeChild(r)));let a=[],l=i.settle??this.config.defaultSettleDelay,h=r.parentNode;if("innerHTML"===o||"outerHTML"===o&&h){let e=document.activeElement;if(e?.id){let t,r;try{t=e.selectionStart,r=e.selectionEnd}catch(e){}n={elt:e,start:t,end:r}}a=t&&l?this.#Ue(s,r):[]}let c=this.#Te(s),u=[...s.childNodes];try{if("innerHTML"===o){for(const e of r.children)this.#Se(e);r.replaceChildren(...s.childNodes)}else if("textContent"===o){for(const e of r.querySelectorAll("[data-htmx-powered]"))this.#Se(e);r.textContent=s.textContent}else if("outerHTML"===o)h&&(this.#ke(h,r,s),this.#Se(r),h.removeChild(r),r=u[0]||h);else if("outerSync"===o){this.#Qe(r,s.firstElementChild);for(const e of r.children)this.#Se(e);r.replaceChildren(...s.firstElementChild.childNodes),u=[r]}else if("innerMorph"===o)this.#I(r,s,!0),u=[...r.childNodes];else if("outerMorph"===o)this.#I(r,s,!1),u.push(r);else if("beforebegin"===o)h&&this.#ke(h,r,s);else if("afterbegin"===o)this.#ke(r,r.firstChild,s);else if("beforeend"===o)this.#ke(r,null,s);else if("afterend"===o)h&&this.#ke(h,r.nextSibling,s);else{let e=this.#i.get("handle_swap")||[],t=!1;for(const n of e){let e=n(o,r,s,i);if(e){t=!0,Array.isArray(e)&&(u=e);break}}if(!t)throw new Error(`Unknown swap style: ${o}`)}}finally{this.#Je(r,"htmx-swapping")}if(e.target=r,this.#qe(c),n&&!n.elt.matches(":focus")){let e=document.getElementById(n.elt.id);if(e){let t={preventScroll:void 0!==i.focusScroll?!i.focusScroll:!this.config.defaultFocusScroll};this.#Pe(e,t,n.start,n.end)}}this.#L(r,"htmx:before:settle",{task:e,newContent:u,settleTasks:a});for(const e of u)this.#We(e,"htmx-added");if(t&&a.length>0){this.#We(r,"htmx-settling"),await this.timeout(l);for(let e of a)e();this.#Je(r,"htmx-settling")}this.#L(r,"htmx:after:settle",{task:e,newContent:u,settleTasks:a});for(const e of u)this.#Je(e,"htmx-added"),this.process(e),this.#Re(e);this.#je(i,r)}#L(e,t,r={},i=!0){if(r.error){let i=`htmx: ${t}: ${r.error.message??r.error}`;r.error instanceof Error?console.error(i,r.error,{elt:e,detail:r}):console.error(i,{elt:e,detail:r})}else r.warn?console.warn(`htmx: ${t}: ${r.warn}`,{elt:e,detail:r}):this.config.logAll&&console.log(`htmx: ${t}`,{elt:e,detail:r});return e=this.#Xe(e),this.#_(e,t,r),this.trigger(e,this.#z(t),r,i)}#_(e,t,r={}){let i=this.#i.get(t.replace(/:/g,"_"));if(i){r.cancelled=!1;for(const t of i)if(!1===t(e,r)||r.cancelled)return r.cancelled=!0,!1}return!0}timeout(e){if((e=this.parseInterval(e))>0)return new Promise(t=>setTimeout(t,e))}onLoad(e){this.on(this.#z("htmx:after:process"),t=>{e(t.target)})}on(e,t,r){let i,s=document;return void 0===r?(i=e,r=t):(s=this.#Xe(e),i=t),s.addEventListener(i,r),r}find(e,t){return this.#Be(e,t)}findAll(e,t){return this.#be(e,t)}parseInterval(e){if("number"==typeof e)return e;let[,t,r]=e?.match(/^([\d.]+)(ms|s|m)?$/)||[],i=parseFloat(t)*({ms:1,s:1e3,m:6e4}[r]||1);return isNaN(i)?void 0:i}trigger(e,t,r={},i=!0){e=this.#Xe(e);let s=new CustomEvent(t,{detail:r,cancelable:!0,bubbles:i,composed:!0}),n=e?.isConnected?e:document;return!r.cancelled&&n.dispatchEvent(s)}ajax(e,t,r){(!r||r instanceof Element||"string"==typeof r)&&(r={target:r});let i="string"==typeof r.source?document.querySelector(r.source):r.source;if("string"==typeof r.source&&!i)return Promise.reject(new Error("Source not found"));if(r.target){let e=this.#K(document.body,r.target);if(!e)return Promise.reject(new Error("Target not found"));i||=e}i||=document.body;let s=this.#T(i,r.event||{});return Object.assign(s,r),r.target&&(s.target=this.#K(document.body,r.target)),Object.assign(s.request,{action:t,method:e.toUpperCase()}),r.headers&&Object.assign(s.request.headers,r.headers),this.#X(s)}#Ge(e){this.config.history&&(history.state||history.replaceState({htmx:!0},"",location.href),history.pushState({htmx:!0},"",e),this.#L(document,"htmx:after:history:push",{path:e}))}#Ke(e){this.config.history&&(history.replaceState({htmx:!0},"",e),this.#L(document,"htmx:after:history:replace",{path:e}))}async#ze(e,t){if(await this.timeout(1),e??=history.state,!e?.htmx)return;this.#p?.abort(),t=t||location.pathname+location.search;let r=document.querySelector(this.#S("[hx-history-elt]"))||document.body;if(this.#L(document,"htmx:before:history:restore",{path:t,cacheMiss:!0})){if("reload"!==this.config.history)return this.#p=new AbortController,this.ajax("GET",t,{target:r,swap:"outerSync",select:r!==document.body?this.#S("[hx-history-elt]"):void 0,request:{headers:{"HX-History-Restore-Request":"true"},signal:this.#p.signal}});this._loc.reload()}}#Ye(e){let{sourceElement:t,push:r,replace:i,hx:s,response:n}=e;if((s?.pushurl||s?.replaceurl)&&(r=s.pushurl,i=s.replaceurl),null==r&&null==i&&this.#D(t)&&(r="true"),"false"!==r&&!1!==r||(r=null),"false"!==i&&!1!==i||(i=null),!r&&!i)return null;let o=r||i;if("true"===o){let t=n?.raw?.url||e.request.action,r=new URL(t,location.href);o=r.pathname+r.search+(e.request.anchor?"#"+e.request.anchor:"")}return{type:r?"push":"replace",path:o}}#_e(e){if(!this.config.history)return;let t=this.#Ye(e);if(!t)return;let r={history:t,sourceElement:e.sourceElement,response:e.response};this.#L(document,"htmx:before:history:update",r)&&("push"===t.type?this.#Ge(t.path):this.#Ke(t.path),this.#L(document,"htmx:after:history:update",r))}#ve(e){if(e._htmx?.onInitialized)return;let t=this.#v("hx-on"),r=this.config.metaCharacter||":",i=t=>async r=>{try{await this.#k(e,{event:r},`with(event?.detail||{}){${t}}`,!1)}catch(t){"symbol"!=typeof t&&this.#L(e,"htmx:error",{error:t})}};for(let s of e.getAttributeNames()){let n=t.find(e=>s.startsWith(e));if(!n)continue;this.#H(e).onInitialized=!0;let o=s.substring(n.length),a=e.getAttribute(s);if(!o){for(let t of a.split(/;(?=[^;]*->)/)){let r=t.indexOf("->");-1!==r&&this.#O(e,t.substring(0,r).trim(),i(t.substring(r+2).trim()))}continue}if(o[0]!==r)continue;let l=o.substring(1);l.startsWith(r)&&(l="htmx"+r+l.substring(1)),this.#O(e,l,i(a))}}#he(e){let t,r=this.#E(e,"hx-indicator");if(r)t=this.#be(e,r,"hx-indicator");else{if(e===document.body)return[];t=[e]}for(const e of t){let t=this.#$(e);t.rc=(t.rc||0)+1,this.#We(e,this.config.requestClass)}return t}#pe(e){for(let t of e){let e=this.#$(t);e.rc&&--e.rc<=0&&(this.#Je(t,this.config.requestClass),delete e.rc)}}#ce(e){let t=this.#E(e,"hx-disable"),r=[];if(t){r=this.#be(e,t,"hx-disable");for(let e of r){let t=this.#$(e);t.dc=(t.dc||0)+1,e.disabled=!0}}return r}#ge(e){for(const t of e){let e=this.#$(t);e.dc&&--e.dc<=0&&(t.disabled=!1,delete e.dc)}}#C(e,t,r,i,s){if(i&&t&&!t.reportValidity())return;let n=t?new FormData(t):new FormData,o=t?new Set(t.elements):new Set;if(!t){if(i&&e.reportValidity&&!e.reportValidity())return;this.#Ze(e,o,n,s)}r&&r.name&&(n.append(r.name,r.value),o.add(r));let a=this.#E(e,"hx-include");if(a)for(let t of this.#be(e,a)){if(i&&t.reportValidity&&!t.reportValidity())return;this.#Ze(t,o,n)}return n}#Ze(e,t,r,i){let s=e.tagName,n=[];"BUTTON"===s||s.includes("-")?n=[e]:!["INPUT","SELECT","TEXTAREA","FIELDSET"].includes(s)&&i||(n=this.#j(e,"[name]:not(button)"));for(let e of n){let i=e.name||e.getAttribute?.("name");if(!i||e.matches(":disabled")||t.has(e))continue;t.add(e);let s=e.type;if("checkbox"===s||"radio"===s||"INPUT"!==e.tagName&&"checked"in e)e.checked&&r.append(i,e.value);else if("file"===s)for(let t of e.files)r.append(i,t);else if("select-multiple"===s)for(let t of e.selectedOptions)r.append(i,t.value);else if(Array.isArray(e.value))for(let t of e.value)r.append(i,t);else r.append(i,e.value)}}#q(t,r,i,s={}){let n=this.#E(t,r);if(!n)return null;let o=this.#ie(n);if(o)return 0!==o.indexOf("{")&&(o="{"+o+"}"),this.#k(t,s,o,!0).then(e=>{i(e)});i(e.parse(n))}#et(e){let t=e.trim();return t.startsWith("<")&&t.endsWith("/>")?t.slice(1,-2):t}#be(t,r,i,s){let n=r??t,o=r?this.#Xe(t)||document.body:document;if(n.startsWith("global "))return this.#be(o,n.slice(7),i,!0);let a=n?e.split(n):[],l=[],h=[];for(const e of a){let t,r=this.#et(e);if(r.startsWith("closest "))t=o.closest(r.slice(8));else if(r.startsWith("find "))t=o.querySelector(r.slice(5));else if(r.startsWith("findAll "))l.push(...o.querySelectorAll(r.slice(8)));else if("next"===r||"nextElementSibling"===r)t=o.nextElementSibling;else if(r.startsWith("next "))t=this.#tt(o,r.slice(5),!!s);else if("previous"===r||"previousElementSibling"===r)t=o.previousElementSibling;else if(r.startsWith("previous "))t=this.#rt(o,r.slice(9),!!s);else if("document"===r)t=document;else if("window"===r)t=window;else if("body"===r)t=document.body;else if("host"===r)t=o.getRootNode().host;else if("this"===r){if(i){l.push(...this.#F(o,i));continue}t=o}else h.push(r);t&&l.push(t)}if(h.length>0){let e=h.join(","),t=this.#it(o,!!s);l.push(...t.querySelectorAll(e))}return[...new Set(l)]}#tt(e,t,r){return this.#st(this.#it(e,r).querySelectorAll(t),e,Node.DOCUMENT_POSITION_PRECEDING)}#rt(e,t,r){let i=[...this.#it(e,r).querySelectorAll(t)].reverse();return this.#st(i,e,Node.DOCUMENT_POSITION_FOLLOWING)}#st(e,t,r){for(const i of e)if(i.compareDocumentPosition(t)===r)return i}#it(e,t){return e.isConnected&&e.getRootNode?e.getRootNode?.({composed:t}):document}#ee(e,t,r){let i=this.#be(e,t,r)[0];return i||console.warn(`htmx: '${t}' on ${r} did not match any element`,{elt:e,selector:t,attr:r}),i}#Be(e,t,r){return this.#be(e,t,r)[0]}#ie(e){if(null!=e){if(e.startsWith("js:"))return e.substring(3);if(e.startsWith("javascript:"))return e.substring(11)}}#ae(e){let t=this.#H(e);if(t.abortInitialized)return;t.abortInitialized=!0;let r=()=>{this.#oe(e).abort()};e.addEventListener("htmx:abort",r),t.listeners.push({fromElt:e,eventName:"htmx:abort",handler:r})}#I(e,t,r){let{persistentIds:i,idMap:s}=this.#nt(e,t),n=document.createElement("div");n.hidden=!0,document.body.after(n);let o={target:e,idMap:s,persistentIds:i,pantry:n,futureMatches:new WeakSet};r?this.#ot(o,e,t):this.#ot(o,e.parentNode,t,e,e.nextSibling),this.#Se(n),n.remove()}#ot(e,t,r,i=null,s=null){t instanceof HTMLTemplateElement&&r instanceof HTMLTemplateElement&&(t=t.content,r=r.content),i||=t.firstChild;let n=r.firstChild;for(;n;){let r;if(i&&i!=s&&(r=this.#at(e,n,i,s),r&&r!==i)){let o=i;for(;o&&o!==r;){let r=o;o=o.nextSibling,r instanceof Element&&(e.idMap.has(r)||this.#lt(e,r,n))?this.#Ce(t,r,s):this.#ht(e,r)}}if(!r&&n instanceof Element&&e.persistentIds.has(n.id)){let s=CSS.escape(n.id);r=e.target.id===n.id&&e.target||e.target.querySelector(`[id="${s}"]`)||e.pantry.querySelector(`[id="${s}"]`);let o=r;for(;o=o.parentNode;){let t=e.idMap.get(o);t&&(t.delete(r.id),t.size||e.idMap.delete(o))}this.#Ce(t,r,i)}if(r){this.#ct(r,n,e),i=r.nextSibling,n=n.nextSibling;continue}let o=n.nextSibling;if(e.idMap.has(n)){let r=document.createElement(n.tagName);t.insertBefore(r,i),this.#ct(r,n,e),this.process(r),i=r.nextSibling}else t.insertBefore(n,i),i=n.nextSibling;n=o}for(;i&&i!=s;){let t=i;i=i.nextSibling,this.#ht(e,t)}}#lt(e,t,r){if(e.futureMatches.has(t))return!0;for(let i=r.nextSibling,s=0;i&&s<this.config.morphScanLimit;i=i.nextSibling,s++)if(i instanceof Element&&t.isEqualNode(i))return e.futureMatches.add(t),!0;return!1}#at(e,t,r,i){if(3===t.nodeType)return 3===r?.nodeType?r:null;if(!(t instanceof Element))return null;let s=null,n=0,o=this.config.morphScanLimit,a=e.idMap.get(t),l=a?.size||0;if(t.id&&!a)return null;let h=r;for(;h&&h!=i;){let r=e.idMap.get(h);if(this.#o.isSoftMatch(h,t)){if(r&&a&&[...r].some(e=>a.has(e)))return h;if(!r){if(o>0&&h.isEqualNode(t))return h;s||(s=h)}}if(n+=r?.size||0,n>l)break;if(null!=document.activeElement?.selectionStart&&h.contains(document.activeElement))break;if(--o<1&&0===l)break;h=h.nextSibling}return s&&this.#lt(e,s,t)?null:s}#M(e,t){return e instanceof Element&&e.tagName===t.tagName&&(!("SCRIPT"===e.tagName&&!e.isEqualNode(t))&&(!e.id||e.id===t.id))}#ht(e,t){e.idMap.has(t)?this.#Ce(e.pantry,t,null):(this.#Se(t),t.remove())}#Ce(e,t,r){if(e.moveBefore)try{return void e.moveBefore(t,r)}catch(e){}e.insertBefore(t,r)}#ct(e,t,r){if(3===e.nodeType)return void(e.nodeValue!==t.nodeValue&&(e.nodeValue=t.nodeValue));if(this.config.morphSkip&&e.matches?.(this.config.morphSkip))return;if(!this.#_(e,"htmx:before:morph:node",{oldNode:e,newNode:t}))return;this.#Qe(e,t),e instanceof HTMLTextAreaElement&&document.activeElement!==e&&e.defaultValue!=t.defaultValue&&(e.value=t.value),this.config.morphSkipChildren&&e.matches?.(this.config.morphSkipChildren)||e.isEqualNode(t)&&"TEMPLATE"!==t.tagName&&!t.querySelector?.("template")||this.#ot(r,e,t)}#Qe(e,t){let r=this.config.morphIgnore||[],i=!1,s=e=>this.#v("hx-").some(t=>e.startsWith(t));for(const n of t.attributes)if(!r.some(e=>n.name.startsWith(e))&&e.getAttribute(n.name)!==n.value){if(s(n.name)&&(i=!0),!this.#_(e,"htmx:before:morph:attr",{attrName:n.name,newValue:n.value}))continue;e.setAttribute(n.name,n.value),"value"===n.name&&e instanceof HTMLInputElement&&"file"!==e.type&&document.activeElement!==e&&(e.value=n.value)}for(let n=e.attributes.length-1;n>=0;n--){let o=e.attributes[n];if(o&&!t.hasAttribute(o.name)&&!r.some(e=>o.name.startsWith(e))){if(s(o.name)&&(i=!0),!this.#_(e,"htmx:before:morph:attr",{attrName:o.name,newValue:null}))continue;e.removeAttribute(o.name)}}i&&this.#Se(e,!0)}#ut(e,t,r,i){for(const s of i)if(t.has(s.id)){let t=s;for(;t&&t!==r;){let r=e.get(t);null==r&&(r=new Set,e.set(t,r)),r.add(s.id),t=t.parentElement}}}#nt(e,t){let r=this.#j(e,"[id]"),i=t.querySelectorAll("[id]"),s=this.#dt(r,i),n=new Map;return this.#ut(n,s,e.parentElement,r),this.#ut(n,s,t,i),{persistentIds:s,idMap:n}}#dt(e,t){let r=new Set,i=new Map;for(const{id:t,tagName:s}of e)i.has(t)?r.add(t):t&&i.set(t,s);let s=new Set;for(const{id:e,tagName:n}of t)s.has(e)?r.add(e):i.get(e)===n&&s.add(e);for(const e of r)s.delete(e);return s}#fe(t){let r=t.response.raw.status,i=this.config.noSwap.map(e=>e+""),s=r+"";for(let r of[s,s.slice(0,2)+"x",s[0]+"xx"]){if(i.includes(r))return void(t.swap="none");let s=this.#E(t.sourceElement,"hx-status:"+r);if(s)return void e.merge(s,t)}}#$e(e,t){return new Promise(r=>{this.#m||=[],this.#m.push({task:e,resolve:r,ctx:t}),this.#x||this.#ft()})}async#ft(){if(0===this.#m.length||this.#x)return;this.#x=!0;let{task:e,resolve:t,ctx:r}=this.#m.shift();try{if(document.startViewTransition){let t={task:e,ctx:r};this.#L(r.sourceElement,"htmx:before:viewTransition",t),await document.startViewTransition(t.task).finished,this.#L(r.sourceElement,"htmx:after:viewTransition",t)}else await e()}catch(e){}finally{this.#x=!1,t(),this.#ft()}}#Ue(e,t){let r=t.querySelectorAll("[id]"),i=Object.fromEntries([...r].map(e=>[e.id,e])),s=e.querySelectorAll("[id]"),n=[];for(let e of s){let t=i[e.id];if(t?.tagName===e.tagName){let r=e.cloneNode(!1);this.#Qe(e,t),n.push(()=>{this.#Qe(e,r)})}}return n}#We(e,t){e?.classList?.add?.(t)}#Je(e,t){e?.classList?.remove?.(t),0===e?.classList?.length&&e.removeAttribute("class")}#Xe(e){return"string"==typeof e?this.find(e):e}#z(e){return this.config.metaCharacter?e.replace(/:/g,this.config.metaCharacter):e}}})();</script>
+</body>
+</html>
