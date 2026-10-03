@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="still-water">
+<html lang="en" data-theme="tide">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -11,24 +11,16 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,200;9..144,300&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.0/dist/htmx.min.js"></script>
 <style>
-/* ==========================================================================
-   0.  Registered custom properties.
-       Registering them makes them animatable + interpolatable, which is what
-       lets an entire palette cross-fade when a fragment swaps the theme.
-   ========================================================================== */
-@property --c1     { syntax: '<color>'; inherits: true; initial-value: #0e3a5c; }
-@property --c2     { syntax: '<color>'; inherits: true; initial-value: #06182b; }
-@property --c3     { syntax: '<color>'; inherits: true; initial-value: #0f5f66; }
-@property --accent { syntax: '<color>'; inherits: true; initial-value: #8fd8ff; }
+@property --c1     { syntax: '<color>'; inherits: true; initial-value: #101f4e; }
+@property --c2     { syntax: '<color>'; inherits: true; initial-value: #050a18; }
+@property --c3     { syntax: '<color>'; inherits: true; initial-value: #1d2a66; }
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #93a8ff; }
 @property --sweep  { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 @property --mx     { syntax: '<number>'; inherits: true; initial-value: 0.5; }
 @property --my     { syntax: '<number>'; inherits: true; initial-value: 0.38; }
 @property --rx     { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
 @property --ry     { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
 
-/* ==========================================================================
-   1.  Palettes - one per soundscape.
-   ========================================================================== */
 html[data-theme="still-water"] { --c1:#0e3a5c; --c2:#06182b; --c3:#0f5f66; --accent:#8fd8ff; }
 html[data-theme="rain"]        { --c1:#2a3c5e; --c2:#0a1220; --c3:#2b5068; --accent:#a9c9ff; }
 html[data-theme="embers"]      { --c1:#5a2c18; --c2:#1e0f0b; --c3:#6b3340; --accent:#ffb37f; }
@@ -42,9 +34,6 @@ html {
   --breath: 9s;
 }
 
-/* ==========================================================================
-   2.  Reset + page chrome
-   ========================================================================== */
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
@@ -65,13 +54,7 @@ h1, h2, p, dl, dd { margin: 0; }
 button { font: inherit; color: inherit; -webkit-appearance: none; appearance: none; }
 ::selection { background: color-mix(in srgb, var(--accent) 32%, transparent); }
 
-/* ==========================================================================
-   3.  The scene - seven pure-CSS layers of weather.
-       RULE: every animation below touches only `transform` and `opacity`.
-       Animating `background-position` or `filter` repaints a full-screen
-       layer on every frame; transforms stay on the compositor.
-   ========================================================================== */
-.scene { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.scene { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; filter: saturate(115%); }
 .scene > * { position: absolute; inset: 0; will-change: transform, opacity; }
 
 .l-sky {
@@ -98,7 +81,6 @@ button { font: inherit; color: inherit; -webkit-appearance: none; appearance: no
 .l-aurora { inset: -32%; mix-blend-mode: screen; opacity: .34; transition: opacity 2.6s ease; }
 .l-aurora .set { position: absolute; inset: 0; }
 .l-aurora .set-b { filter: hue-rotate(58deg); }
-/* The blur lives on one static layer; only the blobs inside move. */
 .l-aurora .blob {
   position: absolute; display: block; border-radius: 50%;
   background: radial-gradient(closest-side, var(--bc), transparent 70%);
@@ -143,9 +125,6 @@ body[data-playing="true"] .l-bloom { opacity: .58; animation: bloom-pulse 11s ea
   background: radial-gradient(120% 80% at 50% 40%, transparent 40%, rgba(0,0,0,.42) 100%);
 }
 
-/* ==========================================================================
-   4.  The shell - glass, plus a hairline of light that slowly goes round
-   ========================================================================== */
 .shell {
   position: relative;
   width: min(920px, 100%);
@@ -155,8 +134,8 @@ body[data-playing="true"] .l-bloom { opacity: .58; animation: bloom-pulse 11s ea
   border-radius: 34px;
   border: 1px solid rgba(255,255,255,.10);
   background: linear-gradient(155deg, rgba(255,255,255,.07), rgba(255,255,255,.015) 45%, rgba(255,255,255,.03));
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
-          backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(155%);
+          backdrop-filter: blur(22px) saturate(155%);
   box-shadow: 0 60px 130px -70px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.14);
   isolation: isolate;
 }
@@ -188,9 +167,6 @@ body[data-playing="true"] .l-bloom { opacity: .58; animation: bloom-pulse 11s ea
 }
 .lede { max-width: 48ch; margin: 0 auto; color: #b4c3e0; font-size: .88rem; text-wrap: balance; }
 
-/* ==========================================================================
-   5.  Stage - the orb and the spectrum
-   ========================================================================== */
 .stage { display: flex; align-items: center; gap: clamp(16px, 3.2vw, 38px); }
 .stage__side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
 
@@ -199,31 +175,38 @@ body[data-playing="true"] .l-bloom { opacity: .58; animation: bloom-pulse 11s ea
   width: clamp(112px, 17vmin, 160px); aspect-ratio: 1;
   padding: 0; border: 0; background: none; cursor: pointer;
   border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
   transform: perspective(760px) rotateX(var(--rx)) rotateY(var(--ry));
   transition: transform .9s cubic-bezier(.2,.9,.25,1);
 }
 .orb__breath, .orb__halo, .orb__spec, .orb__rings, .orb__icon {
   position: absolute; inset: 0; border-radius: 50%;
 }
+
+/* Fixed uniform highlight ring around the button */
 .orb__breath {
-  border: 1px solid rgba(255,255,255,.20);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 45%, rgba(255, 255, 255, 0.45));
   background:
     radial-gradient(56% 50% at 38% 30%, color-mix(in srgb, var(--accent) 58%, #ffffff), transparent 68%),
     radial-gradient(78% 78% at 64% 74%, color-mix(in srgb, var(--c3) 76%, #04070f), transparent 70%),
-    linear-gradient(160deg, rgba(255,255,255,.26), rgba(255,255,255,.03));
+    radial-gradient(circle at center, transparent 35%, rgba(255, 255, 255, 0.12) 100%);
   box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 30%, rgba(255, 255, 255, 0.25)),
     0 0 64px -14px color-mix(in srgb, var(--accent) 62%, transparent),
-    inset 0 2px 30px rgba(255,255,255,.18),
-    inset 0 -20px 42px rgba(0,0,0,.42);
-  transition: box-shadow .8s ease;
+    inset 0 0 18px rgba(255, 255, 255, 0.22),
+    inset 0 0 38px rgba(0, 0, 0, 0.45);
+  transition: box-shadow .8s ease, border-color .8s ease;
 }
 .orb:hover .orb__breath {
+  border-color: color-mix(in srgb, var(--accent) 65%, rgba(255, 255, 255, 0.65));
   box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, rgba(255, 255, 255, 0.45)),
     0 0 92px -10px color-mix(in srgb, var(--accent) 76%, transparent),
-    inset 0 2px 30px rgba(255,255,255,.22),
-    inset 0 -20px 42px rgba(0,0,0,.42);
+    inset 0 0 24px rgba(255, 255, 255, 0.30),
+    inset 0 0 38px rgba(0, 0, 0, 0.45);
 }
-.orb:active .orb__breath { box-shadow: 0 0 40px -18px color-mix(in srgb, var(--accent) 70%, transparent), inset 0 3px 34px rgba(0,0,0,.3); }
+.orb:active .orb__breath { box-shadow: 0 0 40px -18px color-mix(in srgb, var(--accent) 70%, transparent), inset 0 0 24px rgba(0,0,0,.5); }
+
 .orb__halo {
   inset: -46%;
   background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 42%, transparent), transparent 70%);
@@ -238,11 +221,11 @@ body[data-playing="true"] .orb__halo { opacity: .85; animation: halo-pulse var(-
   mix-blend-mode: screen;
   opacity: .9;
 }
-.orb__rings { inset: -7%; pointer-events: none; }
+.orb__rings { inset: -7%; pointer-events: none; display: flex; align-items: center; justify-content: center; transform-origin: center; }
 .orb__rings i {
   position: absolute; inset: 0; border-radius: 50%;
   border: 1px solid color-mix(in srgb, var(--accent) 52%, transparent);
-  opacity: 0;
+  opacity: 0; transform-origin: center; box-sizing: border-box;
 }
 body[data-playing="true"] .orb__rings i { animation: ring-out var(--breath) ease-out infinite; }
 .orb__rings i:nth-child(1) { animation-delay: calc(var(--breath) * 0) !important; }
@@ -250,7 +233,7 @@ body[data-playing="true"] .orb__rings i { animation: ring-out var(--breath) ease
 .orb__rings i:nth-child(3) { animation-delay: calc(var(--breath) * .66) !important; }
 .orb__icon { display: grid; place-items: center; }
 .orb__icon .play {
-  width: 0; height: 0; margin-left: 8%;
+  width: 0; height: 0; margin-left: 3px;
   border-left: 21px solid #050a12;
   border-top: 12.5px solid transparent;
   border-bottom: 12.5px solid transparent;
@@ -304,9 +287,6 @@ body[data-playing="true"] .state::before { background: var(--accent); box-shadow
 }
 .ghost:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-/* ==========================================================================
-   6.  Scene chips - one htmx GET each
-   ========================================================================== */
 .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .chip {
   position: relative;
@@ -332,9 +312,6 @@ body[data-playing="true"] .state::before { background: var(--accent); box-shadow
 }
 .chip.is-pending::after { opacity: 1; animation: pip 1s ease-in-out infinite; }
 
-/* ==========================================================================
-   7.  Panel - the fragment
-   ========================================================================== */
 .panel {
   position: relative; overflow: hidden;
   border-radius: 22px;
@@ -343,14 +320,14 @@ body[data-playing="true"] .state::before { background: var(--accent); box-shadow
   background: linear-gradient(150deg, rgba(255,255,255,.07), rgba(255,255,255,.018));
   box-shadow: 0 30px 70px -46px #000, inset 0 1px 0 rgba(255,255,255,.12);
 }
-.panel::before {                              /* request sheen */
+.panel::before {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.13) 50%, transparent 80%);
   transform: translateX(-100%);
   opacity: 0;
 }
 .panel.is-loading::before { opacity: 1; animation: sheen 1.1s linear infinite; }
-.panel::after {                               /* arrival ripple */
+.panel::after {
   content: ''; position: absolute; left: 0; right: 0; top: 0; height: 1px;
   pointer-events: none; opacity: 0;
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
@@ -373,9 +350,6 @@ body[data-playing="true"] .state::before { background: var(--accent); box-shadow
   white-space: nowrap;
 }
 
-/* ==========================================================================
-   8.  Dials
-   ========================================================================== */
 .dials { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 15px 22px; }
 .dial__top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-bottom: 2px; }
 .dial__name { font-size: .64rem; letter-spacing: .18em; text-transform: uppercase; color: #8d9fc2; }
@@ -413,9 +387,6 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 }
 input[type="range"]:focus-visible { outline: none; }
 
-/* ==========================================================================
-   9.  Breath cue, footer, toast
-   ========================================================================== */
 .breath {
   display: flex; align-items: center; gap: 17px;
   padding: .85rem 1.05rem;
@@ -426,12 +397,32 @@ input[type="range"]:focus-visible { outline: none; }
 }
 .breath__text { transition: opacity .5s ease; }
 .breath.is-loading .breath__text { opacity: .35; }
-.breath__ring {
-  flex: none; width: 32px; height: 32px; border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--accent) 52%, transparent);
-  box-shadow: 0 0 22px -9px var(--accent);
-  animation: inhale 9s cubic-bezier(.4,0,.5,1) infinite;
+
+/* Blooming Lotus breathing icon styles */
+.breath__icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 55%, transparent));
 }
+.breath__lotus {
+  width: 100%;
+  height: 100%;
+  animation: lotus-breathe var(--breath, 9s) cubic-bezier(.4, 0, .5, 1) infinite;
+}
+.breath__lotus .petal {
+  transform-origin: 24px 34px;
+}
+.breath__lotus .p-left-1  { animation: petal-expand-l1 var(--breath, 9s) cubic-bezier(.4, 0, .5, 1) infinite; }
+.breath__lotus .p-right-1 { animation: petal-expand-r1 var(--breath, 9s) cubic-bezier(.4, 0, .5, 1) infinite; }
+.breath__lotus .p-left-2  { animation: petal-expand-l2 var(--breath, 9s) cubic-bezier(.4, 0, .5, 1) infinite; }
+.breath__lotus .p-right-2 { animation: petal-expand-r2 var(--breath, 9s) cubic-bezier(.4, 0, .5, 1) infinite; }
+.breath__lotus .lotus__core { animation: core-pulse var(--breath, 9s) cubic-bezier(.4, 0, .5, 1) infinite; }
+
 .foot {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 5px 18px;
   font-size: .66rem; letter-spacing: .09em; text-transform: uppercase; color: #74859f;
@@ -462,9 +453,6 @@ input[type="range"]:focus-visible { outline: none; }
   color: #cfdcf3; font-size: .9rem; text-align: center;
 }
 
-/* ==========================================================================
-   10.  Keyframes
-   ========================================================================== */
 @keyframes sweep        { to { --sweep: 360deg; } }
 @keyframes sky-drift {
   from { transform: translate3d(0,0,0) scale(1); }
@@ -486,14 +474,37 @@ input[type="range"]:focus-visible { outline: none; }
 @keyframes halo-pulse  { 0%,100% { transform: scale(.9); opacity: .6; } 50% { transform: scale(1.06); opacity: .95; } }
 @keyframes ring-out { 0% { transform: scale(.72); opacity: 0; } 18% { opacity: .7; } 100% { transform: scale(1.95); opacity: 0; } }
 @keyframes idle-wave { from { transform: scaleY(.06); } to { transform: scaleY(.24); } }
-@keyframes inhale { 0%, 100% { transform: scale(.48); opacity: .2; } 42% { transform: scale(1.12); opacity: .95; } }
+
+/* Keyframe animations for lotus blooming */
+@keyframes lotus-breathe {
+  0%, 100% { transform: scale(0.72) translateY(1px); opacity: 0.5; }
+  42%      { transform: scale(1.15) translateY(-1px); opacity: 1; }
+}
+@keyframes petal-expand-l1 {
+  0%, 100% { transform: rotate(0deg) scale(0.85); }
+  42%      { transform: rotate(-14deg) scale(1.05); }
+}
+@keyframes petal-expand-r1 {
+  0%, 100% { transform: rotate(0deg) scale(0.85); }
+  42%      { transform: rotate(14deg) scale(1.05); }
+}
+@keyframes petal-expand-l2 {
+  0%, 100% { transform: rotate(0deg) scale(0.8); }
+  42%      { transform: rotate(-26deg) scale(1.1); }
+}
+@keyframes petal-expand-r2 {
+  0%, 100% { transform: rotate(0deg) scale(0.8); }
+  42%      { transform: rotate(26deg) scale(1.1); }
+}
+@keyframes core-pulse {
+  0%, 100% { transform: scale(0.7); opacity: 0.5; }
+  42%      { transform: scale(1.3); opacity: 1; }
+}
+
 @keyframes sheen { to { transform: translateX(100%); } }
 @keyframes ripple { 0% { opacity: 0; transform: translateY(0); } 18% { opacity: .9; } 100% { opacity: 0; transform: translateY(160px); } }
 @keyframes pip { 0%,100% { opacity: .25; transform: scale(.65); } 50% { opacity: 1; transform: scale(1.1); } }
 
-/* ==========================================================================
-   11.  Responsive + reduced motion
-   ========================================================================== */
 @media (max-width: 640px) {
   .stage { flex-direction: column; align-items: stretch; gap: 14px; }
   .orb { align-self: center; }
@@ -515,9 +526,6 @@ input[type="range"]:focus-visible { outline: none; }
 </head>
 <body data-playing="false">
 
-<!-- ======================================================================
-     The scene: seven pure-CSS layers of weather.
-     ====================================================================== -->
 <div class="scene" aria-hidden="true">
   <div class="l-sky"></div>
   <div class="l-stars"></div>
@@ -562,20 +570,18 @@ input[type="range"]:focus-visible { outline: none; }
     </div>
   </section>
 
-  <!-- Each chip is one GET. The panel below is what comes back. -->
   <nav class="chips" id="chips" aria-label="Soundscapes">
-    <button class="chip" type="button" data-id="still-water" aria-current="true" hx-get="/fragments/preset/still-water" hx-target="#preset-panel" hx-swap="outerHTML">Still Water</button>
-    <button class="chip" type="button" data-id="rain"        hx-get="/fragments/preset/rain"        hx-target="#preset-panel" hx-swap="outerHTML">Rain on Glass</button>
+    <button class="chip" type="button" data-id="tide"        aria-current="true" hx-get="/fragments/preset/tide"        hx-target="#preset-panel" hx-swap="outerHTML">Night Tide</button>
     <button class="chip" type="button" data-id="embers"      hx-get="/fragments/preset/embers"      hx-target="#preset-panel" hx-swap="outerHTML">Warm Embers</button>
     <button class="chip" type="button" data-id="forest"      hx-get="/fragments/preset/forest"      hx-target="#preset-panel" hx-swap="outerHTML">Deep Forest</button>
+    <button class="chip" type="button" data-id="still-water" hx-get="/fragments/preset/still-water" hx-target="#preset-panel" hx-swap="outerHTML">Still Water</button>
+    <button class="chip" type="button" data-id="rain"        hx-get="/fragments/preset/rain"        hx-target="#preset-panel" hx-swap="outerHTML">Rain on Glass</button>
     <button class="chip" type="button" data-id="aurora"      hx-get="/fragments/preset/aurora"      hx-target="#preset-panel" hx-swap="outerHTML">Aurora Drift</button>
-    <button class="chip" type="button" data-id="tide"        hx-get="/fragments/preset/tide"        hx-target="#preset-panel" hx-swap="outerHTML">Night Tide</button>
   </nav>
 
-  <!-- htmx fetches the opening fragment on load. -->
-  <section id="preset-slot" hx-get="/fragments/preset/still-water" hx-trigger="load" hx-target="#preset-panel" hx-swap="outerHTML">
+  <section id="preset-slot" hx-get="/fragments/preset/tide" hx-trigger="load" hx-target="#preset-panel" hx-swap="outerHTML">
     <div class="panel is-skeleton" id="preset-panel">
-      <h2 class="panel__title">Still Water</h2>
+      <h2 class="panel__title">Night Tide</h2>
       <p class="panel__blurb">settling the room&hellip;</p>
     </div>
   </section>
@@ -586,31 +592,40 @@ input[type="range"]:focus-visible { outline: none; }
       <input type="range" id="d-volume" min="0" max="100" value="60" aria-label="Volume">
     </div>
     <div class="dial">
-      <div class="dial__top"><span class="dial__name">Warmth</span><span class="dial__val" id="v-warmth">820 Hz</span></div>
-      <input type="range" id="d-warmth" min="0" max="100" value="38" aria-label="Warmth, low-pass cutoff">
+      <div class="dial__top"><span class="dial__name">Warmth</span><span class="dial__val" id="v-warmth">520 Hz</span></div>
+      <input type="range" id="d-warmth" min="0" max="100" value="26" aria-label="Warmth, low-pass cutoff">
     </div>
     <div class="dial">
-      <div class="dial__top"><span class="dial__name">Space</span><span class="dial__val" id="v-space">55%</span></div>
-      <input type="range" id="d-space" min="0" max="100" value="55" aria-label="Space, reverb amount">
+      <div class="dial__top"><span class="dial__name">Space</span><span class="dial__val" id="v-space">78%</span></div>
+      <input type="range" id="d-space" min="0" max="100" value="78" aria-label="Space, reverb amount">
     </div>
     <div class="dial">
-      <div class="dial__top"><span class="dial__name">Drift</span><span class="dial__val" id="v-drift">35%</span></div>
-      <input type="range" id="d-drift" min="0" max="100" value="35" aria-label="Drift, filter movement">
+      <div class="dial__top"><span class="dial__name">Drift</span><span class="dial__val" id="v-drift">22%</span></div>
+      <input type="range" id="d-drift" min="0" max="100" value="22" aria-label="Drift, filter movement">
     </div>
     <div class="dial">
-      <div class="dial__top"><span class="dial__name">Air</span><span class="dial__val" id="v-air">4%</span></div>
-      <input type="range" id="d-air" min="0" max="100" value="4" aria-label="Air, noise bed">
+      <div class="dial__top"><span class="dial__name">Air</span><span class="dial__val" id="v-air">12%</span></div>
+      <input type="range" id="d-air" min="0" max="100" value="12" aria-label="Air, noise bed">
     </div>
     <div class="dial">
-      <div class="dial__top"><span class="dial__name">Bells</span><span class="dial__val" id="v-sparkle">30%</span></div>
-      <input type="range" id="d-sparkle" min="0" max="100" value="30" aria-label="Bells, chime density">
+      <div class="dial__top"><span class="dial__name">Bells</span><span class="dial__val" id="v-sparkle">20%</span></div>
+      <input type="range" id="d-sparkle" min="0" max="100" value="20" aria-label="Bells, chime density">
     </div>
   </section>
 
-  <!-- The polling element is never replaced, so the htmx timer stays stable.
-       Only the sentence inside it is swapped. -->
   <aside class="breath" id="breath-slot" hx-get="/fragments/breath" hx-trigger="load, every 19s" hx-target=".breath__text" hx-swap="innerHTML">
-    <span class="breath__ring" aria-hidden="true"></span>
+    <div class="breath__icon" aria-hidden="true">
+      <svg class="breath__lotus" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g class="lotus__petals">
+          <path d="M24 8 C16 18 12 28 24 40 C36 28 32 18 24 8 Z" fill="currentColor" opacity="0.3" class="petal p-center"/>
+          <path d="M24 14 C12 20 8 30 20 38 C28 32 26 22 24 14 Z" fill="currentColor" opacity="0.25" class="petal p-left-1"/>
+          <path d="M24 14 C36 20 40 30 28 38 C20 32 22 22 24 14 Z" fill="currentColor" opacity="0.25" class="petal p-right-1"/>
+          <path d="M24 20 C10 26 6 34 16 40 C26 38 26 28 24 20 Z" fill="currentColor" opacity="0.18" class="petal p-left-2"/>
+          <path d="M24 20 C38 26 42 34 32 40 C22 38 22 28 24 20 Z" fill="currentColor" opacity="0.18" class="petal p-right-2"/>
+        </g>
+        <circle cx="24" cy="34" r="3.5" fill="currentColor" class="lotus__core"/>
+      </svg>
+    </div>
     <p class="breath__text">Breathe in for four, and let the sound arrive with you.</p>
   </aside>
 
@@ -626,13 +641,6 @@ input[type="range"]:focus-visible { outline: none; }
 <div class="toast" id="toast" aria-hidden="true"></div>
 <p class="sr" id="live" aria-live="polite" aria-atomic="true"></p>
 <noscript><div class="noscript-card"><strong>Serene needs JavaScript.</strong> The tone, the fragments and the weather are all generated in the browser &mdash; there is nothing to fall back to.</div></noscript>
-
-<!-- ======================================================================
-     FRAGMENTS.
-     In production these are server-rendered pages. Here they are templates
-     that the in-page router below serves to htmx.
-     data-preset is the whole contract: the audio engine reads nothing else.
-     ====================================================================== -->
 
 <template id="tpl-preset-still-water">
   <section class="panel" id="preset-panel" data-preset='{"id":"still-water","name":"Still Water","theme":"still-water","accent":"#8fd8ff","root":130.81,"chord":[0,7,12,16],"waves":["sine","sine","triangle","sine"],"detune":[0,-6,5,9],"gains":[0.5,0.26,0.2,0.1],"cutoff":820,"q":0.6,"space":0.55,"drift":0.35,"swell":0.3,"air":0.04,"airTone":900,"sparkle":0.3}'>
@@ -751,19 +759,11 @@ input[type="range"]:focus-visible { outline: none; }
 (function () {
   'use strict';
 
-  /* ====================================================================
-     1.  THE SERVER THAT LIVES IN THE PAGE Every hx-get in the markup points at /fragments/... . The requests
-         are intercepted, answered from the <template> bank, and handed
-         back through htmx's normal swap contract. Delete this whole
-         section and point the chips at a real endpoint instead - nothing
-         else in the file needs to change.
-     ==================================================================== */
   var BREATH_COUNT = 4;
   var breathCursor = 0;
 
   function tpl(id) { return document.getElementById('tpl-' + id); }
 
-  /* Returns the markup for a path, or null if we do not serve it. */
   function markup(action) {
     var key = String(action || '').split('?')[0].split('#')[0].replace(/\/+$/, '');
     var node, name;
@@ -779,22 +779,14 @@ input[type="range"]:focus-visible { outline: none; }
     return node ? node.innerHTML : null;
   }
 
-  /* ====================================================================
-     2.  REQUEST PLUMBING
-         htmx 4 renamed its events (htmx:beforeRequest -> htmx:before:request)
-         and moved the request context under detail.ctx. We listen for both
-         the v4 and the v2 names, and we only rely on documented surface:
-         detail.ctx / detail.elt, htmx.process(), htmx.trigger().
-     ==================================================================== */
   var htmxOk = !!(window.htmx && typeof window.htmx.process === 'function');
   var REQUEST_EVENTS = ['htmx:before:request', 'htmx:beforeRequest'];
-  var seq = 0;                       /* newest request wins */
+  var seq = 0;
 
   function attr(elt, name) {
     return (elt && elt.getAttribute) ? (elt.getAttribute(name) || '') : '';
   }
 
-  /* Pull the request context out of whichever htmx we are running under. */
   function readCtx(e) {
     var d = e.detail || {}, ctx = d.ctx || d, req = ctx.request || d.requestConfig || {};
     var elt = (e.target && e.target.nodeType === 1) ? e.target : (d.elt || ctx.sourceElement || null);
@@ -807,8 +799,6 @@ input[type="range"]:focus-visible { outline: none; }
     };
   }
 
-  /* Resolve hx-target ourselves, for the case where htmx has not (or when
-     htmx is missing entirely). */
   function resolveTarget(elt, hint) {
     if (hint && hint.nodeType === 1) return hint;
     var raw = attr(elt, 'hx-target').trim();
@@ -849,15 +839,13 @@ input[type="range"]:focus-visible { outline: none; }
   function ripple(node) {
     if (!node || !node.classList) return;
     node.classList.remove('is-new');
-    void node.offsetWidth;                    /* restart the animation */
+    void node.offsetWidth;
     node.classList.add('is-new');
   }
 
-  /* Serve one request. Returns true when we handled it (so the caller can
-     stop htmx from actually hitting the network). */
   function request(elt, action, target, spec) {
     var html = markup(action);
-    if (html == null) return false;           /* not ours - let htmx have it */
+    if (html == null) return false;
 
     var mine = ++seq;
     var node = target || resolveTarget(elt, null);
@@ -870,7 +858,7 @@ input[type="range"]:focus-visible { outline: none; }
 
     var delay = 70 + Math.random() * 80;
     window.setTimeout(function () {
-      if (mine === seq) {                     /* out-of-order responses are dropped */
+      if (mine === seq) {
         var fresh = swapIn(node, html, swapStyle);
         if (fresh && fresh.id === 'preset-panel') ripple(fresh);
       }
@@ -888,7 +876,6 @@ input[type="range"]:focus-visible { outline: none; }
       });
     });
   } else {
-    /* Same contract, no htmx on the page: click, load, and every-Ns. */
     document.addEventListener('click', function (e) {
       var elt = e.target && e.target.closest ? e.target.closest('[hx-get]') : null;
       if (!elt) return;
@@ -908,27 +895,20 @@ input[type="range"]:focus-visible { outline: none; }
     });
   }
 
-  /* Safety net: if nothing has replaced the opening skeleton by now, serve it
-     directly, so the interface can never be left half-built. */
   window.setTimeout(function () {
     var p = document.getElementById('preset-panel');
     if (p && p.classList.contains('is-skeleton')) {
-      var fresh = swapIn(p, markup('/fragments/preset/still-water'), 'outerHTML');
+      var fresh = swapIn(p, markup('/fragments/preset/tide'), 'outerHTML');
       if (fresh) ripple(fresh);
     }
   }, 1600);
 
-  /* ====================================================================
-     3.  THE INSTRUMENT
-         Four detuned voices, a noise bed, two very slow LFOs, a
-         procedurally generated reverb, and a sparse bell layer.
-     ==================================================================== */
   var DEFAULT = {
-    id: 'still-water', name: 'Still Water', theme: 'still-water', accent: '#8fd8ff',
-    root: 130.81, chord: [0, 7, 12, 16],
-    waves: ['sine', 'sine', 'triangle', 'sine'],
-    detune: [0, -6, 5, 9], gains: [0.5, 0.26, 0.2, 0.1],
-    cutoff: 820, q: 0.6, space: 0.55, drift: 0.35, swell: 0.3, air: 0.04, airTone: 900, sparkle: 0.3
+    id: 'tide', name: 'Night Tide', theme: 'tide', accent: '#93a8ff',
+    root: 73.42, chord: [0, 7, 12, 19],
+    waves: ['sine', 'sine', 'sine', 'sine'],
+    detune: [0, -7, 6, 3], gains: [0.55, 0.24, 0.18, 0.1],
+    cutoff: 520, q: 0.5, space: 0.78, drift: 0.22, swell: 0.6, air: 0.12, airTone: 320, sparkle: 0.2
   };
   var SCALE = [0, 3, 5, 7, 10, 12, 15, 17, 19, 24];
 
@@ -1071,7 +1051,6 @@ input[type="range"]:focus-visible { outline: none; }
     A.master.gain.cancelScheduledValues(now);
     A.master.gain.setValueAtTime(A.master.gain.value, now);
     A.master.gain.linearRampToValueAtTime(0.0001, now + 2.2);
-    /* nothing audible is left after the fade, so stop burning CPU */
     window.setTimeout(function () {
       if (!A.playing && A.ctx && A.ctx.state === 'running') A.ctx.suspend();
     }, 2500);
@@ -1108,9 +1087,6 @@ input[type="range"]:focus-visible { outline: none; }
   }
   window.setInterval(schedule, 400);
 
-  /* ====================================================================
-     4.  INTERFACE
-     ==================================================================== */
   function $(s) { return document.querySelector(s); }
   var toggleBtn = $('#toggle'), muteBtn = $('#mute'), sleepBtn = $('#sleep');
   var clock = $('#clock'), stateEl = $('#state'), toast = $('#toast'), live = $('#live');
@@ -1142,7 +1118,6 @@ input[type="range"]:focus-visible { outline: none; }
     try { return localStorage.getItem('serene.' + key); } catch (e) { return null; }
   }
 
-  /* ---- dials ------------------------------------------------------- */
   var dials = [
     { input: $('#d-volume'), out: $('#v-volume'), key: 'volume', to: identity, from: identity, fmt: pct,
       set: function (v) { A.vol = v; pushMaster(); } },
@@ -1183,7 +1158,6 @@ input[type="range"]:focus-visible { outline: none; }
 
   dials[0].input.addEventListener('change', function () { store('vol', String(A.vol)); });
 
-  /* ---- scenes ------------------------------------------------------ */
   function chipFor(id) {
     for (var i = 0; i < chips.length; i++) if (chips[i].dataset.id === id) return chips[i];
     return null;
@@ -1218,8 +1192,7 @@ input[type="range"]:focus-visible { outline: none; }
   function setPreset(p) {
     if (!p || !p.id) return;
     A.data = p;
-    document.documentElement.dataset.theme = p.theme || 'still-water';
-    /* the orb, the rings and the halo all breathe on the audio's own tempo */
+    document.documentElement.dataset.theme = p.theme || 'tide';
     document.documentElement.style.setProperty('--breath', (18 - (p.swell || 0.3) * 11).toFixed(1) + 's');
     if (A.ctx) apply(p, false);
     syncDials();
@@ -1231,14 +1204,12 @@ input[type="range"]:focus-visible { outline: none; }
     }
   }
 
-  /* a fragment landed - read its data-preset and retune */
   document.addEventListener('serene:fragment', function (e) {
     var node = e.target && e.target.closest ? e.target.closest('[data-preset]') : null;
     if (!node) return;
     try { setPreset(JSON.parse(node.getAttribute('data-preset'))); } catch (err) {}
   });
 
-  /* ---- sleep timer -------------------------------------------------- */
   var SLEEPS = [0, 15, 30, 60];
   var sleepIdx = 0, sleepEndsAt = 0;
 
@@ -1286,7 +1257,6 @@ input[type="range"]:focus-visible { outline: none; }
     announce('will fade out in ' + SLEEPS[sleepIdx] + ' minutes');
   }
 
-  /* ---- buttons ------------------------------------------------------ */
   toggleBtn.addEventListener('click', toggle);
   sleepBtn.addEventListener('click', cycleSleep);
   muteBtn.addEventListener('click', function () {
@@ -1296,7 +1266,6 @@ input[type="range"]:focus-visible { outline: none; }
     announce(A.muted ? 'Muted' : 'Unmuted');
   });
 
-  /* ---- clocks ------------------------------------------------------- */
   window.setInterval(function () {
     if (A.playing) {
       var s = Math.floor((Date.now() - started) / 1000);
@@ -1308,7 +1277,6 @@ input[type="range"]:focus-visible { outline: none; }
     }
   }, 1000);
 
-  /* ---- keyboard ------------------------------------------------------ */
   document.addEventListener('keydown', function (e) {
     var t = e.target || {};
     var k = e.key;
@@ -1316,7 +1284,7 @@ input[type="range"]:focus-visible { outline: none; }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     var key = k.length === 1 ? k.toLowerCase() : k;
     if (key === ' ' || e.code === 'Space') {
-      if (t.tagName === 'BUTTON' || t.tagName === 'A') return;   /* the button handles it */
+      if (t.tagName === 'BUTTON' || t.tagName === 'A') return;
       e.preventDefault(); toggle();
     } else if (key === 'ArrowUp' || key === 'ArrowRight') {
       e.preventDefault(); A.vol = Math.max(0, Math.min(1, A.vol + 0.05)); pushMaster(); paintDial(dials[0]);
@@ -1331,10 +1299,6 @@ input[type="range"]:focus-visible { outline: none; }
     }
   });
 
-  /* ====================================================================
-     5.  THE TWO IMPERATIVE VISUALS
-         The CSS does all the styling; this only hands it numbers.
-     ==================================================================== */
   var spec = $('#spectrum'), bars = [], i;
   for (i = 0; i < 46; i++) {
     var bar = document.createElement('i');
@@ -1343,9 +1307,9 @@ input[type="range"]:focus-visible { outline: none; }
     bars.push(bar);
   }
 
-  /* pointer parallax on the orb: a slow lean toward the cursor */
+  var followCursor = false;
   var pm = { x: 0.5, y: 0.38, tx: 0.5, ty: 0.38 };
-  if (!reduced && window.matchMedia && window.matchMedia('(hover: hover)').matches) {
+  if (followCursor && !reduced && window.matchMedia && window.matchMedia('(hover: hover)').matches) {
     orb.addEventListener('pointermove', function (e) {
       var r = orb.getBoundingClientRect();
       pm.tx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
@@ -1368,18 +1332,17 @@ input[type="range"]:focus-visible { outline: none; }
       }
     }
 
-    pm.x += (pm.tx - pm.x) * 0.09;
-    pm.y += (pm.ty - pm.y) * 0.09;
-    orb.style.setProperty('--mx', pm.x.toFixed(3));
-    orb.style.setProperty('--my', pm.y.toFixed(3));
-    orb.style.setProperty('--ry', ((pm.x - 0.5) * 9).toFixed(2) + 'deg');
-    orb.style.setProperty('--rx', ((0.5 - pm.y) * 8).toFixed(2) + 'deg');
+    if (followCursor) {
+      pm.x += (pm.tx - pm.x) * 0.09;
+      pm.y += (pm.ty - pm.y) * 0.09;
+      orb.style.setProperty('--mx', pm.x.toFixed(3));
+      orb.style.setProperty('--my', pm.y.toFixed(3));
+      orb.style.setProperty('--ry', ((pm.x - 0.5) * 9).toFixed(2) + 'deg');
+      orb.style.setProperty('--rx', ((0.5 - pm.y) * 8).toFixed(2) + 'deg');
+    }
   }
   requestAnimationFrame(frame);
 
-  /* ====================================================================
-     6.  BOOT
-     ==================================================================== */
   var savedVol = parseFloat(recall('vol'));
   if (!isNaN(savedVol)) A.vol = Math.max(0, Math.min(1, savedVol));
 
@@ -1388,7 +1351,6 @@ input[type="range"]:focus-visible { outline: none; }
   setPlaying(false, true);
   markChips(DEFAULT.id);
 
-  /* deep links: #rain opens Rain on Glass */
   function wantedScene() {
     var h = (window.location.hash || '').replace('#', '').trim();
     if (h && chipFor(h)) return h;
@@ -1401,7 +1363,6 @@ input[type="range"]:focus-visible { outline: none; }
     if (chip && chip.getAttribute('aria-current') !== 'true') chip.click();
   });
 
-  /* the opening fragment arrives from htmx on load; then honour the link */
   document.addEventListener('serene:fragment', function once(e) {
     if (!e.target || !e.target.closest || !e.target.closest('[data-preset]')) return;
     document.removeEventListener('serene:fragment', once, true);
