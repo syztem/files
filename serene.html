@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="description" content="Serene - a tranquil tone generator. Web Audio drones, CSS-generated weather, htmx fragments.">
-<title>Serene</title>
+<title>Serene &middot; tranquil tone generator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,200;9..144,300&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
@@ -335,11 +335,16 @@ body[data-playing="true"] .state::before { background: var(--accent); box-shadow
 .panel.is-new::after { animation: ripple 1s cubic-bezier(.2,.7,.3,1) 1; }
 .panel.is-skeleton { color: #6b7c9c; font-size: .86rem; }
 .panel__row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; }
+.panel__row > div { display: flex; align-items: baseline; gap: 12px; min-width: 0; flex: 1; }
 .panel__title {
   font: 300 clamp(1.12rem, 2.5vw, 1.45rem)/1.2 'Fraunces', Georgia, serif;
   color: #f2f7ff; letter-spacing: .005em;
+  white-space: nowrap; flex-shrink: 0;
 }
-.panel__blurb { font-size: .85rem; color: #a6b5d4; max-width: 44ch; }
+.panel__blurb {
+  font-size: .85rem; color: #a6b5d4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .tag {
   font-size: .63rem; letter-spacing: .11em; text-transform: uppercase;
@@ -509,7 +514,6 @@ input[type="range"]:focus-visible { outline: none; }
   .stage { flex-direction: column; align-items: stretch; gap: 14px; }
   .orb { align-self: center; }
   .spectrum { justify-content: center; }
-  .panel__row { flex-direction: column; }
   .stage__meta { flex-wrap: wrap; }
   .state { flex-basis: 100%; }
 }
@@ -581,8 +585,12 @@ input[type="range"]:focus-visible { outline: none; }
 
   <section id="preset-slot" hx-get="/fragments/preset/tide" hx-trigger="load" hx-target="#preset-panel" hx-swap="outerHTML">
     <div class="panel is-skeleton" id="preset-panel">
-      <h2 class="panel__title">Night Tide</h2>
-      <p class="panel__blurb">settling the room&hellip;</p>
+      <div class="panel__row">
+        <div>
+          <h2 class="panel__title">Night Tide</h2>
+          <p class="panel__blurb">settling the room&hellip;</p>
+        </div>
+      </div>
     </div>
   </section>
 

@@ -1,0 +1,1634 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SETT — Plate Studies in Cloth</title>
+<meta name="description" content="Six woven structures, computed live in the browser. The weaving draft as score, the cloth as performance. Single file, SVG and htmx 4.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F4F0E6">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23F4F0E6'/%3E%3Cg fill='%2322346B'%3E%3Crect x='4' y='4' width='6' height='6'/%3E%3Crect x='16' y='4' width='6' height='6'/%3E%3Crect x='10' y='10' width='6' height='6'/%3E%3Crect x='22' y='10' width='6' height='6'/%3E%3Crect x='4' y='16' width='6' height='6'/%3E%3Crect x='16' y='16' width='6' height='6'/%3E%3Crect x='10' y='22' width='6' height='6'/%3E%3Crect x='22' y='22' width='6' height='6'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+/* ============================================================
+   SETT — Plate Studies in Cloth
+   A single file. Paper, ink, and thread.
+   ============================================================ */
+
+:root{
+  --paper:      #F4F0E6;
+  --paper-hi:   #FBF8F1;
+  --paper-lo:   #EBE4D6;
+  --ink:        #191510;
+  --ink-2:      #4E463B;
+  --ink-3:      #8C8073;
+  --ink-4:      #AFA495;
+  --rule:       #D8CFBE;
+  --rule-2:     #C3B7A2;
+
+  --indigo:     #22346B;
+  --madder:     #A63A26;
+  --weld:       #A87C22;
+  --oak:        #3A2A1B;
+  --moss:       #4C6042;
+  --undyed:     #E4D9C1;
+  --wool:       #F7F2E6;
+
+  --serif: 'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua','URW Palladio L',P052,Georgia,'Times New Roman',serif;
+  --mono:  ui-monospace,'SF Mono',SFMono-Regular,'Cascadia Mono','JetBrains Mono','IBM Plex Mono',Menlo,Consolas,'Liberation Mono',monospace;
+
+  --gut:  clamp(18px, 4.6vw, 72px);
+  --maxw: 1360px;
+  --ease: cubic-bezier(.22,.61,.36,1);
+  --ease-io: cubic-bezier(.65,.02,.28,1);
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+
+html{
+  -webkit-text-size-adjust:100%;
+  scroll-behavior:smooth;
+  scroll-padding-top:5.5rem;
+}
+
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:clamp(16px, .34vw + 14.6px, 19.5px);
+  line-height:1.62;
+  font-kerning:normal;
+  font-variant-numeric:oldstyle-nums proportional-nums;
+  text-rendering:optimizeLegibility;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  overflow-x:hidden;
+  /* rag-paper grain, generated in SVG so the file stays self-contained */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23g)' opacity='.055'/%3E%3C/svg%3E");
+  background-attachment:fixed, scroll;
+}
+
+/* --- shared atoms ------------------------------------------- */
+
+.wrap{ width:100%; max-width:var(--maxw); margin-inline:auto; padding-inline:var(--gut); }
+
+.rule{ height:1px; background:var(--rule); border:0; margin:0; }
+.rule--ink{ background:var(--ink); }
+.rule--soft{ background:var(--rule); opacity:.55; }
+
+.eyebrow{
+  font-family:var(--mono);
+  font-size:clamp(9.5px,.16vw + 9px,11px);
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+  font-weight:500;
+  margin:0;
+  line-height:1.4;
+}
+.eyebrow--ink{ color:var(--ink); }
+
+.num{
+  font-family:var(--mono);
+  font-variant-numeric:tabular-nums lining-nums;
+  font-feature-settings:"tnum" 1,"lnum" 1;
+}
+
+.smallcaps{
+  font-variant-caps:all-small-caps;
+  letter-spacing:.1em;
+}
+
+.sr-only{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+}
+
+a{ color:inherit; }
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible,
+input:focus-visible{
+  outline:2px solid var(--indigo);
+  outline-offset:3px;
+  border-radius:1px;
+}
+
+::selection{ background:var(--ink); color:var(--paper); }
+
+/* --- section scaffolding ------------------------------------- */
+
+.sec{ padding-block:clamp(3.5rem, 7vw, 8rem); position:relative; }
+.sec + .sec{ border-top:1px solid var(--rule); }
+
+.sec-head{
+  display:flex; align-items:baseline; gap:1.25rem;
+  margin-bottom:clamp(2rem,3.6vw,3.4rem);
+}
+.sec-head__t{
+  font-size:clamp(11px,.2vw + 10px,12.5px);
+  font-family:var(--mono);
+  letter-spacing:.2em;
+  text-transform:uppercase;
+  color:var(--ink);
+  white-space:nowrap;
+}
+.sec-head__r{ flex:1; height:1px; background:var(--rule); }
+
+h2.sec-title{
+  font-size:clamp(2.1rem, 4.6vw, 4.1rem);
+  line-height:1.02;
+  letter-spacing:-.022em;
+  font-weight:400;
+  margin:0 0 1.1rem;
+  text-wrap:balance;
+}
+h2.sec-title em{ font-style:italic; }
+
+.lede{
+  font-size:clamp(1.06rem,.5vw + .95rem,1.32rem);
+  line-height:1.56;
+  color:var(--ink-2);
+  max-width:46ch;
+  margin:0;
+  text-wrap:pretty;
+}
+
+/* --- masthead ---------------------------------------------- */
+
+.masthead{
+  position:sticky; top:0; z-index:40;
+  background:color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter:blur(14px) saturate(1.3);
+  -webkit-backdrop-filter:blur(14px) saturate(1.3);
+  border-bottom:1px solid var(--rule);
+}
+.masthead__in{
+  display:flex; align-items:center; gap:clamp(.9rem,2vw,2rem);
+  height:clamp(52px,5.4vw,64px);
+}
+.mark{
+  display:flex; align-items:center; gap:.62rem;
+  text-decoration:none; color:var(--ink);
+  flex:0 0 auto;
+}
+.mark svg{ display:block; }
+.mark__w{
+  font-family:var(--mono); font-size:12.5px; letter-spacing:.34em;
+  text-transform:uppercase; font-weight:600; white-space:nowrap;
+}
+.masthead__nav{
+  display:flex; gap:clamp(.85rem,1.9vw,1.9rem);
+  margin-left:auto; flex-wrap:wrap; justify-content:flex-end;
+}
+.masthead__nav a{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.16em;
+  text-transform:uppercase; text-decoration:none; color:var(--ink-3);
+  padding-block:.3rem; position:relative; transition:color .28s var(--ease);
+  white-space:nowrap;
+}
+.masthead__nav a::after{
+  content:''; position:absolute; left:0; right:100%; bottom:0;
+  height:1px; background:var(--ink); transition:right .38s var(--ease);
+}
+.masthead__nav a:hover{ color:var(--ink); }
+.masthead__nav a:hover::after{ right:0; }
+@media (max-width:640px){ .masthead__nav a:nth-child(n+4){ display:none; } }
+
+/* --- PLATE I : the hero ------------------------------------ */
+
+.hero{
+  padding-block:clamp(2.6rem,5.4vw,5.2rem) clamp(3rem,6vw,6rem);
+  border-bottom:1px solid var(--rule);
+}
+.hero__grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:clamp(2.2rem,4.6vw,4.6rem);
+  align-items:start;
+}
+@media (min-width:960px){
+  .hero__grid{ grid-template-columns:minmax(0,5.15fr) minmax(0,6.85fr); gap:clamp(2.5rem,4.2vw,4.4rem); }
+}
+
+.plate-no{
+  display:flex; align-items:baseline; gap:.9rem;
+  padding-bottom:.75rem; margin-bottom:clamp(1.5rem,3vw,2.4rem);
+  border-bottom:1px solid var(--ink);
+}
+.plate-no__n{
+  font-family:var(--mono); font-size:11px; letter-spacing:.2em;
+  color:var(--ink); text-transform:uppercase;
+}
+.plate-no__t{
+  font-family:var(--mono); font-size:10px; letter-spacing:.2em;
+  color:var(--ink-3); text-transform:uppercase; margin-left:auto;
+}
+
+h1.hero__title{
+  font-size:clamp(2.55rem, 7.4vw, 5.9rem);
+  line-height:.95;
+  letter-spacing:-.033em;
+  font-weight:400;
+  margin:0 0 clamp(1.3rem,2.4vw,1.9rem);
+  text-wrap:balance;
+}
+h1.hero__title .l2{ display:block; }
+h1.hero__title em{
+  font-style:italic; letter-spacing:-.028em;
+  color:var(--indigo);
+}
+h1.hero__title .amp{
+  font-style:normal; color:var(--ink-3);
+  font-size:.52em; vertical-align:.24em; padding-inline:.14em;
+  letter-spacing:0;
+}
+
+.hero__lede{
+  font-size:clamp(1.04rem,.46vw + .92rem,1.26rem);
+  line-height:1.58;
+  color:var(--ink-2);
+  max-width:44ch;
+  margin:0 0 clamp(1.8rem,3vw,2.4rem);
+  text-wrap:pretty;
+}
+.hero__lede strong{ font-weight:400; color:var(--ink); font-style:italic; }
+
+/* metadata table */
+.meta{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:0;
+  border-top:1px solid var(--rule);
+  border-left:1px solid var(--rule);
+  margin:0;
+}
+.meta__c{
+  padding:.72rem .85rem .78rem;
+  border-right:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);
+  min-width:0;
+}
+.meta__k{
+  display:block;
+  font-family:var(--mono); font-size:9px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-4);
+  margin-bottom:.3rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.meta__v{
+  display:block;
+  font-family:var(--mono); font-size:12.5px; letter-spacing:.01em;
+  color:var(--ink); line-height:1.35;
+  font-variant-numeric:tabular-nums lining-nums;
+}
+
+/* --- the swatch mount -------------------------------------- */
+
+.stage{ position:relative; }
+.sw{
+  position:relative;
+  background:var(--paper-hi);
+  border:1px solid var(--rule-2);
+  padding:clamp(14px,1.7vw,26px);
+  box-shadow:
+    0 1px 0 rgba(25,21,16,.05),
+    0 14px 34px -18px rgba(25,21,16,.30),
+    0 3px 10px -5px rgba(25,21,16,.16);
+  transition:box-shadow .5s var(--ease), transform .5s var(--ease);
+}
+.sw:hover{
+  box-shadow:
+    0 1px 0 rgba(25,21,16,.05),
+    0 26px 56px -22px rgba(25,21,16,.36),
+    0 5px 14px -6px rgba(25,21,16,.18);
+}
+.sw__art{
+  position:relative; overflow:hidden;
+  background:var(--paper-lo);
+  aspect-ratio:1/1;
+}
+.sw__art svg{ display:block; width:100%; height:100%; }
+.sw__art::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  box-shadow:inset 0 0 0 1px rgba(25,21,16,.13), inset 0 2px 12px rgba(25,21,16,.10);
+}
+.sw__label{
+  display:flex; align-items:baseline; gap:.7rem; flex-wrap:wrap;
+  margin-top:.95rem;
+  font-family:var(--mono); font-size:10px; letter-spacing:.17em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.sw__label b{ font-weight:500; color:var(--ink); letter-spacing:.13em; }
+
+/* weave-in animation */
+.sw.is-weaving .sw__art{ animation:beat .62s var(--ease-io) both; }
+@keyframes beat{
+  0%   { clip-path:inset(0 0 100% 0); }
+  55%  { clip-path:inset(0 0 0 0); }
+  100% { clip-path:inset(0 0 0 0); }
+}
+
+/* beat cursor on the cloth */
+.beatline{
+  position:absolute; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,transparent,var(--ink) 18%,var(--ink) 82%,transparent);
+  opacity:0; pointer-events:none; z-index:2;
+}
+.sw.is-weaving .beatline{ animation:beatrun .62s var(--ease-io) both; }
+@keyframes beatrun{
+  0%{ top:0; opacity:0; }
+  10%{ opacity:.55; }
+  100%{ top:100%; opacity:0; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  html{ scroll-behavior:auto; }
+  .sw.is-weaving .sw__art, .sw.is-weaving .beatline{ animation:none; }
+  *,*::before,*::after{ transition-duration:.01ms !important; }
+}
+
+/* --- reveal-on-scroll -------------------------------------- */
+
+[data-reveal]{
+  opacity:0;
+  transform:translateY(14px);
+  transition:opacity .8s var(--ease), transform .8s var(--ease);
+}
+[data-reveal].is-in{ opacity:1; transform:none; }
+@media (prefers-reduced-motion: reduce){
+  [data-reveal]{ opacity:1; transform:none; }
+}
+
+/* --- PLATE II : the score (draft) --------------------------- */
+
+.score{
+  display:grid; gap:clamp(2rem,4vw,3.6rem);
+  grid-template-columns:minmax(0,1fr);
+}
+@media (min-width:1000px){
+  .score{ grid-template-columns:minmax(230px,272px) minmax(0,1fr); align-items:start; }
+}
+
+.rail{ display:flex; flex-direction:column; gap:clamp(1.5rem,2.6vw,2.2rem); }
+@media (min-width:1000px){
+  .rail{
+    position:sticky; top:calc(clamp(52px,5.4vw,64px) + 1.6rem);
+    max-height:calc(100vh - clamp(52px,5.4vw,64px) - 3.2rem);
+    overflow-y:auto; overscroll-behavior:contain;
+    padding-right:.4rem;
+  }
+}
+
+.fld__h{
+  display:flex; align-items:baseline; gap:.6rem;
+  padding-bottom:.55rem; margin:0 0 .8rem;
+  border-bottom:1px solid var(--ink);
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink);
+}
+.fld__h span{ margin-left:auto; color:var(--ink-4); letter-spacing:.14em; }
+
+.picker{ display:flex; flex-direction:column; gap:1px; background:var(--rule); border:1px solid var(--rule); }
+.picker button{
+  appearance:none; -webkit-appearance:none;
+  display:flex; align-items:center; gap:.62rem;
+  width:100%; text-align:left; cursor:pointer;
+  background:var(--paper-hi); color:var(--ink);
+  border:0; padding:.62rem .7rem;
+  font-family:var(--serif); font-size:.92rem; line-height:1.25;
+  transition:background .22s var(--ease), color .22s var(--ease);
+}
+.picker button:hover{ background:var(--paper-lo); }
+.picker button[aria-pressed="true"]{ background:var(--ink); color:var(--paper); }
+.picker button[aria-pressed="true"] .picker__n{ color:color-mix(in srgb, var(--paper) 62%, transparent); }
+.picker__n{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+  color:var(--ink-4); margin-left:auto; flex:0 0 auto;
+  font-variant-numeric:tabular-nums;
+}
+.picker__sw{ width:15px; height:15px; flex:0 0 auto; display:block; }
+.picker button[aria-pressed="true"] .picker__sw{ opacity:.9; }
+
+.dyes{ display:flex; gap:.6rem; flex-wrap:wrap; }
+.dyes button{
+  appearance:none; -webkit-appearance:none; cursor:pointer;
+  width:clamp(40px,4.4vw,50px); aspect-ratio:1/1; padding:0;
+  border:1px solid var(--rule-2); background:var(--paper-hi);
+  position:relative; transition:transform .26s var(--ease), border-color .26s var(--ease);
+}
+.dyes button:hover{ transform:translateY(-2px); }
+.dyes button[aria-pressed="true"]{ border-color:var(--ink); box-shadow:0 0 0 2px var(--paper-hi), 0 0 0 3px var(--ink); }
+.dyes button svg{ display:block; width:100%; height:100%; }
+.dyes__key{
+  font-family:var(--mono); font-size:9px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-4); margin-top:.7rem;
+}
+
+.btn{
+  appearance:none; -webkit-appearance:none; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; gap:.6rem;
+  width:100%; padding:.82rem 1rem;
+  background:var(--ink); color:var(--paper);
+  border:1px solid var(--ink);
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.2em;
+  text-transform:uppercase;
+  transition:background .24s var(--ease), color .24s var(--ease), transform .12s var(--ease);
+}
+.btn:hover{ background:var(--indigo); border-color:var(--indigo); }
+.btn:active{ transform:translateY(1px); }
+.btn--ghost{ background:transparent; color:var(--ink); border-color:var(--rule-2); }
+.btn--ghost:hover{ background:var(--paper-lo); color:var(--ink); border-color:var(--ink); }
+.btn svg{ display:block; }
+
+.readout{
+  border-top:1px solid var(--rule); padding-top:.8rem;
+  font-family:var(--mono); font-size:10.5px; line-height:1.85;
+  color:var(--ink-3); letter-spacing:.03em;
+}
+.readout b{ color:var(--ink); font-weight:500; font-variant-numeric:tabular-nums; }
+.readout div{ display:flex; gap:.6rem; }
+.readout i{ font-style:normal; color:var(--ink-4); min-width:6.5em; }
+
+/* --- the draft plate ---------------------------------------- */
+
+.plate{
+  background:var(--paper-hi);
+  border:1px solid var(--rule-2);
+  padding:clamp(14px,1.9vw,28px);
+  box-shadow:0 12px 30px -20px rgba(25,21,16,.3);
+}
+.plate__h{
+  display:flex; align-items:baseline; gap:.8rem; flex-wrap:wrap;
+  padding-bottom:.7rem; margin-bottom:clamp(1rem,1.8vw,1.5rem);
+  border-bottom:1px solid var(--rule);
+}
+.plate__t{
+  font-family:var(--mono); font-size:10px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink);
+}
+.plate__s{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-4); margin-left:auto;
+}
+.plate__art{ position:relative; overflow-x:auto; overflow-y:hidden; }
+.plate__art svg{ display:block; max-width:100%; height:auto; }
+
+.dg-cell{ fill:transparent; }
+.dg-mark{ fill:var(--ink); }
+.dg-rule{ stroke:var(--rule); stroke-width:1; fill:none; }
+.dg-frame{ stroke:var(--rule-2); stroke-width:1; fill:none; }
+.dg-lab{
+  font-family:var(--mono); font-size:7.4px; letter-spacing:.11em;
+  text-transform:uppercase; fill:var(--ink-4);
+}
+.dg-lab--ink{ fill:var(--ink-3); }
+.dg-hit{ fill:transparent; cursor:crosshair; }
+.dg-cross{ fill:var(--madder); opacity:0; pointer-events:none; }
+.dg.is-live .dg-cross{ opacity:.13; }
+
+.gloss{
+  font-family:var(--serif); font-size:.95rem; line-height:1.56;
+  color:var(--ink-2); margin:clamp(1rem,1.8vw,1.5rem) 0 0;
+  max-width:62ch; text-wrap:pretty;
+}
+.gloss em{ font-style:italic; color:var(--ink); }
+.gloss code{
+  font-family:var(--mono); font-size:.86em; color:var(--ink);
+  background:var(--paper-lo); padding:.08em .34em; border:1px solid var(--rule);
+}
+
+/* --- dye cards --------------------------------------------- */
+
+.dyes-grid{
+  display:grid; gap:0;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,178px),1fr));
+  border-top:1px solid var(--rule); border-left:1px solid var(--rule);
+}
+.dyecard{
+  border-right:1px solid var(--rule); border-bottom:1px solid var(--rule);
+  padding:1rem 1rem 1.15rem;
+  display:flex; flex-direction:column; gap:.55rem;
+}
+.dyecard__sw{
+  aspect-ratio:3/2; border:1px solid rgba(25,21,16,.16);
+  position:relative; overflow:hidden;
+}
+.dyecard__sw svg{ display:block; width:100%; height:100%; }
+.dyecard__n{
+  font-size:1.02rem; line-height:1.2; letter-spacing:-.005em; margin:0;
+}
+.dyecard__d{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.06em;
+  color:var(--ink-4); margin:0; line-height:1.5;
+}
+.dyecard__x{
+  font-size:.87rem; line-height:1.5; color:var(--ink-2); margin:.15rem 0 0;
+  text-wrap:pretty;
+}
+
+/* --- essay --------------------------------------------------- */
+
+.essay{ display:grid; gap:clamp(1.6rem,3vw,3rem); grid-template-columns:minmax(0,1fr); }
+@media (min-width:860px){ .essay{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:clamp(2rem,4vw,4.4rem); } }
+.prose p{
+  margin:0 0 1.15em; text-wrap:pretty;
+  hanging-punctuation:first;
+}
+.prose p:last-child{ margin-bottom:0; }
+.prose > p:first-of-type::first-letter{
+  float:left; font-size:3.62em; line-height:.82;
+  padding:.06em .1em 0 0; margin-right:.04em;
+  color:var(--ink); font-weight:400;
+}
+.prose h3{
+  font-size:1.32rem; line-height:1.24; letter-spacing:-.012em;
+  font-weight:400; margin:1.9em 0 .6em;
+}
+.prose h3:first-child{ margin-top:0; }
+.prose em{ font-style:italic; }
+.prose strong{ font-weight:600; }
+.prose a{
+  color:var(--ink); text-decoration:none;
+  border-bottom:1px solid var(--rule-2);
+  transition:border-color .26s var(--ease);
+}
+.prose a:hover{ border-color:var(--ink); }
+.prose--drop > p:first-of-type::first-letter{
+  float:left; font-size:3.9em; line-height:.8;
+  padding:.06em .1em 0 0; color:var(--indigo);
+}
+
+.margin-note{
+  border-left:1px solid var(--rule-2);
+  padding:.2rem 0 .2rem 1.1rem;
+  margin:1.9rem 0;
+  font-size:.94rem; line-height:1.55; color:var(--ink-2);
+}
+.margin-note strong{
+  display:block; font-family:var(--mono); font-size:9px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-4); font-weight:500;
+  margin-bottom:.45rem;
+}
+.margin-note code{ font-family:var(--mono); font-size:.86em; color:var(--ink); }
+
+.eq{
+  margin:1.8rem 0; padding:1.1rem 1.25rem;
+  background:var(--paper-hi); border:1px solid var(--rule);
+  font-family:var(--mono); font-size:.82rem; line-height:1.9;
+  color:var(--ink-2); overflow-x:auto;
+}
+.eq b{ color:var(--ink); font-weight:600; }
+.eq .op{ color:var(--indigo); }
+
+/* --- colophon ------------------------------------------------ */
+
+.colophon{ border-top:1px solid var(--ink); padding-top:clamp(2rem,4vw,3.2rem); padding-bottom:clamp(2.5rem,5vw,4rem); }
+.colophon__grid{
+  display:grid; gap:clamp(1.4rem,3vw,2.6rem);
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,186px),1fr));
+}
+.colophon h4{
+  font-family:var(--mono); font-size:9px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-4);
+  margin:0 0 .7rem; padding-bottom:.5rem;
+  border-bottom:1px solid var(--rule); font-weight:500;
+}
+.colophon dl{ margin:0; font-family:var(--mono); font-size:10.5px; line-height:1.9; color:var(--ink-3); }
+.colophon dt{ display:inline; }
+.colophon dd{ display:inline; margin:0 0 0 .4em; color:var(--ink); }
+.colophon dd::after{ content:''; display:block; margin-bottom:.15rem; }
+.colophon p{ margin:.6rem 0 0; font-size:.88rem; line-height:1.55; color:var(--ink-3); text-wrap:pretty; }
+.colophon a{ color:var(--ink); text-decoration:none; border-bottom:1px solid var(--rule-2); }
+.colophon a:hover{ border-color:var(--ink); }
+
+.sig{
+  display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap;
+  margin-top:clamp(2rem,4vw,3rem); padding-top:1rem;
+  border-top:1px solid var(--rule);
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--ink-4);
+}
+
+/* --- dark --------------------------------------------------- */
+
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#14110D; --paper-hi:#1C1813; --paper-lo:#100D0A;
+    --ink:#EDE6D8; --ink-2:#B7AC9A; --ink-3:#8A8073; --ink-4:#6A6154;
+    --rule:#332C24; --rule-2:#453C31;
+    --indigo:#7D93D6; --madder:#D4694C; --weld:#C9A249; --oak:#A97F58;
+    --moss:#8AA47C; --undyed:#C9BDA4; --wool:#E4DCCB;
+  }
+  body{ background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23g)' opacity='.05'/%3E%3C/svg%3E"); }
+  .masthead{ background:color-mix(in srgb, var(--paper) 82%, transparent); }
+  .sw, .plate{ box-shadow:0 1px 0 rgba(255,255,255,.03), 0 16px 38px -22px rgba(0,0,0,.8); }
+  .dyecard__sw{ border-color:rgba(255,255,255,.12); }
+  .prose > p:first-of-type::first-letter, .prose--drop > p:first-of-type::first-letter{ color:var(--madder); }
+  .picker button[aria-pressed="true"]{ background:var(--ink); color:var(--paper); }
+  .btn{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .btn:hover{ background:var(--madder); border-color:var(--madder); color:#fff; }
+  ::selection{ background:var(--ink); color:var(--paper); }
+}
+
+/* htmx in-flight state on the shuttle button */
+.htmx-request{ opacity:.45; pointer-events:none; }
+.htmx-indicator{ opacity:0; transition:opacity .2s var(--ease); }
+.htmx-request .htmx-indicator{ opacity:1; }
+#beat-label{ transition:opacity .2s var(--ease); }
+</style>
+</head>
+<body>
+
+<a class="sr-only" href="#score">Skip to the draft</a>
+
+<!-- ══ MASTHEAD ═══════════════════════════════════════════════ -->
+<header class="masthead">
+  <div class="wrap masthead__in">
+    <a class="mark" href="#top" aria-label="SETT — home">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" focusable="false">
+        <g fill="#22346B">
+          <rect x="1"  y="1"  width="6" height="6"/><rect x="13" y="1"  width="6" height="6"/>
+          <rect x="7"  y="7"  width="6" height="6"/><rect x="19" y="7"  width="6" height="6"/>
+          <rect x="1"  y="13" width="6" height="6"/><rect x="13" y="13" width="6" height="6"/>
+          <rect x="7"  y="19" width="6" height="6"/><rect x="19" y="19" width="6" height="6"/>
+        </g>
+        <g fill="#A63A26">
+          <rect x="7"  y="1"  width="6" height="6"/><rect x="1"  y="7"  width="6" height="6"/>
+          <rect x="13" y="7"  width="6" height="6"/><rect x="7"  y="13" width="6" height="6"/>
+          <rect x="19" y="13" width="6" height="6"/><rect x="13" y="19" width="6" height="6"/>
+        </g>
+      </svg>
+      <span class="mark__w">Sett</span>
+    </a>
+    <nav class="masthead__nav" aria-label="Sections">
+      <a href="#plate-i">Plates</a>
+      <a href="#score">The Score</a>
+      <a href="#progress">The Beat</a>
+      <a href="#dyes">Dyes</a>
+      <a href="#notes">Notes</a>
+      <a href="#colophon">Colophon</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ══ PLATE I ════════════════════════════════════════════════ -->
+<section class="hero" id="plate-i">
+  <div class="wrap">
+    <div class="hero__grid">
+
+      <div>
+        <div class="plate-no">
+          <span class="plate-no__n">Plate&nbsp;I</span>
+          <span class="plate-no__t">Point Twill &middot; Bird&rsquo;s Eye</span>
+        </div>
+
+        <h1 class="hero__title">
+          <span class="l1">The draft is the score.</span>
+          <span class="l2">The cloth is <em>the performance</em><span class="amp">&amp;</span></span>
+        </h1>
+
+        <p class="hero__lede">
+          Every patterned weave begins as a grid of decisions made long before a
+          single thread is wet. Three of them &mdash; <strong>threading</strong>,
+          <strong>treadling</strong>, <strong>tie&#8209;up</strong> &mdash; and everything
+          after is arithmetic. Below, six structures are drawn, read and woven
+          by the browser itself. Nothing here is an image of cloth. It is cloth.
+        </p>
+
+        <div class="meta" id="plate-meta"></div>
+      </div>
+
+      <div class="stage">
+        <div id="plate"></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══ THE SCORE ══════════════════════════════════════════════ -->
+<section class="sec" id="score">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-head__t">Plate&nbsp;II &nbsp;&middot;&nbsp; The Score</span>
+      <span class="sec-head__r"></span>
+      <span class="eyebrow">threading &times; tie&#8209;up &times; treadling</span>
+    </div>
+
+    <div style="max-width:62ch; margin-bottom:clamp(2rem,4vw,3.2rem);">
+      <h2 class="sec-title">Three squares, <em>one truth</em></h2>
+      <p class="lede">
+        A draft is the whole of a weave, written down. The <em>threading</em> says
+        which shaft each warp end is drawn through. The <em>tie&#8209;up</em> says
+        which shafts each treadle lifts. The <em>treadling</em> says the order the
+        treadles are pressed. Read the first two as a little machine, and the third
+        as the melody you play on it. Hold the pointer over any square to trace the
+        thread through the machine.
+      </p>
+    </div>
+
+    <div class="score">
+
+      <!-- rail -->
+      <div class="rail">
+        <div class="fld">
+          <p class="fld__h">Structure <span id="rd-shafts"></span></p>
+          <div class="picker" id="picker" role="group" aria-label="Choose a weave structure"></div>
+        </div>
+
+        <div class="fld">
+          <p class="fld__h">Colourway <span id="rd-way"></span></p>
+          <div class="dyes" id="dyes" role="group" aria-label="Choose a colourway"></div>
+          <p class="dyes__key" id="dyes-key"></p>
+        </div>
+
+        <div class="fld">
+          <button class="btn" type="button"
+                  hx-post="/loom/beat"
+                  hx-target="#plate"
+                  hx-swap="outerHTML"
+                  hx-indicator="#beat-label">
+            <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true" focusable="false">
+              <path d="M2 6.5h9M8 3l3 3.5L8 10" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            </svg>
+            <span id="beat-label">Throw the shuttle</span>
+          </button>
+        </div>
+
+        <div class="readout" id="readout"></div>
+      </div>
+
+      <!-- the plate itself -->
+      <div>
+        <div class="plate" id="score-plate">
+          <div class="plate__h">
+            <span class="plate__t" id="score-title">Weaving draft</span>
+            <span class="plate__s" id="score-sub"></span>
+          </div>
+          <div class="plate__art" id="score-art"></div>
+        </div>
+        <div class="plate" id="progress-plate" style="margin-top:clamp(1rem,2vw,1.6rem);">
+          <div class="plate__h">
+            <span class="plate__t">The beat, pick by pick</span>
+            <span class="plate__s">liftplan &middot; warp over weft</span>
+          </div>
+          <div class="plate__art" id="progress-art"></div>
+          <p class="gloss" id="score-gloss">
+            The liftplan is the cloth seen from the side, one pick at a time. It is
+            the same arithmetic as the plate above, stripped of colour &mdash; which
+            is why a weaver can read a photograph of the cloth and name the draft
+            that made it. <em>Float length is what the eye calls texture.</em>
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══ THE DYES ═══════════════════════════════════════════════ -->
+<section class="sec" id="dyes">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-head__t">Plate&nbsp;III &nbsp;&middot;&nbsp; The Dyes</span>
+      <span class="sec-head__r"></span>
+      <span class="eyebrow">colour&#8209;and&#8209;weave</span>
+    </div>
+
+    <div style="display:grid; gap:clamp(1.8rem,4vw,3.6rem); grid-template-columns:minmax(0,1fr);" class="dyes-intro">
+      <div>
+        <h2 class="sec-title">Structure gives the figure.<br><em>Dye gives the ground.</em></h2>
+      </div>
+      <p class="lede">
+        Colour in a patterned weave is almost never decoration applied afterwards.
+        It is assigned thread by thread <em>before</em> weaving, then covered or
+        exposed by the draft itself. The palette below is drawn from the natural
+        dyes a small mill would actually keep: indigo and madder, weld and oak
+        gall, woad and walnut, and the undyed fleece that, in old cloth, was
+        simply whatever the animal wore.
+      </p>
+    </div>
+
+    <div class="dyes-grid" id="dyes-grid" style="margin-top:clamp(2rem,4vw,3rem);"></div>
+  </div>
+</section>
+
+<!-- ══ NOTES ═════════════════════════════════════════════════ -->
+<section class="sec" id="notes">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-head__t">Plate&nbsp;IV &nbsp;&middot;&nbsp; Notes</span>
+      <span class="sec-head__r"></span>
+      <span class="eyebrow">on reading a draft</span>
+    </div>
+
+    <div style="max-width:56ch; margin-bottom:clamp(2.4rem,5vw,4rem);">
+      <h2 class="sec-title">How to read a square</h2>
+    </div>
+
+    <div class="essay">
+      <div class="prose prose--drop">
+        <p>
+          The first thing to understand about a weaving draft is that it is not a
+          picture of anything. It is a <em>program</em> &mdash; a short list of
+          instructions that, read one end and one pick at a time, produces an
+          arbitrary distance away. This is the same situation as sheet music, and
+          the analogy is older than you might guess: the first European treatises
+          on figured weaving were copied from the same scribal hands that copied
+          the chant.
+        </p>
+        <p>
+          At every crossing of warp and weft, exactly one thread must lie on top.
+          That single binary decision, repeated across the whole cloth, is the whole
+          of weaving. Everything else &mdash; the sheen, the drape, the name of the
+          pattern &mdash; is downstream of it.
+        </p>
+
+        <h3>The three parts</h3>
+        <p>
+          <strong>Threading</strong> runs across the top. Read each column downward:
+          the filled square tells you which shaft that end of the warp is heddled
+          on. <strong>Tie&#8209;up</strong> is the small matrix at the corner, the
+          loom's wiring: for each treadle, which shafts are lifted. <strong>Treadling</strong>
+          runs down the side and is simply the order of the treadles. Multiply the
+          three and you get the <em>drawdown</em>, which is the cloth, flat.
+        </p>
+
+        <div class="eq">
+          <b>warp_up</b>(i, j) <span class="op">=</span> tie[ treadling[ j ] ].includes( threading[ i ] )
+        </div>
+
+        <p>
+          That single line of code is the whole of the engine behind every cloth on
+          this page. It has no randomness in it and no image files. Change the
+          threading and you have a different weave; change the colour assigned to
+          each end and you have the same weave in a different cloth.
+        </p>
+
+        <div class="margin-note">
+          <strong>A small fact worth knowing</strong>
+          On four shafts, plain weave and a 2/2 twill are <em>the same cloth</em>.
+          The twill line simply steps across the shaft order and, by the time it
+          returns, the floats have already closed. Weavers have known this for
+          centuries; it is why <code>sett</code> is counted in shafts and why the
+          smallest useful number of them is four.
+        </div>
+
+        <h3>Point, and the diamond</h3>
+        <p>
+          If the threading runs up the shafts and then back down again, the
+          interlacement reverses with it, and a twill line folds on itself. The
+          result is a <em>point draft</em>: the surface picks, and a set of
+          lozenges opens along the fold. On eight shafts the diamonds are wide
+          enough to read as architecture. This is the structure on Plate&nbsp;I,
+          and it is the reason a point draft looks so much more like a design than
+          a straight twill does.
+        </p>
+      </div>
+
+      <div class="prose">
+        <p>
+          Overshot, the last of the six, works by a different trick. Four shafts
+          weave a plain or twilled ground; a fifth carries a separate pattern warp
+          that never interlaces at all. It simply rides over the top of the ground
+          on certain picks and disappears beneath it on others. Because the pattern
+          warp is never cut by the weft, the shapes it makes have hard, clean
+          edges in a way no ground weave can manage.
+        </p>
+        <p>
+          Group those riding picks one, then two, then four, then four, then two,
+          then one, and you get the pointed oval at the heart of a rosepath. It is
+          a shape you can get by no other means, and it is the oldest pattern in
+          this collection by a very long way.
+        </p>
+
+        <h3>What the colour is doing</h3>
+        <p>
+          In <em>colour&#8209;and&#8209;weave</em>, a pattern is made by giving each
+          thread its own colour and then weaving the structure over the top of that
+          arrangement. Two colourways and a plain weave will do it. What surprises
+          people is how much the same two colours will do with a different draft:
+          the cloth changes character entirely, not merely in its detail but in its
+          apparent grain.
+        </p>
+
+        <div class="margin-note">
+          <strong>On balance</strong>
+          Every weave that hangs properly is <em>balanced</em>: as many warp threads
+          on top as weft. Try the <code>balance</code> readout in the left rail.
+          The plain and herringbone cloths sit at zero. The warp&#8209;faced twill
+          runs heavily positive, the rosepath negative &mdash; both of which are
+          exactly why those structures drape and hang the way they do.
+        </div>
+
+        <h3>Why this page exists</h3>
+        <p>
+          Because it is a small, complete argument for how much is contained in a
+          grid. Six structures, six colourways, twenty&#8209;four dyed threads of
+          repeat, and no pixels of cloth anywhere &mdash; only the score, and a
+          browser willing to perform it. The loom was always just a way of reading
+          a square.
+        </p>
+        <p>
+          Change anything. The draft is the score, and a score exists to be played
+          by somebody else.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ══ COLOPHON ═══════════════════════════════════════════════ -->
+<footer class="colophon" id="colophon">
+  <div class="wrap">
+    <div class="colophon__grid">
+
+      <div>
+        <h4>The piece</h4>
+        <p>
+          <strong>Sett</strong> &mdash; Plate Studies in Cloth. Six weave structures
+          and three colourways, drawn and woven live in the browser. No cloth was
+          harmed; no image files were used.
+        </p>
+      </div>
+
+      <div>
+        <h4>Technique</h4>
+        <dl>
+          <dt>Drawing</dt><dd>SVG</dd>
+          <dt>Interaction</dt><dd>htmx 4.0.0</dd>
+          <dt>Loom</dt><dd>plain JS</dd>
+          <dt>Cloth</dt><dd id="col-threads">&mdash;</dd>
+          <dt>File</dt><dd id="col-size">&mdash;</dd>
+        </dl>
+      </div>
+
+      <div>
+        <h4>Method</h4>
+        <p>
+          Every crossing of the cloth is resolved from
+          <code>tie[treadling[j]].includes(threading[i])</code>. Threads are merged
+          into maximal float runs and stroked as SVG paths, so a 40&nbsp;&times;&nbsp;40
+          sample costs about a hundred path segments rather than two thousand
+          rectangles.
+        </p>
+      </div>
+
+      <div>
+        <h4>Provenance</h4>
+        <p>
+          Structures after the standard hand&#8209;loom repertoire: plain weave,
+          warp&#8209;faced twill, five&#8209;end satin, herringbone, point twill and
+          five&#8209;shaft overshot. Woven and computed in a browser. Set in the
+          reader's own serif.
+        </p>
+      </div>
+
+    </div>
+
+    <div class="sig">
+      <span>Sett</span>
+      <span aria-hidden="true">&mdash;</span>
+      <span>No. 04</span>
+      <span aria-hidden="true">&middot;</span>
+      <span id="col-sig">htmx 4.0.0 &middot; SVG &middot; one file</span>
+      <span style="margin-left:auto" id="col-time"></span>
+    </div>
+  </div>
+</footer>
+
+<script
+  src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.0/dist/htmx.min.js"
+  integrity="sha256-5ITZFxqdswo5yPFuPXCdQTfzIRxln45hJYFmNQM9WT8="
+  crossorigin="anonymous"></script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   SETT — the loom
+   The whole of it: tie[treadling[j]].includes(threading[i])
+   ════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+
+/* ── dye kitchen ───────────────────────────────────────────── */
+var DYE = {
+  indigo:  { name:'Indigo',        hex:'#22346B', note:'Woad, fermented in a vat. Blue only exists as a molecule dissolved in lye \u2014 the cloth is blue the moment it leaves the air.' },
+  madder:  { name:'Madder',        hex:'#A63A26', note:'The root of Rubia tinctorum. A duller, warmer red than cochineal, and it shifts brown in daylight.' },
+  weld:    { name:'Weld',          hex:'#A87C22', note:'Reseda luteola, boiled with alum and stannous chloride. The only serious yellow dye native to Europe.' },
+  oak:     { name:'Oak gall',      hex:'#3A2A1B', note:'Tannin from the oak apple, turned to iron black. Iron gall, the ink of the Middle Ages, is an oak gall and a nail.' },
+  moss:    { name:'Woad green',    hex:'#4C6042', note:'Woad over yellow, or weld over woad. Olive greens were the hardest colour to agree on before synthetics.' },
+  undyed:  { name:'Undyed',        hex:'#E4D9C1', note:'Whatever the sheep wore. In old cloth it is never white; it is cream, grey, or the colour of the animal.' }
+};
+
+/* ── structures ────────────────────────────────────────────── */
+var seq = function (n) { var a = [], i; for (i = 0; i < n; i++) a.push(i); return a; };
+var rep = function (a, n) { var o = [], i; for (i = 0; i < n; i++) o.push(a[i % a.length]); return o; };
+var twill = function (n) { return seq(n).map(function (t) { return [t, (t + 1) % n]; }); };          // 2/2
+var face  = function (n) { return seq(n).map(function (t) { return [t, (t + 1) % n, (t + 2) % n]; }); };  // 3/1
+var satin = function (n) { return seq(n).map(function (t) { return [t, (t + 2) % n, (t + 4) % n]; }); };  // counter 2
+var point = function (n) { var a = seq(n), k; for (k = n - 2; k >= 0; k--) a.push(k); return a; };
+var rose  = [0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4];
+var roseTie = [[0,1],[1,2],[2,3],[3,0],[0,1,4]];
+
+var DRAFTS = [
+  { id:'point',   name:"Point twill",  sub:"bird\u2019s eye",  shafts:8, thr:point(8),  tre:point(8),  tie:twill(8),
+    gloss:'Eight shafts, threaded and treadled in a point. The twill line folds on itself at the turn, so the surface picks and a lattice of lozenges opens along the fold. The diamonds are wide enough to read as architecture \u2014 which is precisely what makes a point draft look designed rather than derived.' },
+  { id:'plain',   name:'Plain weave',  sub:'tabby',          shafts:4, thr:seq(4),      tre:seq(4),      tie:twill(4),
+    gloss:'One up, one down, forever. The oldest structure there is, and the only one whose name is also its behaviour: on four shafts it is indistinguishable from a 2/2 twill, which is why the smallest loom worth having has four shafts.' },
+  { id:'twill',   name:'Warp-faced',   sub:'3/1 twill',      shafts:4, thr:seq(4),      tre:seq(4),      tie:face(4),
+    gloss:'Three warp threads over, one under. The surface belongs entirely to the warp, so it reads as a fine vertical stripe with the weft showing only as a glint between. Balance runs heavily positive \u2014 and that is why it hangs.' },
+  { id:'herring', name:'Herringbone',  sub:'broken twill',   shafts:4, thr:[0,1,2,3,3,2,1,0], tre:[0,1,2,3,2,3,0,1], tie:twill(4),
+    gloss:'The twill runs out, reverses, and runs back. The line breaks into a chevron. Fashioned on four shafts long before anyone wrote the word, and still the fastest way to make a diagonal look deliberate.' },
+  { id:'satin',   name:'Five-end satin',sub:'damask ground', shafts:5, thr:seq(5),      tre:seq(5),      tie:satin(5),
+    gloss:'No two warp floats touch: the interlacement steps by two, so the warp lies over four and under one, everywhere. The surface goes smooth and glossy, and takes up a weft colour in long soft lozenges \u2014 the ground of every damask ever woven.' },
+  { id:'rose',    name:'Rosepath',     sub:'5-shaft overshot',shafts:5, thr:seq(5),     tre:rose,        tie:roseTie,
+    gloss:'Four shafts weave the ground; a fifth carries a pattern warp that never interlaces at all. It simply rides over on certain picks and vanishes under on others. Group the riding picks one, two, four, four, two, one, and the pointed oval appears \u2014 a shape no ground weave can make.' }
+];
+
+var WAYS = [
+  { id:'im', name:'Indigo & Madder', w:[DYE.indigo.hex, DYE.undyed.hex], f:[DYE.madder.hex, DYE.undyed.hex],
+    wi:'wool, 2/2 twill-spun', fi:'wool, 8/2 s-spun',
+    key:'Indigo warp \u00b7 madder weft \u00b7 undyed ground' },
+  { id:'wo', name:'Weld & Oak',      w:[DYE.weld.hex, DYE.undyed.hex],   f:[DYE.oak.hex, DYE.undyed.hex],
+    wi:'linen, 20/2', fi:'flax, 10/2',
+    key:'Weld warp \u00b7 oak\u2011gall weft \u00b7 undyed ground' },
+  { id:'gm', name:'Moss & Indigo',   w:[DYE.moss.hex, DYE.undyed.hex],   f:[DYE.indigo.hex, DYE.undyed.hex],
+    wi:'wool, 2/2 twill-spun', fi:'wool, 8/2 s-spun',
+    key:'Olive warp \u00b7 indigo weft \u00b7 undyed ground' }
+];
+
+/* ── the loom ──────────────────────────────────────────────── */
+function draft(id) { for (var i = 0; i < DRAFTS.length; i++) if (DRAFTS[i].id === id) return DRAFTS[i]; return DRAFTS[0]; }
+function way(id)   { for (var i = 0; i < WAYS.length; i++)   if (WAYS[i].id === id) return WAYS[i]; return WAYS[0]; }
+
+function up(d, i, j) { return d.tie[d.tre[j % d.tre.length]].indexOf(d.thr[i % d.thr.length]) !== -1; }
+function balance(d, n) {
+  var t = 0, i, j, r = d.thr.length;
+  for (j = 0; j < n; j++) for (i = 0; i < r; i++) t += up(d, i, j) ? 1 : -1;
+  return t;
+}
+function repeatOf(seq0, want) { return rep(seq0, Math.max(1, Math.ceil(want / seq0.length))); }
+function hash(n) { var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+var n2 = function (v) { return Math.round(v * 10) / 10; };
+
+/* ── runs: merge consecutive trues into maximal spans ─────── */
+function runs(n, test) {
+  var out = [], s = -1, k;
+  for (k = 0; k < n; k++) {
+    if (test(k)) { if (s < 0) s = k; }
+    else if (s >= 0) { out.push([s, k - 1]); s = -1; }
+  }
+  if (s >= 0) out.push([s, n - 1]);
+  return out;
+}
+
+/* ══ THE CLOTH ══════════════════════════════════════════════
+   Four layers, exactly as the loom stacks them:
+
+     1  the warp sheet, full width, lying under everything
+     2  the weft sheet, laid over it
+     3  the weft float heads — where the weft is on top
+     4  the warp float heads — where the warp is on top
+
+   Floats are merged into maximal runs, and every run of one
+   colour is collected into a single <path>, so a 48x48 sample
+   costs a handful of path elements instead of four thousand
+   rectangles.
+   ═════════════════════════════════════════════════════════════ */
+function rectsToPath(list) {
+  var d = '', i, r;
+  for (i = 0; i < list.length; i++) {
+    r = list[i];
+    d += 'M' + n2(r[0]) + ' ' + n2(r[1]) + 'h' + n2(r[2]) + 'v' + n2(r[3]) + 'h-' + n2(r[2]) + 'z';
+  }
+  return d;
+}
+function groupPaths(map) {
+  var out = '', k, keys = [];
+  for (k in map) if (map[k].length) keys.push(k);
+  for (var q = 0; q < keys.length; q++) out += '<path d="' + map[keys[q]] + '" fill="' + keys[q] + '"/>';
+  return out;
+}
+
+function clothSVG(d, wy, opt) {
+  opt = opt || {};
+  var W = opt.w || 48, H = opt.h || 48, C = opt.cell || 12;
+  var g = C * (opt.gapRatio === undefined ? 0.17 : opt.gapRatio);
+  var tw = n2(C - g), th = n2(C - g);
+  var vw = W * C, vh = H * C;
+  var i, j, e, col, rr, rs, x0, x1, y0, y1;
+
+  var wSheet = {}, fSheet = {}, wHead = {}, fHead = {};
+
+  /* 1 — the warp sheet; whole adjacent ends of one colour merge */
+  i = 0;
+  while (i < W) {
+    col = wy.w[i % wy.w.length];
+    e = i;
+    while (e < W && wy.w[e % wy.w.length] === col) e++;
+    if (!wSheet[col]) wSheet[col] = '';
+    wSheet[col] += rectsToPath([[i * C, 0, (e - i) * C, vh]]);
+    i = e;
+  }
+  /* 2 — the weft sheet, likewise by pick */
+  j = 0;
+  while (j < H) {
+    col = wy.f[j % wy.f.length];
+    e = j;
+    while (e < H && wy.f[e % wy.f.length] === col) e++;
+    if (!fSheet[col]) fSheet[col] = '';
+    fSheet[col] += rectsToPath([[0, j * C, vw, (e - j) * C]]);
+    j = e;
+  }
+  /* 3 — weft heads: horizontal bands where the weft is on top */
+  for (j = 0; j < H; j++) {
+    col = wy.f[j % wy.f.length];
+    rs = runs(W, (function (jj) { return function (a) { return !up(d, a, jj); }; })(j));
+    for (var a1 = 0; a1 < rs.length; a1++) {
+      rr = rs[a1];
+      x0 = rr[0] * C + g / 2; x1 = (rr[1] + 1) * C - g / 2;
+      if (!fHead[col]) fHead[col] = '';
+      fHead[col] += rectsToPath([[n2(x0), n2(j * C + g / 2), n2(x1 - x0), th]]);
+    }
+  }
+  /* 4 — warp heads: vertical bands, drawn last so they win every
+        crossing they are entitled to. Each end carries a hair of
+        hand-made wobble, decided once and for all.                */
+  for (i = 0; i < W; i++) {
+    col = wy.w[i % wy.w.length];
+    var wx = n2(g / 2 + (hash(i) - 0.5) * g * 0.55);
+    rs = runs(H, (function (ii) { return function (b) { return up(d, ii, b); }; })(i));
+    for (var a2 = 0; a2 < rs.length; a2++) {
+      rr = rs[a2];
+      y0 = rr[0] * C + g / 2; y1 = (rr[1] + 1) * C - g / 2;
+      if (!wHead[col]) wHead[col] = '';
+      wHead[col] += rectsToPath([[n2(i * C + wx), n2(y0), tw, n2(y1 - y0)]]);
+    }
+  }
+
+  var uid = 'c' + d.id + wy.id + (opt.key || '') + Math.floor((opt.salt || 0) * 1000);
+
+  return '<svg viewBox="0 0 ' + vw + ' ' + vh + '" xmlns="http://www.w3.org/2000/svg" role="img" ' +
+    'aria-label="' + esc(d.name + ', ' + d.sub + ', in ' + wy.name + ', ' + W + ' by ' + H + ' threads') + '">' +
+    '<defs>' +
+      '<linearGradient id="' + uid + 's" x1="0" y1="0" x2=".7" y2="1">' +
+        '<stop offset="0" stop-color="#ffffff" stop-opacity=".17"/>' +
+        '<stop offset=".42" stop-color="#ffffff" stop-opacity="0"/>' +
+        '<stop offset="1" stop-color="#000000" stop-opacity=".15"/>' +
+      '</linearGradient>' +
+      '<pattern id="' + uid + 'g" width="' + C + '" height="' + C + '" patternUnits="userSpaceOnUse">' +
+        '<path d="M0 0H' + C + 'V' + C + '" fill="none" stroke="#1B1510" stroke-opacity=".13" stroke-width="1"/>' +
+      '</pattern>' +
+      '<filter id="' + uid + 'f" x="0" y="0" width="100%" height="100%">' +
+        '<feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch" result="n"/>' +
+        '<feColorMatrix in="n" type="saturate" values="0"/>' +
+      '</filter>' +
+    '</defs>' +
+    '<g fill="#1B1510" fill-opacity=".17">' + groupPaths(wSheet) + '</g>' +
+    groupPaths(fSheet) +
+    groupPaths(fHead) +
+    groupPaths(wHead) +
+    '<rect width="' + vw + '" height="' + vh + '" fill="url(#' + uid + 'g)"/>' +
+    '<rect width="' + vw + '" height="' + vh + '" fill="url(#' + uid + 's)"/>' +
+    '<rect width="' + vw + '" height="' + vh + '" filter="url(#' + uid + 'f)" opacity=".055"/>' +
+    '<rect width="' + n2(g * .8) + '" height="' + vh + '" fill="#1B1510" opacity=".2"/>' +
+    '<rect x="' + n2(vw - g * .8) + '" width="' + n2(g * .8) + '" height="' + vh + '" fill="#1B1510" opacity=".2"/>' +
+  '</svg>';
+}
+
+/* ══ THE DRAFT ══════════════════════════════════════════════
+   threading · tie-up · drawdown · treadling, in the conventional
+   arrangement, with a crosshair that follows the pointer.
+   ═════════════════════════════════════════════════════════════ */
+function draftSVG(d) {
+  var i, cell = 7, pad = 1;
+  var TR = repeatOf(d.thr, 42), GR = repeatOf(d.tre, 30);
+  var ends = TR.length, picks = GR.length, sh = d.shafts, trs = d.tie.length; /* one treadle per tie-up column */
+  var GAP = 12;
+
+  var xT = 0, yT = 0;
+  var wT = ends * cell, hT = sh * cell;
+  var xTie = wT + GAP, yTie = 0, wTie = trs * cell;
+  var yD = hT + GAP, hD = picks * cell;
+  var xTr = xTie, yTr = yD;
+
+  var LW = 30, PADB = 16;
+  var totalW = xTie + wTie + LW + PADB;
+  var totalH = yD + hD + 22;
+
+  var s = '';
+
+  /* --- threading (shaft 1 at the bottom, as on the loom) --- */
+  for (i = 0; i < ends; i++) {
+    var row = sh - 1 - d.thr[i % d.thr.length];
+    s += '<rect class="dg-mark" x="' + n2(xT + i * cell + pad) + '" y="' + n2(yT + row * cell + pad) + '" width="' + (cell - pad * 2) + '" height="' + (cell - pad * 2) + '" rx="1"/>';
+  }
+  /* --- tie-up --- */
+  for (var t = 0; t < trs; t++) {
+    for (var shft = 0; shft < sh; shft++) {
+      if (d.tie[t].indexOf(shft) !== -1) {
+        s += '<rect class="dg-mark" x="' + n2(xTie + t * cell + pad) + '" y="' + n2(yTie + (sh - 1 - shft) * cell + pad) + '" width="' + (cell - pad * 2) + '" height="' + (cell - pad * 2) + '" rx="1"/>';
+      }
+    }
+  }
+  /* --- drawdown --- */
+  var dd = '';
+  for (var jj = 0; jj < picks; jj++) {
+    var seg = '';
+    for (var ii = 0; ii < ends; ii++) {
+      if (up(d, ii, jj)) seg += '<rect x="' + n2(xT + ii * cell + pad) + '" y="' + n2(yD + jj * cell + pad) + '" width="' + (cell - pad * 2) + '" height="' + (cell - pad * 2) + '"/>';
+    }
+    if (seg) dd += '<g fill="#191510">' + seg + '</g>';
+  }
+  s += dd;
+  /* --- treadling --- */
+  for (var k2 = 0; k2 < picks; k2++) {
+    var trow = sh - 1 - d.tre[k2 % d.tre.length];
+    s += '<rect class="dg-mark" x="' + n2(xTr + trow * cell + pad) + '" y="' + n2(yTr + k2 * cell + pad) + '" width="' + (cell - pad * 2) + '" height="' + (cell - pad * 2) + '" rx="1"/>';
+  }
+
+  /* --- frames + labels --- */
+  s += '<rect class="dg-frame" x="' + n2(xT - .5) + '" y="' + n2(yT - .5) + '" width="' + n2(wT + 1) + '" height="' + n2(hT + 1) + '"/>';
+  s += '<rect class="dg-frame" x="' + n2(xTie - .5) + '" y="' + n2(yTie - .5) + '" width="' + n2(wTie + 1) + '" height="' + n2(hT + 1) + '"/>';
+  s += '<rect class="dg-frame" x="' + n2(xT - .5) + '" y="' + n2(yD - .5) + '" width="' + n2(wT + 1) + '" height="' + n2(hD + 1) + '"/>';
+  s += '<rect class="dg-frame" x="' + n2(xTr - .5) + '" y="' + n2(yTr - .5) + '" width="' + n2(wTie + 1) + '" height="' + n2(hD + 1) + '"/>';
+
+  var LBL = [['threading', xT, yT - 11, 'start'], ['tie-up', xTie, yT - 11, 'start'],
+             ['drawdown', xT, yD + hD + 13, 'start'], ['treadling', xTr, yTr + hD + 13, 'start']];
+  LBL.forEach(function (L) { s += '<text class="dg-lab" x="' + n2(L[1]) + '" y="' + n2(L[2]) + '" text-anchor="' + L[3] + '">' + L[0] + '</text>'; });
+
+  /* --- crosshair --- */
+  s += '<g class="dg-cross">';
+  s += '<rect class="dg-cx" x="0" y="' + n2(yT) + '" width="' + cell + '" height="' + n2(hT) + '"/>';
+  s += '<rect class="dg-cy" x="' + n2(xT) + '" y="' + n2(yD) + '" width="' + n2(wT) + '" height="' + cell + '"/>';
+  s += '<rect class="dg-cx" x="0" y="' + n2(yD) + '" width="' + cell + '" height="' + n2(hD) + '"/>';
+  s += '<rect class="dg-cy" x="' + n2(xTr) + '" y="' + n2(yD) + '" width="' + n2(wTie) + '" height="' + cell + '"/>';
+  s += '</g>';
+
+  /* --- hit areas --- */
+  s += '<g class="dg-hits">';
+  for (var a = 0; a < ends; a++)
+    s += '<rect class="dg-hit" data-i="' + a + '" data-j="0" x="' + n2(xT + a * cell) + '" y="' + n2(yT) + '" width="' + cell + '" height="' + n2(hT + GAP + hD) + '"/>';
+  for (var b = 0; b < picks; b++)
+    s += '<rect class="dg-hit" data-i="0" data-j="' + b + '" x="' + n2(xTr) + '" y="' + n2(yTr + b * cell) + '" width="' + n2(wTie + GAP) + '" height="' + cell + '"/>';
+  s += '</g>';
+
+  return '<svg viewBox="-2 -14 ' + n2(totalW) + ' ' + n2(totalH) + '" xmlns="http://www.w3.org/2000/svg" ' +
+         'preserveAspectRatio="xMinYMid meet" style="width:100%;height:auto;max-width:' + n2(totalW * 2.4) + 'px">' + s + '</svg>';
+}
+
+/* ══ THE BEAT ═══════════════════════════════════════════════
+   The liftplan: the same arithmetic, monochrome, pick by pick.
+   ═════════════════════════════════════════════════════════════ */
+function liftSVG(d) {
+  var W = 44, H = 30, cw = 11, pad = 1.5;
+  var vw = W * cw, vh = H * cw, i, j, ink = '', pale = '', hi = [], hf = [];
+  for (j = 0; j < H; j++) {
+    hi = []; hf = [];
+    for (i = 0; i < W; i++) {
+      if (up(d, i, j)) hi.push([i * cw + pad, j * cw + pad, cw - pad * 2, cw - pad * 2]);
+      else hf.push([i * cw + pad, j * cw + pad, cw - pad * 2, cw - pad * 2]);
+    }
+    if (hi.length) ink += rectsToPath(hi);
+    if (hf.length) pale += rectsToPath(hf);
+  }
+  return '<svg viewBox="0 0 ' + vw + ' ' + vh + '" xmlns="http://www.w3.org/2000/svg" role="img" ' +
+    'aria-label="Liftplan of ' + esc(d.name) + ': warp threads in ink over weft threads in pale, ' + W + ' by ' + H + '">' +
+    '<path d="' + pale + '" fill="#DBD1BD"/>' +
+    '<path d="' + ink + '" fill="#191510"/>' +
+    '<rect width="' + vw + '" height="' + vh + '" fill="url(#lpSheen)"/>' +
+  '</svg>';
+}
+
+/* ══ FRAGMENTS ══════════════════════════════════════════════
+   One request re-renders the swatch and every panel that depends
+   on the same draft, so the whole instrument changes atomically.
+   ═════════════════════════════════════════════════════════════ */
+var SALT = 0;
+var STATE = { draft: DRAFTS[0].id, way: WAYS[0].id };
+
+function plateHTML(d, wy, beat) {
+  SALT++;
+  return '' +
+  '<div class="sw' + (beat ? ' is-weaving' : '') + '" id="plate">' +
+    '<div class="sw__art">' +
+      '<span class="beatline" aria-hidden="true"></span>' +
+      clothSVG(d, wy, { w:40, h:40, cell:14, salt:SALT, key:'p' }) +
+    '</div>' +
+    '<p class="sw__label">' +
+      '<b>' + esc(d.name) + '</b>' +
+      '<span>' + esc(d.sub) + '</span>' +
+      '<span style="margin-left:auto">' + esc(wy.name) + '</span>' +
+      '<span class="num">40 &times; 40</span>' +
+    '</p>' +
+  '</div>';
+}
+
+function metaHTML(d, wy) {
+  var cells = [
+    ['Structure', d.name + ' \u00b7 ' + d.sub],
+    ['Shafts', String(d.shafts)],
+    ['Threading', d.thr.length + ' end repeat'],
+    ['Treadling', d.tre.length + ' pick repeat'],
+    ['Colourway', wy.name],
+    ['Warp', wy.wi],
+    ['Weft', wy.fi],
+    ['Sample', '40 \u00d7 40 threads']
+  ];
+  return cells.map(function (c) {
+    return '<div class="meta__c"><span class="meta__k">' + esc(c[0]) + '</span><span class="meta__v">' + esc(c[1]) + '</span></div>';
+  }).join('');
+}
+
+function pickerHTML(cur) {
+  return DRAFTS.map(function (d, i) {
+    return '<button type="button"' +
+      ' hx-get="/sett/' + d.id + '"' +
+      ' hx-target="#plate" hx-swap="outerHTML"' +
+      ' aria-pressed="' + (d.id === cur) + '">' +
+      '<span>' + esc(d.name) + '</span>' +
+      '<span class="picker__n">' + (i + 1) + '\u00b7' + d.shafts + 'sh</span>' +
+    '</button>';
+  }).join('');
+}
+
+function dyesHTML(cur) {
+  return WAYS.map(function (w) {
+    var prev = '';
+    for (var i = 0; i < 12; i++) prev += '<rect x="' + i * 6 + '" y="0" width="6" height="18" fill="' + w.w[i % w.w.length] + '"/>';
+    for (i = 0; i < 6; i++) prev += '<rect x="' + i * 12 + '" y="18" width="12" height="18" fill="' + w.f[i % w.f.length] + '"/>';
+    return '<button type="button"' +
+      ' hx-get="/sett/DY/dye/' + w.id + '"' +
+      ' hx-target="#plate" hx-swap="outerHTML"' +
+      ' title="' + esc(w.name) + '" aria-label="' + esc(w.name) + '"' +
+      ' aria-pressed="' + (w.id === cur) + '">' +
+      '<svg viewBox="0 0 72 36" aria-hidden="true" focusable="false">' + prev + '</svg>' +
+    '</button>';
+  }).join('');
+}
+
+function readoutHTML(d) {
+  var b = balance(d, d.tre.length);
+  var face = b > 0 ? 'warp-faced' : (b < 0 ? 'weft-faced' : 'balanced');
+  var rows = [
+    ['shafts', d.shafts],
+    ['tie-up', d.tie.length + ' treadles'],
+    ['threading', d.thr.length + ' ends'],
+    ['treadling', d.tre.length + ' picks'],
+    ['balance', (b > 0 ? '+' : '') + b + ' \u00b7 ' + face],
+    ['floats', 'max ' + d.thr.length + ' \u00b7 ' + d.tre.length],
+    ['cloth', '1,600 crossings']
+  ];
+  return rows.map(function (r) { return '<div><i>' + r[0] + '</i><b>' + esc(String(r[1])) + '</b></div>'; }).join('');
+}
+
+function oob(sel, html) {
+  return '<div hx-swap-oob="true" id="' + sel.replace('#', '') + '">' + html + '</div>';
+}
+
+/* One response: the swatch, plus every panel downstream of it. */
+function respond(id, wayId, beat) {
+  var d = draft(id), wy = way(wayId);
+  var out = plateHTML(d, wy, beat);
+  out += oob('#plate-meta', metaHTML(d, wy));
+  out += oob('#picker', pickerHTML(d.id));
+  out += oob('#dyes', dyesHTML(wy.id));
+  out += oob('#readout', readoutHTML(d));
+  out += oob('#score-art', draftSVG(d));
+  out += oob('#score-title', 'Weaving draft \u00b7 ' + esc(d.name));
+  out += oob('#score-sub', d.shafts + ' shafts \u00b7 ' + d.thr.length + '\u00d7' + d.tre.length + ' repeat');
+  out += oob('#progress-art', liftSVG(d));
+  out += oob('#rd-shafts', d.shafts + ' shafts');
+  out += oob('#rd-way', esc(wy.name));
+  out += oob('#dyes-key', esc(wy.key));
+  out += oob('#score-gloss', esc(d.gloss));   /* innerHTML, so text only */
+  return out;
+}
+
+/* ── global SVG defs the liftplan leans on ─────────────────── */
+function injectDefs() {
+  var ns = 'http://www.w3.org/2000/svg';
+  var s = document.createElementNS(ns, 'svg');
+  s.setAttribute('width', '0'); s.setAttribute('height', '0');
+  s.setAttribute('aria-hidden', 'true');
+  s.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+  s.innerHTML =
+    '<defs><linearGradient id="lpSheen" x1="0" y1="0" x2=".6" y2="1">' +
+      '<stop offset="0" stop-color="#fff" stop-opacity=".14"/>' +
+      '<stop offset=".5" stop-color="#fff" stop-opacity="0"/>' +
+      '<stop offset="1" stop-color="#000" stop-opacity=".10"/>' +
+    '</linearGradient></defs>';
+  document.body.appendChild(s);
+}
+
+/* ── crosshair: trace a thread through the machine ─────────── */
+/* Four crosshair rects live in the SVG, in this order:
+     0  threading column   1  drawdown row
+     2  drawdown column    3  treadling row
+   A hit area over an end lights 0+2; one over a pick lights 1+3.  */
+function wireCrosshair() {
+  var art = document.getElementById('score-art');
+  if (!art || art.dataset.wired) return;
+  var svg = art.querySelector('svg');
+  if (!svg) return;
+  art.dataset.wired = '1';
+  svg.classList.add('dg');
+
+  var cross = svg.querySelectorAll('.dg-cross rect');
+  if (cross.length < 4) return;
+
+  function move(e) {
+    var hit = e.target.closest ? e.target.closest('.dg-hit') : null;
+    if (!hit) { svg.classList.remove('is-live'); return; }
+    var x = hit.getAttribute('x');
+    var y = hit.getAttribute('y');
+    if (hit.getAttribute('data-j') === '0') {
+      cross[0].setAttribute('x', x);   /* threading column */
+      cross[2].setAttribute('x', x);   /* drawdown column  */
+    } else {
+      cross[1].setAttribute('y', y);   /* drawdown row    */
+      cross[3].setAttribute('y', y);   /* treadling row   */
+    }
+    svg.classList.add('is-live');
+  }
+
+  art.addEventListener('pointermove', move);
+  art.addEventListener('pointerleave', function () { svg.classList.remove('is-live'); });
+}
+
+/* ══ THE LOOM ROOM ══════════════════════════════════════════
+   A loom that answers its own requests.
+
+   Every control above carries real htmx attributes pointing at
+   real endpoints. When the file is served by something that can
+   render those endpoints, htmx does the work. Opened from disk
+   there is nothing to ask, so this extension answers the same
+   requests locally from the same functions — one implementation,
+   two ways in. Set ?net=1 to always go to the network.
+   ═════════════════════════════════════════════════════════════ */
+var REMOTE = /[?&]net=1\b/.test(location.search);
+
+function renderLocally(elt, path) {
+  var p = String(path || '').split('?')[0];
+  var seg = p.split('/').filter(Boolean);
+  var verb = (elt.getAttribute('hx-post') ? 'POST' : 'GET');
+  var id = STATE.draft, wayId = STATE.way, beat = false;
+
+  if (verb === 'POST' && /beat/.test(p)) {
+    beat = true;                                  /* re-weave what is on the loom */
+    if (seg[2]) id = seg[2];
+    if (seg[3]) wayId = seg[3];
+  } else if (seg[0] === 'sett') {
+    if (seg[1]) id = seg[1];
+    if (seg[2] === 'dye' && seg[3]) wayId = seg[3];
+  }
+  STATE.draft = id; STATE.way = wayId;
+
+  var html = respond(id, wayId, beat);
+  var target = document.querySelector(elt.getAttribute('hx-target') || '#plate');
+  if (target) {
+    var swap = (elt.getAttribute('hx-swap') || 'innerHTML').split(/\s+/)[0];
+    if (swap === 'outerHTML') { target.outerHTML = html; }
+    else { target.innerHTML = html; }
+  }
+
+  /* htmx puts id-matched new nodes into the document for OOB swaps;
+     here we have the markup already, so place the extras by hand.  */
+  var oobRe = /<div hx-swap-oob="true" id="([^"]+)">([\s\S]*?)<\/div>/g, m;
+  while ((m = oobRe.exec(html)) !== null) {
+    var node = document.getElementById(m[1]);
+    if (node) node.innerHTML = m[2];
+  }
+
+  /* no browser history here: keep the address bar clean */
+  wireCrosshair();
+}
+
+function installLoom() {
+  document.body.addEventListener('htmx:beforeRequest', function (e) {
+    if (REMOTE) return;
+    var elt = e.detail.elt;
+    if (!elt) return;
+    e.preventDefault();
+    var path = elt.getAttribute('hx-get') || elt.getAttribute('hx-post') || '';
+    renderLocally(elt, path);
+  });
+
+  /* If a real server 404s on the endpoints, fall back to the loom. */
+  document.body.addEventListener('htmx:responseError', function (e) {
+    if (REMOTE) return;
+    var elt = e.detail && e.detail.elt;
+    if (!elt) return;
+    var path = elt.getAttribute('hx-get') || elt.getAttribute('hx-post') || '';
+    renderLocally(elt, path);
+  });
+  document.body.addEventListener('htmx:sendError', function (e) {
+    if (REMOTE) return;
+    var elt = e.detail && e.detail.elt;
+    if (!elt) return;
+    var path = elt.getAttribute('hx-get') || elt.getAttribute('hx-post') || '';
+    renderLocally(elt, path);
+  });
+}
+
+/* ══ BOOT ═══════════════════════════════════════════════════ */
+function dyeCards() {
+  var host = document.getElementById('dyes-grid');
+  if (!host) return;
+  host.innerHTML = Object.keys(DYE).map(function (k) {
+    var d = DYE[k];
+    return '<article class="dyecard" data-reveal>' +
+      '<div class="dyecard__sw"><svg viewBox="0 0 90 60" aria-hidden="true" focusable="false">' +
+        '<rect width="90" height="60" fill="' + d.hex + '"/>' +
+        '<rect y="0" width="90" height="15" fill="#fff" opacity=".08"/>' +
+        '<rect y="45" width="90" height="15" fill="#000" opacity=".10"/>' +
+      '</svg></div>' +
+      '<h3 class="dyecard__n">' + esc(d.name) + '</h3>' +
+      '<p class="dyecard__d">' + d.hex.toUpperCase() + '</p>' +
+      '<p class="dyecard__x">' + esc(d.note) + '</p>' +
+    '</article>';
+  }).join('');
+}
+
+function colophon() {
+  var t = document.getElementById('col-threads');
+  if (t) t.textContent = '1,600';
+  var s = document.getElementById('col-size');
+  if (s) {
+    var bytes = 0;
+    try {
+      var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+      if (nav && nav.encodedBodySize) bytes = nav.encodedBodySize;
+    } catch (e) {}
+    if (!bytes) bytes = new Blob([document.documentElement.outerHTML]).size;
+    s.textContent = bytes > 1024 ? (Math.round(bytes / 1024) + ' KB') : (bytes + ' B');
+  }
+  var tm = document.getElementById('col-time');
+  if (tm) {
+    var y = new Date().getFullYear();
+    tm.innerHTML = 'Set in your own serif \u00b7 ' + y;
+  }
+}
+
+function reveal() {
+  var sel = '.sec-head, h2.sec-title, .lede, .prose > p, .prose > h3, .dyecard, .margin-note, .eq, .plate, .rail';
+  var els = [].slice.call(document.querySelectorAll(sel));
+  if (!('IntersectionObserver' in window)) return;
+  els.forEach(function (el, i) {
+    el.setAttribute('data-reveal', '');
+    el.style.transitionDelay = (Math.min(i % 6, 5) * 42) + 'ms';
+  });
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); }
+    });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.06 });
+  els.forEach(function (el) { io.observe(el); });
+  setTimeout(function () { els.forEach(function (el) { el.classList.add('is-in'); }); }, 2400);
+}
+
+function firstPaint() {
+  var d = DRAFTS[0], wy = WAYS[0];
+  document.getElementById('plate').outerHTML = plateHTML(d, wy, true);
+  var o = respond(d.id, wy.id, false);
+  var re = /<div hx-swap-oob="true" id="([^"]+)">([\s\S]*?)<\/div>/g, m;
+  while ((m = re.exec(o)) !== null) {
+    var n = document.getElementById(m[1]);
+    if (n) n.innerHTML = m[2];
+  }
+  var sp = document.getElementById('score-gloss');
+  if (sp) sp.textContent = d.gloss;
+}
+
+function boot() {
+  injectDefs();
+  firstPaint();
+  dyeCards();
+  colophon();
+  wireCrosshair();
+  if (window.htmx) installLoom();
+  else {
+    /* htmx never arrived (offline): drive the controls directly. */
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[hx-get],[hx-post]');
+      if (b) { e.preventDefault(); renderLocally(b, b.getAttribute('hx-get') || b.getAttribute('hx-post')); }
+    });
+  }
+  document.body.addEventListener('htmx:afterSwap', wireCrosshair);
+  reveal();
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+
+})();
+</script>
+</body>
+</html>
