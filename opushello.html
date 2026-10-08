@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#04050b">
+<title>Hello, World</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300&display=swap">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#04050b;overflow:hidden;color:#dfe3ff;-webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;touch-action:none}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity 2.4s ease}
+canvas#c.on{opacity:1}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(120% 90% at 50% 45%,transparent 55%,rgba(2,2,8,.75) 100%)}
+#hello h1{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#hello p{position:fixed;left:0;right:0;bottom:calc(11vh + env(safe-area-inset-bottom));z-index:2;text-align:center;font:300 11px/1.6 "JetBrains Mono",ui-monospace,monospace;letter-spacing:.42em;text-transform:uppercase;color:rgba(214,220,255,.62);animation:rise 2.2s cubic-bezier(.16,.84,.24,1) .35s both;pointer-events:none}
+#hello p:lang(ar),#hello p:lang(hi),#hello p:lang(he){letter-spacing:.08em;font-size:13px}
+#hello p::before{content:"";display:block;width:56px;height:1px;margin:0 auto 18px;background:linear-gradient(90deg,transparent,rgba(170,200,255,.8),transparent);animation:line 2.6s cubic-bezier(.16,.84,.24,1) .2s both}
+#hello p span{margin-inline-start:1.1em;opacity:.38;letter-spacing:.3em}
+@keyframes rise{from{opacity:0;transform:translateY(10px);filter:blur(8px)}to{opacity:1;transform:none;filter:none}}
+@keyframes line{from{transform:scaleX(0);opacity:0}to{transform:scaleX(1);opacity:1}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.0" crossorigin="anonymous"></script>
+<script>
+window.hello=WebAssembly.instantiate(Uint8Array.from(atob("AGFzbQEAAAABDgJgAAF/YAZ/fX19fX0AAwMCAAEFAwEAEAYGAX8BQX8LBxMDAW0CAARodG1sAAAEc3RlcAABCtUCAiwBAX8jAEEBakEScCQAIwBBA3QhAEGAwAAgACgCACAAKAIE/AoAACAAKAIEC6UCAgJ/CX0gAEEMbCEHQQAhBgJAA0AgBiAHTw0BIAYqAoCABCEIIAYqAoSABCEJIAYqAoiABCEKIAggAZMhDiAJIAKTIQ8gA0MAAIA/IA4gDpQgDyAPlJIiECAQlEMAAKBAlJKVIRAgBiAGKgKA0xIgBioCgKYhIAiTIASUkiAOIBCUkiAPIBCUQ5qZGT+UkyAFlCILOAKA0xIgBiAGKgKE0xIgBioChKYhIAmTIASUkiAPIBCUkiAOIBCUQ5qZGT+UkiAFlCIMOAKE0xIgBiAGKgKI0xIgBioCiKYhIAqTIASUkiAQQ83MTD+UkiAFlCINOAKI0xIgBiAIIAuSOAKAgAQgBiAJIAySOAKEgAQgBiAKIA2SOAKIgAQgBkEMaiEGDAALCwsLhg8BAEEAC/8OkAAAAFoAAADqAAAAWgAAAEQBAABhAAAApQEAAFkAAAD+AQAAWgAAAFgCAABcAAAAtAIAAGkAAAAdAwAAcgAAAI8DAABoAAAA9wMAAFwAAABTBAAAXgAAALEEAAB+AAAALwUAAG4AAACdBQAAYgAAAP8FAABdAAAAXAYAAGsAAADHBgAAXQAAACQHAABbAAAAPGgxIGxhbmc9ImVuIiBkaXI9Imx0ciI+SGVsbG8sIFdvcmxkPC9oMT48cCBsYW5nPSJlbiIgZGlyPSJsdHIiPkVuZ2xpc2g8c3Bhbj5lbjwvc3Bhbj48L3A+PGgxIGxhbmc9ImVzIiBkaXI9Imx0ciI+SG9sYSwgTXVuZG88L2gxPjxwIGxhbmc9ImVzIiBkaXI9Imx0ciI+RXNwYcOxb2w8c3Bhbj5lczwvc3Bhbj48L3A+PGgxIGxhbmc9ImZyIiBkaXI9Imx0ciI+Qm9uam91ciwgbGUgbW9uZGU8L2gxPjxwIGxhbmc9ImZyIiBkaXI9Imx0ciI+RnJhbsOnYWlzPHNwYW4+ZnI8L3NwYW4+PC9wPjxoMSBsYW5nPSJkZSIgZGlyPSJsdHIiPkhhbGxvLCBXZWx0PC9oMT48cCBsYW5nPSJkZSIgZGlyPSJsdHIiPkRldXRzY2g8c3Bhbj5kZTwvc3Bhbj48L3A+PGgxIGxhbmc9Iml0IiBkaXI9Imx0ciI+Q2lhbywgbW9uZG88L2gxPjxwIGxhbmc9Iml0IiBkaXI9Imx0ciI+SXRhbGlhbm88c3Bhbj5pdDwvc3Bhbj48L3A+PGgxIGxhbmc9InB0IiBkaXI9Imx0ciI+T2zDoSwgTXVuZG88L2gxPjxwIGxhbmc9InB0IiBkaXI9Imx0ciI+UG9ydHVndcOqczxzcGFuPnB0PC9zcGFuPjwvcD48aDEgbGFuZz0icnUiIGRpcj0ibHRyIj7Qn9GA0LjQstC10YIsINC80LjRgDwvaDE+PHAgbGFuZz0icnUiIGRpcj0ibHRyIj7QoNGD0YHRgdC60LjQuTxzcGFuPnJ1PC9zcGFuPjwvcD48aDEgbGFuZz0iZWwiIGRpcj0ibHRyIj7Ok861zrnOrCDPg86/z4UsIM6az4zPg868zrU8L2gxPjxwIGxhbmc9ImVsIiBkaXI9Imx0ciI+zpXOu867zrfOvc65zrrOrDxzcGFuPmVsPC9zcGFuPjwvcD48aDEgbGFuZz0iamEiIGRpcj0ibHRyIj7jgZPjgpPjgavjgaHjga/jgIHkuJbnlYw8L2gxPjxwIGxhbmc9ImphIiBkaXI9Imx0ciI+5pel5pys6KqePHNwYW4+amE8L3NwYW4+PC9wPjxoMSBsYW5nPSJ6aCIgZGlyPSJsdHIiPuS9oOWlve+8jOS4lueVjDwvaDE+PHAgbGFuZz0iemgiIGRpcj0ibHRyIj7kuK3mloc8c3Bhbj56aDwvc3Bhbj48L3A+PGgxIGxhbmc9ImtvIiBkaXI9Imx0ciI+7JWI64WVLCDshLjsg4E8L2gxPjxwIGxhbmc9ImtvIiBkaXI9Imx0ciI+7ZWc6rWt7Ja0PHNwYW4+a288L3NwYW4+PC9wPjxoMSBsYW5nPSJoaSIgZGlyPSJsdHIiPuCkqOCkruCkuOCljeCkpOClhyDgpKbgpYHgpKjgpL/gpK/gpL48L2gxPjxwIGxhbmc9ImhpIiBkaXI9Imx0ciI+4KS54KS/4KSo4KWN4KSm4KWAPHNwYW4+aGk8L3NwYW4+PC9wPjxoMSBsYW5nPSJhciIgZGlyPSJydGwiPtmF2LHYrdio2Kcg2KjYp9mE2LnYp9mE2YU8L2gxPjxwIGxhbmc9ImFyIiBkaXI9InJ0bCI+2KfZhNi52LHYqNmK2Kk8c3Bhbj5hcjwvc3Bhbj48L3A+PGgxIGxhbmc9ImhlIiBkaXI9InJ0bCI+16nXnNeV150g16LXldec1508L2gxPjxwIGxhbmc9ImhlIiBkaXI9InJ0bCI+16LXkdeo15nXqjxzcGFuPmhlPC9zcGFuPjwvcD48aDEgbGFuZz0idHIiIGRpcj0ibHRyIj5NZXJoYWJhIETDvG55YTwvaDE+PHAgbGFuZz0idHIiIGRpcj0ibHRyIj5Uw7xya8OnZTxzcGFuPnRyPC9zcGFuPjwvcD48aDEgbGFuZz0idmkiIGRpcj0ibHRyIj5YaW4gY2jDoG8gdGjhur8gZ2nhu5tpPC9oMT48cCBsYW5nPSJ2aSIgZGlyPSJsdHIiPlRp4bq/bmcgVmnhu4d0PHNwYW4+dmk8L3NwYW4+PC9wPjxoMSBsYW5nPSJzdyIgZGlyPSJsdHIiPkhhYmFyaSwgRHVuaWE8L2gxPjxwIGxhbmc9InN3IiBkaXI9Imx0ciI+S2lzd2FoaWxpPHNwYW4+c3c8L3NwYW4+PC9wPjxoMSBsYW5nPSJzdiIgZGlyPSJsdHIiPkhlaiwgdsOkcmxkZW48L2gxPjxwIGxhbmc9InN2IiBkaXI9Imx0ciI+U3ZlbnNrYTxzcGFuPnN2PC9zcGFuPjwvcD4="),c=>c.charCodeAt(0))).then(r=>r.instance.exports);
+document.addEventListener("htmx:config:request",e=>{
+e.detail.ctx.fetch=async()=>{
+const w=await window.hello,n=w.html();
+return new Response(new Uint8Array(w.m.buffer,8192,n).slice(),{status:200,headers:{"Content-Type":"text/html; charset=utf-8"}});
+};
+});
+</script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<main id="hello" aria-live="polite" hx-get="/hello" hx-trigger="load, every 6s, click from:document" hx-on::after:swap="window.morph&&window.morph(this)"></main>
+<script type="module">
+import*as THREE from"three";
+import{EffectComposer}from"three/addons/postprocessing/EffectComposer.js";
+import{RenderPass}from"three/addons/postprocessing/RenderPass.js";
+import{UnrealBloomPass}from"three/addons/postprocessing/UnrealBloomPass.js";
+import{OutputPass}from"three/addons/postprocessing/OutputPass.js";
+const w=await window.hello;
+const N=16000,RING=2600,buf=w.m.buffer;
+const P=new Float32Array(buf,65536,N*3),V=new Float32Array(buf,305536,N*3),T=new Float32Array(buf,545536,N*3);
+const rnd=Math.random,TAU=Math.PI*2;
+const gauss=()=>Math.sqrt(-2*Math.log(1-rnd()))*Math.cos(TAU*rnd());
+const th=new Float32Array(N),rr=new Float32Array(N),sp=new Float32Array(N),ry=new Float32Array(N),seed=new Float32Array(N*4);
+for(let i=0;i<N;i++){
+const r=16+rnd()*34,u=rnd()*2-1,a=rnd()*TAU,s=Math.sqrt(1-u*u);
+P[i*3]=r*s*Math.cos(a);P[i*3+1]=r*u;P[i*3+2]=r*s*Math.sin(a)-8;
+const q=Math.cbrt(rnd())*2.6;T[i*3]=q*s*Math.cos(a);T[i*3+1]=q*u;T[i*3+2]=q*s*Math.sin(a);
+V[i*3]=V[i*3+1]=V[i*3+2]=0;
+th[i]=rnd()*TAU;rr[i]=.82+Math.pow(rnd(),1.8)*.9;sp[i]=(.05+.11/Math.pow(rr[i],1.5))*(rnd()<.06?-1:1);ry[i]=gauss()*.07;
+seed[i*4]=rnd();seed[i*4+1]=rnd();seed[i*4+2]=rnd();seed[i*4+3]=Math.pow(rnd(),2.2);
+}
+const canvas=document.getElementById("c");
+const renderer=new THREE.WebGLRenderer({canvas,antialias:false,powerPreference:"high-performance"});
+const pr=Math.min(devicePixelRatio,2);
+renderer.setPixelRatio(pr);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.05;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,.1,300);
+camera.position.set(0,0,14);
+const bg=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.ShaderMaterial({
+depthTest:false,depthWrite:false,
+uniforms:{t:{value:0},r:{value:new THREE.Vector2(innerWidth,innerHeight)},m:{value:new THREE.Vector2()}},
+vertexShader:`varying vec2 u;void main(){u=uv;gl_Position=vec4(position.xy,.9999,1.);}`,
+fragmentShader:`uniform float t;uniform vec2 r,m;varying vec2 u;
+float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+1.),f.x),f.y);}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<6;i++){v+=a*n(p);p=mat2(1.6,1.2,-1.2,1.6)*p+vec2(1.7,9.2);a*=.5;}return v;}
+void main(){
+vec2 p=(u-.5)*vec2(r.x/r.y,1.)*2.+m*.035;
+float q=fbm(p*1.1+vec2(t*.018,-t*.012));
+float k=fbm(p*1.7+q*2.2+vec2(-t*.025,t*.017));
+vec3 c=vec3(.004,.005,.014);
+c=mix(c,vec3(.05,.018,.11),smoothstep(.35,.95,k));
+c=mix(c,vec3(.008,.06,.11),smoothstep(.5,1.,q)*.7);
+c+=vec3(.16,.05,.2)*pow(k,5.)*.9;
+c*=1.-smoothstep(.4,1.9,length(p*vec2(.75,1.)));
+c+=(h(gl_FragCoord.xy+fract(t)*91.)-.5)*.006;
+gl_FragColor=vec4(max(c,0.),1.);
+}`}));
+bg.frustumCulled=false;bg.renderOrder=-2;scene.add(bg);
+const SN=2200,sp3=new Float32Array(SN*3),ss=new Float32Array(SN);
+for(let i=0;i<SN;i++){const r=60+rnd()*120,u=rnd()*2-1,a=rnd()*TAU,s=Math.sqrt(1-u*u);sp3[i*3]=r*s*Math.cos(a);sp3[i*3+1]=r*u;sp3[i*3+2]=-Math.abs(r*s*Math.sin(a));ss[i]=rnd();}
+const sg=new THREE.BufferGeometry();sg.setAttribute("position",new THREE.BufferAttribute(sp3,3));sg.setAttribute("s",new THREE.BufferAttribute(ss,1));
+const stars=new THREE.Points(sg,new THREE.ShaderMaterial({
+transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+uniforms:{t:{value:0},pr:{value:pr}},
+vertexShader:`attribute float s;uniform float t,pr;varying float a;void main(){a=(.25+.75*s)*(.55+.45*sin(t*(.6+s*2.)+s*60.));gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_PointSize=(.8+s*1.6)*pr;}`,
+fragmentShader:`varying float a;void main(){float d=length(gl_PointCoord-.5);gl_FragColor=vec4(vec3(.75,.82,1.)*a*smoothstep(.5,.0,d)*.55,1.);}`}));
+stars.renderOrder=-1;scene.add(stars);
+const geo=new THREE.BufferGeometry();
+const pa=new THREE.BufferAttribute(P,3).setUsage(THREE.DynamicDrawUsage),va=new THREE.BufferAttribute(V,3).setUsage(THREE.DynamicDrawUsage);
+geo.setAttribute("position",pa);geo.setAttribute("v",va);geo.setAttribute("s",new THREE.BufferAttribute(seed,4));
+const mat=new THREE.ShaderMaterial({
+transparent:true,depthWrite:false,depthTest:false,blending:THREE.AdditiveBlending,
+uniforms:{t:{value:0},h:{value:innerHeight*pr},g:{value:0}},
+vertexShader:`attribute vec3 v;attribute vec4 s;uniform float t,h,g;varying vec3 c;
+vec3 grad(float x){x=fract(x);vec3 a=vec3(.32,.86,1.),b=vec3(.58,.46,1.),d=vec3(1.,.42,.72),e=vec3(1.,.8,.52);
+return x<.25?mix(a,b,x*4.):x<.5?mix(b,d,x*4.-1.):x<.75?mix(d,e,x*4.-2.):mix(e,a,x*4.-3.);}
+void main(){
+vec3 p=position;
+float a=t*(.5+s.x*.9)+s.y*6.2832;
+p+=vec3(sin(a),cos(a*1.31),sin(a*.73))*.022*(.35+s.z);
+vec4 mv=modelViewMatrix*vec4(p,1.);
+gl_Position=projectionMatrix*mv;
+float q=length(v);
+float w=.5+.5*sin(position.x*.7-position.y*.25-t*1.6+s.y*1.5);
+vec3 col=grad(position.x*.045+position.y*.025-t*.035+s.x*.07);
+col=mix(col,vec3(1.,.96,.92),clamp(q*5.,0.,.75)+w*w*w*.25);
+float b=(.45+.55*s.z)*(.62+.6*w*w)*(1.+g);
+c=col*b;
+gl_PointSize=(.55+s.w*2.1)*(1.+clamp(q*9.,0.,1.4))*h*.032/-mv.z;
+}`,
+fragmentShader:`varying vec3 c;void main(){float d=length(gl_PointCoord-.5);float a=smoothstep(.5,.0,d);gl_FragColor=vec4(c*a*a,1.);}`});
+const pts=new THREE.Points(geo,mat);pts.frustumCulled=false;scene.add(pts);
+const composer=new EffectComposer(renderer);
+composer.setPixelRatio(pr);
+composer.addPass(new RenderPass(scene,camera));
+const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),.95,.62,.04);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+const cv=document.createElement("canvas"),cx=cv.getContext("2d",{willReadFrequently:true});
+const CW=2048,CH=560;cv.width=CW;cv.height=CH;
+const latin=/^[\p{Script=Latin}\p{P}\p{Zs}]+$/u;
+const fontsReady=Promise.race([Promise.all([document.fonts.load('italic 300px "Instrument Serif"'),document.fonts.load('300px "Instrument Serif"')]),new Promise(r=>setTimeout(r,1800))]);
+function sample(text,dir){
+const font=s=>`${latin.test(text)?"italic ":""}400 ${s}px "Instrument Serif","Iowan Old Style","Noto Serif","Noto Serif CJK JP","Hiragino Mincho ProN","Songti SC","Noto Naskh Arabic","Noto Serif Devanagari",Georgia,serif`;
+let fs=320;cx.font=font(fs);cx.direction=dir||"ltr";
+const mw=cx.measureText(text).width;if(mw>CW*.9)fs*=CW*.9/mw;
+cx.clearRect(0,0,CW,CH);cx.font=font(fs);cx.textAlign="center";cx.textBaseline="middle";cx.fillStyle="#fff";cx.fillText(text,CW/2,CH/2);
+const d=cx.getImageData(0,0,CW,CH).data;
+let cnt=0;for(let i=3;i<d.length;i+=16)if(d[i]>110)cnt++;
+cnt*=4;
+const st=Math.max(1,Math.sqrt(cnt/(N-RING)));
+const o=[];let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+for(let y=0;y<CH;y+=st)for(let x=0;x<CW;x+=st){
+const xi=(x+rnd()*st*.5)|0,yi=(y+rnd()*st*.5)|0;
+if(xi<CW&&yi<CH&&d[(yi*CW+xi)*4+3]>110){const X=xi-CW/2,Y=CH/2-yi;o.push(X,Y);if(X<x0)x0=X;if(X>x1)x1=X;if(Y<y0)y0=Y;if(Y>y1)y1=Y;}
+}
+return{o,x0,x1,y0,y1};
+}
+let M=0,R=6,cur=null,glow=0;
+function layout(burst){
+const h=cur&&cur.querySelector("h1");if(!h)return;
+const{o,x0,x1,y0,y1}=sample(h.textContent.trim(),h.getAttribute("dir"));
+const n=o.length/2;if(!n)return;
+for(let i=n-1;i>0;i--){const j=(rnd()*(i+1))|0,a=o[i*2],b=o[i*2+1];o[i*2]=o[j*2];o[i*2+1]=o[j*2+1];o[j*2]=a;o[j*2+1]=b;}
+const vh=2*camera.position.z*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)),vw=vh*camera.aspect;
+const tw=Math.min(vw*.84,12.5),sc=Math.min(tw/(x1-x0||1),vh*.3/(y1-y0||1));
+const cxo=(x0+x1)/2,cyo=(y0+y1)/2,lift=vh*.035;
+M=Math.min(n,N-RING);
+const perm=new Uint32Array(N);for(let i=0;i<N;i++)perm[i]=i;
+if(burst)for(let i=N-1;i>0;i--){const j=(rnd()*(i+1))|0,a=perm[i];perm[i]=perm[j];perm[j]=a;}
+const TT=new Float32Array(T);
+for(let i=0;i<N;i++){
+const k=i*3;
+if(i<M){TT[k]=(o[i*2]-cxo)*sc+gauss()*.006;TT[k+1]=(o[i*2+1]-cyo)*sc+lift+gauss()*.006;TT[k+2]=gauss()*.06;}
+}
+const Pn=new Float32Array(P),Vn=new Float32Array(V);
+for(let i=0;i<N;i++){
+const a=perm[i]*3,k=i*3;
+P[k]=Pn[a];P[k+1]=Pn[a+1];P[k+2]=Pn[a+2];
+V[k]=Vn[a];V[k+1]=Vn[a+1];V[k+2]=Vn[a+2];
+if(i<M){T[k]=TT[k];T[k+1]=TT[k+1];T[k+2]=TT[k+2];}
+if(burst){const px=P[k],py=P[k+1],l=Math.hypot(px,py)+.5;V[k]+=gauss()*.07+px/l*.09;V[k+1]+=gauss()*.07+py/l*.09;V[k+2]+=gauss()*.09+.05;}
+}
+R=Math.max(tw*.56,2.4)+.6;
+if(burst)glow=1;
+}
+window.morph=async el=>{cur=el;await fontsReady;layout(true);};
+if(document.querySelector("#hello h1"))window.morph(document.getElementById("hello"));
+const ndc=new THREE.Vector2(9,9),ray=new THREE.Raycaster(),plane=new THREE.Plane(new THREE.Vector3(0,0,1),0),hit=new THREE.Vector3();
+let on=0,amp=0;const look=new THREE.Vector2();
+addEventListener("pointermove",e=>{ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);on=1;});
+addEventListener("pointerdown",e=>{ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);on=1;});
+document.addEventListener("pointerleave",()=>on=0);
+addEventListener("pointerup",e=>{if(e.pointerType!=="mouse")on=0;});
+addEventListener("blur",()=>on=0);
+function size(){
+const W=innerWidth,H=innerHeight;
+renderer.setSize(W,H,false);composer.setSize(W,H);bloom.setSize(W,H);
+camera.aspect=W/H;camera.position.z=W/H<1?14+(1/(W/H)-1)*5:14;camera.updateProjectionMatrix();
+bg.material.uniforms.r.value.set(W,H);mat.uniforms.h.value=H*pr;
+if(cur)layout(false);
+}
+size();
+let rt=0;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(size,120);});
+const cr=Math.cos(-.11),sr=Math.sin(-.11);
+let first=true,last=performance.now();
+renderer.setAnimationLoop(now=>{
+const t=now/1000,dt=Math.min((now-last)/16.667,3);last=now;
+for(let i=M;i<N;i++){
+const k=i*3,a=th[i]+t*sp[i],r=R*rr[i],x=Math.cos(a)*r,s=Math.sin(a)*r,y=s*.17+ry[i]*r;
+T[k]=x*cr-y*sr;T[k+1]=x*sr+y*cr;T[k+2]=s*.82;
+}
+ray.setFromCamera(ndc,camera);
+if(!ray.ray.intersectPlane(plane,hit))hit.set(99,99,0);
+amp+=((on?.11:0)-amp)*.08;
+look.lerp(on?ndc:new THREE.Vector2(Math.sin(t*.13)*.4,Math.cos(t*.11)*.25),.02);
+const steps=dt>1.6?2:1;
+for(let j=0;j<steps;j++)w.step(N,hit.x,hit.y,amp,.0155,.91);
+pa.needsUpdate=true;va.needsUpdate=true;
+glow*=.94;
+camera.position.x+=(look.x*1.1-camera.position.x)*.03;
+camera.position.y+=(look.y*.7-camera.position.y)*.03;
+camera.lookAt(0,0,0);
+mat.uniforms.t.value=t;mat.uniforms.g.value=glow*.6;
+bg.material.uniforms.t.value=t;bg.material.uniforms.m.value.copy(look);
+stars.material.uniforms.t.value=t;stars.rotation.y=t*.004;
+composer.render();
+if(first){first=false;canvas.classList.add("on");}
+});
+</script>
+</body>
+</html>

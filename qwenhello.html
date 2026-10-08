@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>hello, world</title>
+<meta name="theme-color" content="#04050a">
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="none" stroke="%23f3e3cb" stroke-width="2"/><circle cx="16" cy="16" r="4" fill="%238ef1f0"/></svg>'>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2/dist/htmx.min.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#04050a}
+body{color:#ece7de;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:inherit;text-decoration:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity 1.6s cubic-bezier(.2,.7,.2,1)}
+body.go canvas{opacity:1}
+.ghost{position:fixed;right:-6vw;bottom:-10vh;font-size:40vh;line-height:.82;font-weight:900;color:#8ef1f0;opacity:0;pointer-events:none;transition:opacity 2.6s ease 1.4s;animation:drift 38s ease-in-out infinite alternate}
+body.go .ghost{opacity:.055}
+@keyframes drift{from{transform:translate3d(0,0,0) rotate(-2deg)}to{transform:translate3d(-3vw,-4vh,0) rotate(2deg)}}
+.grain{position:fixed;inset:-60%;z-index:6;pointer-events:none;opacity:.15;mix-blend-mode:overlay;animation:gr .9s steps(2,jump-none) infinite}
+.grain i{position:absolute;inset:0;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.44'/></svg>")}
+@keyframes gr{0%{transform:translate3d(0,0,0)}25%{transform:translate3d(-2.4%,1.6%,0)}50%{transform:translate3d(1.8%,-2.2%,0)}75%{transform:translate3d(-1.2%,-1%,0)}100%{transform:translate3d(2.2%,2%,0)}}
+.halo{position:fixed;left:50%;top:47%;width:130vmax;height:130vmax;transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;opacity:0;transition:opacity 3s ease 1s;background:radial-gradient(circle,rgba(255,150,96,.075),rgba(142,241,240,.05) 34%,transparent 62%)}
+body.go .halo{opacity:1}
+.sweep{position:fixed;inset:0;z-index:7;pointer-events:none;background:linear-gradient(100deg,transparent 42%,rgba(236,231,222,.13) 50%,transparent 58%);transform:translateX(-130%);animation:wipe 2.4s cubic-bezier(.6,0,.2,1) .25s 1 both}
+@keyframes wipe{to{transform:translateX(130%)}}
+.frame{position:fixed;inset:0;z-index:3;display:grid;grid-template-rows:auto 1fr auto;padding:max(16px,env(safe-area-inset-top)) clamp(16px,4vw,46px) max(16px,env(safe-area-inset-bottom));pointer-events:none}
+.rail{display:flex;justify-content:space-between;align-items:center;gap:18px;font:500 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.28em;text-transform:uppercase;color:#7c8496}
+.mark{font-weight:700;letter-spacing:.34em;color:#ece7de;font-size:10.5px}
+.mark span{color:#ff9c5c;margin:0 .45em}
+.kicker em{font-style:normal;color:#8ef1f0}
+.below{align-self:end;justify-self:center;display:flex;flex-direction:column;align-items:center;gap:clamp(14px,2.4vh,26px);text-align:center;max-width:min(94vw,940px)}
+.greet{min-height:clamp(58px,10vh,110px);display:flex;flex-direction:column;align-items:center;gap:8px;opacity:0;transform:translateY(10px);transition:opacity .55s cubic-bezier(.2,.7,.2,1),transform .55s cubic-bezier(.2,.7,.2,1)}
+.greet.ready{opacity:1;transform:none}
+.nat{font-size:clamp(25px,5.1vh,54px);font-weight:650;letter-spacing:.004em;line-height:1.08;background:linear-gradient(96deg,#fff3e4,#ffd6ae 27%,#cfeff5 62%,#8ef1f0);-webkit-background-clip:text;background-clip:text;color:transparent}
+.rom{font-style:italic;font-size:clamp(12px,1.7vh,16px);color:#9aa3b3;letter-spacing:.07em}
+.meta{font:500 9.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.24em;text-transform:uppercase;color:#6d7688}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;max-width:min(92vw,780px);pointer-events:auto}
+.chips a{font-size:11.5px;line-height:1;padding:7px 11px;border:1px solid rgba(236,231,222,.14);border-radius:999px;color:#8d97a8;background:rgba(255,255,255,.018);transition:color .32s,border-color .32s,background .32s,box-shadow .32s;opacity:0;transform:translateY(9px);animation:up .8s cubic-bezier(.2,.7,.2,1) forwards;animation-play-state:paused;cursor:pointer}
+body.go .chips a{animation-play-state:running}
+@keyframes up{to{opacity:1;transform:none}}
+.chips a:hover,.chips a:focus-visible{color:#fff3e4;border-color:rgba(255,156,92,.5);background:rgba(255,156,92,.07);box-shadow:0 0 26px -10px rgba(255,156,92,.7);outline:none}
+.chips a[aria-current=true]{color:#04050a;background:#f3e3cb;border-color:#f3e3cb}
+.chips a[data-s=rtl]{direction:rtl}
+.acts{display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:center;pointer-events:auto}
+.say{font:600 9.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.3em;text-transform:uppercase;color:#04060a;background:linear-gradient(100deg,#ffd9b8,#8ef1f0);border:0;border-radius:999px;padding:12px 20px;cursor:pointer;transition:box-shadow .3s,transform .25s;box-shadow:0 0 0 0 rgba(255,156,92,0)}
+.say:hover{box-shadow:0 0 34px -6px rgba(255,176,120,.55);transform:translateY(-1px)}
+.say:active{transform:translateY(0) scale(.98)}
+.status,.pulse{font:500 9.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em;color:#67melt}
+.status{color:#6f7889;text-align:left;max-width:44ch;text-transform:none}
+#pulse{text-align:right;color:#6f7889;text-transform:none}
+#pulse:empty::before{content:"· · ·";letter-spacing:.5em;color:#3a4152}
+.greet.htmx-swapping{opacity:0;transform:translateY(-9px);transition:opacity .17s ease,transform .17s ease}
+.greet.htmx-settling{opacity:0;transform:translateY(13px)}
+@keyframes fadein{from{opacity:0;transform:translateY(13px)}to{opacity:1;transform:none}}
+.greet.fallback{animation:fadein .52s cubic-bezier(.2,.7,.2,1) both}
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+@media (prefers-reduced-motion:reduce){.grain,.ghost,.sweep{animation:none}.greet{transition:none}}
+@media (max-width:640px){.rail{font-size:8.5px;letter-spacing:.18em}.kicker{display:none}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div class="halo"></div>
+<div class="ghost" aria-hidden="true">世界</div>
+<div class="frame">
+  <header class="rail">
+    <div class="mark">hello<span>/</span>world</div>
+    <div class="kicker">glyphs rasterised by <em>webassembly</em></div>
+  </header>
+  <section class="below">
+    <h1 class="sr">hello, world</h1>
+    <div id="greet" class="greet" role="status" aria-live="polite"></div>
+    <nav id="chips" class="chips" aria-label="say hello in another language"></nav>
+    <div class="acts">
+      <button id="say" class="say" type="button">say hello</button>
+      <span id="status" class="status" hx-get="/wasm:status" hx-target="#status" hx-swap="innerHTML transition:true settle:340ms" hx-trigger="load"></span>
+    </div>
+  </section>
+  <footer class="rail">
+    <div>sdf glyphs · exact euclidean distance field · bloom</div>
+    <div id="pulse" class="pulse" hx-get="/wasm:telemetry" hx-target="#pulse" hx-swap="innerHTML transition:true settle:340ms" hx-trigger="telem:in, every 4s"></div>
+  </footer>
+</div>
+<div class="grain" aria-hidden="true"><i></i></div>
+<div class="sweep" aria-hidden="true"></div>
+<script>
+const WORDS=[["hello, world","—","english"],["你好，世界","nǐ hǎo, shìjiè","chinese"],["こんにちは世界","konnichiwa sekai","japanese"],["안녕하세요 세계","annyeonghaseyo segye","korean"],["Привет, мир","privet mir","russian"],["مرحبا بالعالم","marhaban bil-ʿālam","arabic"],["مرhabا",""],["שלום עולם","shalom olam","hebrew"],["こんにちは",""],["สวัสดีชาวโลก","sawatdii choolok","thai"],["សួស្ដីពិភពលោក","suostei phiphoplok","khmer"],["Hello,.world",""],["Γειά σου Κόσμε","geia sou kosme","greek"],["Hallo Welt","hal-o velt","german"],["Bonjour le monde","bonjoor luh mond","french"],["Hola Mundo","OH-lah MOON-doh","spanish"],["Olá Mundo","oh-LAH MOO-noo","portuguese"],["Ciao mondo","CHOW MOHn-doh","italonian"],["Witaj świecie","VEE-tay SHEF-eh","polish"],["Hallöchen Welt","HAL-er-shen velt","german"],["Bok world",""],["Hallo Wereld","HAH-lo VELD","dutch"],["Hej Världen","yay VYR-len","swedish"],["Hej verden","HAI VEN-dnen","danish"],["Halo Maailma","HAH-lo MY-lma","estonian"],["Hei maailma","i MAI-lma","finnish"],["Ahoj světe","AH-hoy SHEE-veh","czech"],["Szia Világ","SEE-ah VEE-laagsh","hungarian"],["Salut lumea","sah-LOO tee LWAY-mah","romanian"],["Здравей свят","zdra-vey syat","bulgarian"],["Здраво свету","zdravo svetu","serbian"],["Добар ден свету",""],["Tunggil",""],["Hallo dunia","HAH-loh DOO-nya","indonesian"],["Kumusta mundo","koo-MOOS-ta MOO-noh","tagalog"],["Xin chào thế giới","zin chow tay zoy","vietnamese"],["สวัสดี",""],[" hello world",""],[" Salam Dünya","sah-LAHM duun-YA","azerbaijani"]].filter(w=>w[1]);
+const RTL=new Set(["arabic","hebrew","urdu","persian","arabic"]);
+const B=1024,HH=256,SPAN=26;
+const U8=t=>t instanceof Uint8Array?t:new Uint8Array(t);
+const b7=n=>{const a=[];do{let d=n&127;n>>>=7,n&&(d|=128),a.push(d)}while(n);return a};
+const s7=n=>{const a=[];let more=1;for(;more;){let d=n&127;n>>=7,(n!==0&&!(d&64))|(n===0&&d&64)?d|=128:more=0,a.push(d)}return a};
+const f32bits=n=>new Uint8Array(new Uint32Array([new Float32Array([n])[0]]).buffer);
+const str=s=>[...unescape(encodeURIComponent(s))].map(c=>c.charCodeAt(0));
+const vec=(arr,a)=>[...b7(a.length),...a];
+const sec=(id,body)=>body.length?[id,...vec(1,[...b7(1),...b7(0)])]:[];
+function EB(){this.b=[]}
+const EBp=EB.prototype;
+EBp.raw=function(a){for(const x of[].concat(a))this.b.push(x&255);return this};
+EBp.op=function(x,a){this.b.push(x);for(const y of a||[])this.b.push(y);return this};
+EBp.i=function(x,a){this.b.push(x);for(const y of s7(a||0))this.b.push(y);return this};
+EBp.u=function(x,a){this.b.push(x);for(const y of b7(a||0))this.b.push(y);return this};
+EBp.c=function(x,m,a){this.b.push(x);for(const y of b7(m))this.b.push(y);for(const y of b7(a||0))this.b.push(y);return this};
+EBp.f=function(x,v){this.b.push(x);for(const y of f32bits(v))this.b.push(y);return this};
+const G={local_get:0x20,local_set:0x21,i32_const:0x41,i32_add:0x6a,i32_sub:0x6b,i32_mul:0x6c,i32_div_s:0x6d,i32_sub_s:0x4a,i32_le_u:0x53,i32_eqz:0x45,i32_and:0x71,i32_wrap_i64:0xa7,i64_const:0x42,i64_add:0x7c,i64_sub:0x7d,i64_mul:0x7e,i64_trunc_s_i32:0xa8,f32_add:0x92,f32_sub:0x93,f32_mul:0x94,f32_div:0x95,f32_neg:0x8c,f32_floor:0x8b,f32_sin:0x9e,f32_convert_i32_s:0xb4,i32_trunc_f32_s:0xa8,i32_reinterpret_f32:0xbe,f32_reinterpret_i32:0xbf,block:0x02,loop:0x03,br:0x0c,br_if:0x0d,end:0x0b};
+const memop=(x,a,m,o)=>b=>{const A=b.length?b[0]:0,M=b.length>1?b[1]:0,O=b.length>2?b[2]:0;return[x,...b7(a),...b7(m+(O?64:0)),...O?b7(O):[]]};
+const I32=0x7f,F32=0x7d;
+function buildWasm(){
+const types=[[[],[]],[[I32,I32,I32,I32,I32,I32],[]],[[I32,I32,I32,I32,I32,I32,I32,I32,I32],[]],[[I32,F32,F32],[]],[[I32,I32],[]],[[I32,I32,I32],[]]];
+const fns=[
+()=>{const p=b=>[G.local_get,b],o=new EB();let d=0;
+o.raw(sec(0,[0]));d++;
+o.raw(p(0)),o.op(G.i32_eqz),o.op(G.br_if,[0]);d--;o.op(G.end);
+o.raw(p(4)),o.op(G.local_set,[8]);
+o.raw(sec(0)),d++;o.raw(sec(3)),d++;
+o.raw(p(5)),o.op(G.local_set,[6]),o.raw(p(8)),o.op(G.local_set,[2]);
+o.raw(sec(0)),d++;o.raw(sec(3)),d++;
+o.op(G.block,[0x40]),d++;
+o.raw(p(2)),o.raw(p(6)),o.op(G.i32_load,[2,1,0]),o.op(G.i32_sub_s),o.op(G.i32_eqz),o.op(G.br_if,[0]);d--;o.op(G.end);
+o.raw(p(6)),o.op(G.i32_const,[1]),o.op(G.i32_lt_s),o.op(G.if,[0x40]),d++;
+o.raw(p(4)),o.raw(p(6)),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.local_set,[7]),o.raw(p(5)),o.raw(p(7)),o.op(G.i32_f32,[2,1,0]),o.op(G.local_set,[8]),o.raw(p(4)),o.raw(p(7)),o.op(G.i32_f32,[2,1,0]),o.raw(p(8)),o.op(G.f32_add),o.raw(p(5)),o.raw(p(6)),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_f32,[2,1,0]),o.op(G.f32_sub),o.op(G.i64_const,[0]),o.op(G.i64_trunc_s_i32),o.raw(p(6)),o.op(G.i64_const,[1]),o.op(G.i64_add),o.op(G.i64_trunc_s_i32),o.op(G.i64_sub),o.op(G.i64_mul),o.op(G.i64_trunc_s_i32),o.raw(p(2)),o.raw(p(2)),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_load,[2,1,0]),o.op(G.i32_sub_s),o.op(G.i32_wrap_i64),o.op(G.i32_const,[1]),o.op(G.i32_add),o.op(G.i32_div_s),o.op(G.local_set,[3]);
+o.raw(p(1)),o.op(G.i32_eqz),o.raw(p(3)),o.raw(p(7)),o.op(G.i32_const,[1]),o.op(G.i32_sub),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_load,[2,1,0]),o.op(G.i32_lt_u),o.op(G.i32_and),o.op(G.br_if,[0]);d++;d--;o.op(G.end);
+o.raw(p(4)),o.raw(p(7)),o.op(G.i32_f32,[2,1,0]),o.op(G.local_set,[8]),o.op(G.br,[1]);d++;d--;o.op(G.end);
+o.raw(p(7)),o.raw(p(3)),o.op(G.i32_f32,[2,1,0]),o.raw(p(5)),o.raw(p(7)),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_f32,[2,1,0]),o.op(G.f32_add),o.raw(p(5)),o.raw(p(6)),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_f32,[2,1,0]),o.op(G.f32_sub),o.op(G.i64_const,[0]),o.op(G.i64_trunc_s_i32),o.raw(p(6)),o.op(G.i64_const,[1]),o.op(G.i64_add),o.op(G.i64_trunc_s_i32),o.op(G.i64_sub),o.op(G.i64_mul),o.op(G.i64_trunc_s_i32),o.raw(p(2)),o.raw(p(2)),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_load,[2,1,0]),o.op(G.i32_sub_s),o.op(G.i32_wrap_i64),o.op(G.i32_const,[1]),o.op(G.i32_add),o.op(G.i32_div_s),o.op(G.local_set,[3]);
+o.raw(p(4)),o.raw(p(7)),o.op(G.i32_const,[1]),o.op(G.i32_sub),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_load,[2,1,0]),o.raw(p(7)),o.op(G.i32_f32,[2,1,0]),o.op(G.f32_add),o.raw(p(5)),o.raw(p(7)),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_f32,[2,1,0]),o.op(G.f32_sub),o.op(G.i64_const,[0]),o.op(G.i64_trunc_s_i32),o.raw(p(7)),o.op(G.i64_const,[1]),o.op(G.i64_add),o.op(G.i64_trunc_s_i32),o.op(G.i64_sub),o.op(G.i64_mul),o.op(G.i64_trunc_s_i32),o.raw(p(2)),o.raw(p(7)),o.op(G.i32_const,[1]),o.op(G.i32_sub),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_load,[2,1,0]),o.op(G.i32_sub_s),o.op(G.i32_wrap_i64),o.op(G.i32_const,[1]),o.op(G.i32_add),o.op(G.i32_div_s),o.op(G.local_set,[3]);
+o.op(G.block,[0x40]),d++;o.raw(p(6)),o.op(G.local_set,[1]);o.raw(sec(3)),d++;
+o.op(G.block,[0x40]),d++;o.raw(p(1)),o.op(G.local_get,[9]),o.op(G.i32_lt_s),o.op(G.br_if,[1]);d--;o.op(G.end);
+o.raw(p(1)),o.op(G.i32_const,[1]),o.op(G.i32_add),o.op(G.local_set,[1]),o.raw(p(2)),o.raw(p(2)),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_load,[2,1,0]),o.raw(p(1)),o.op(G.i32_const,[1]),o.op(G.i32_sub),o.op(G.i32_const,[2]),o.op(G.i32_mul),o.op(G.i32_load,[2,1,0]),o.op(G.i32_le_s),o.op(G.br_if,[2]);d++;d--;o.op(G.end);
+o.raw(p(6)),o.raw(p(1)),o.op(G.i32_set,[6]);
+o.op(G.block,[0x40]),d++;o.raw(sec(3)),d++;
+o.raw(p(2)),o.raw(p(6)),o.op(G.i32_lt_s),o.op(G.br_if,[1]);d++;d--;o.op(G.end);
+return o.b},
+];
+return fns}
+</script>
+</body>
+</html>

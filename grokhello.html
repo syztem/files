@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>hello, world</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/htmx.org@4.0.0/dist/htmx.min.js"></script>
+<style>
+:root{--ink:#f6ecd8;--line:rgba(246,236,216,.18);--veil:#07060b}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--veil);color:var(--ink);overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity 1.4s ease}
+body.ready canvas{opacity:1}
+#shade{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 46%,transparent 0%,transparent 42%,rgba(0,0,0,.45) 78%,rgba(0,0,0,.72) 100%)}
+#grain{position:fixed;inset:-20%;pointer-events:none;opacity:.18;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E")}
+#dock{position:fixed;left:50%;bottom:6.5vh;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:22px;z-index:2;opacity:0;transition:opacity 1.8s ease .5s}
+body.ready #dock{opacity:1}
+#phrase{margin:0;min-height:1.2em;font-family:"Cormorant Garamond",Palatino,"Palatino Linotype",Georgia,serif;font-style:italic;font-weight:500;font-size:clamp(32px,4.6vw,62px);letter-spacing:.22em;text-indent:.22em;color:var(--ink);text-shadow:0 0 28px rgba(243,214,164,.38)}
+#phrase span{display:inline-block}
+#hours{display:flex;gap:8px}
+#hours button{font-family:"Cormorant Garamond",Palatino,Georgia,serif;font-size:13px;letter-spacing:.32em;text-indent:.32em;text-transform:lowercase;color:rgba(246,236,216,.66);background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:999px;padding:9px 18px;cursor:pointer;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);transition:background .45s ease,color .45s ease,border-color .45s ease}
+#hours button:hover{color:var(--ink);border-color:rgba(246,236,216,.4)}
+#hours button.on{color:#1b140e;background:var(--ink);border-color:transparent}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="shade"></div>
+<div id="grain"></div>
+<div id="dock">
+<p id="phrase"><span data-tint="0">hello, world</span></p>
+<div id="hours">
+<button type="button" class="on">dawn</button>
+<button type="button">noon</button>
+<button type="button">dusk</button>
+</div>
+</div>
+<script>
+["0","1","2"].forEach((k,i)=>{
+const b=document.querySelectorAll("#hours button")[i];
+const html='<span data-tint="'+k+'">hello, world</span>';
+b.setAttribute("hx-get",URL.createObjectURL(new Blob([html],{type:"text/html"})));
+b.setAttribute("hx-target","#phrase");
+b.setAttribute("hx-swap","innerHTML");
+});
+</script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}
+</script>
+<script type="module">
+import * as THREE from "three";
+const b64="AGFzbQEAAAABCwJgAn1/AGABfQF9AwMCAAEFAwEAAgcVAwNtZW0CAARmaWxsAAAEZ2xvdwABCtIDAsoCAgF/A30DQCAAQ+xROD+UIAKzQ+OlmzyUkiEDIAMgA0PbD8lAlY5D2w/JQJSTIQMgA0PbD0lAXgRAIAND2w/JQJMhAwsgAyADlCEEIAMhBSAFIAQgA5RDAADAQJWTIQUgBSAEIASUIAOUQwAA8EKVkiEFIAUgBCAElCAElCADlEMAgJ1FlZMhBSAFQ65HYT6UIQUgAkECdCAFOAIAIABDMzOzP5QgArNDbxKDO5SSIQMgAyADQ9sPyUCVjkPbD8lAlJMhAyADQ9sPSUBeBEAgA0PbD8lAkyEDCyADIAOUIQQgAyEFIAUgBCADlEMAAMBAlZMhBSAFIAQgBJQgA5RDAADwQpWSIQUgBSAEIASUIASUIAOUQwCAnUWVkyEFQ1K4Hj8gBUNcj8I+lJIhBSACQQJ0QYCABGogBTgCACACQQFqIgIgAUkNAAsLgwEBA30gACEBIAEgAUPbD8lAlY5D2w/JQJSTIQEgAUPbD0lAXgRAIAFD2w/JQJMhAQsgASABlCECIAEhAyADIAIgAZRDAADAQJWTIQMgAyACIAKUIAGUQwAA8EKVkiEDIAMgAiAClCAClCABlEMAgJ1FlZMhA0MAAAA/IANDAAAAP5SSCw==";
+const raw=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+const {instance}=await WebAssembly.instantiate(raw);
+const {fill,glow,mem}=instance.exports;
+const field=new Float32Array(mem.buffer);
+const palettes=[
+{a:[0.99,0.86,0.62],b:[0.93,0.58,0.50],bg:[0.07,0.045,0.055],ink:"#f6e2c4"},
+{a:[1,0.96,0.90],b:[0.74,0.83,1],bg:[0.045,0.055,0.075],ink:"#f7f1e6"},
+{a:[1,0.66,0.38],b:[0.70,0.55,1],bg:[0.06,0.03,0.08],ink:"#f0d8c2"}
+];
+let tintTo=0,shown=0;
+const canvas=document.getElementById("c");
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:"high-performance"});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.setClearColor(0x07060b,1);
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+const scene=new THREE.Scene();
+scene.fog=new THREE.FogExp2(0x07060b,0.042);
+const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,0.1,40);
+camera.position.set(0,0.08,7.6);
+await document.fonts.ready;
+const tw=1500,th=620,step=3;
+const sheet=document.createElement("canvas");
+sheet.width=tw;sheet.height=th;
+const ctx=sheet.getContext("2d",{willReadFrequently:true});
+ctx.clearRect(0,0,tw,th);
+ctx.fillStyle="#fff";
+ctx.textAlign="center";
+ctx.textBaseline="middle";
+ctx.font='600 228px "Cormorant Garamond", Palatino, "Palatino Linotype", Georgia, serif';
+ctx.textAlign="center";
+function drawTracked(text,y,tracking){
+const letters=[...text];
+const widths=letters.map(ch=>ctx.measureText(ch).width);
+const total=widths.reduce((a,b)=>a+b,0)+tracking*(letters.length-1);
+let x=(tw-total)/2;
+letters.forEach((ch,i)=>{ctx.fillText(ch,x+widths[i]/2,y);x+=widths[i]+tracking;});
+}
+drawTracked("HELLO",200,36);
+drawTracked("WORLD",430,36);
+const img=ctx.getImageData(0,0,tw,th).data;
+const sampled=[];
+for(let y=0;y<th;y+=step){
+for(let x=0;x<tw;x+=step){
+const a=img[(y*tw+x)*4+3];
+if(a<48)continue;
+sampled.push((x-tw/2)/176,(th/2-y)/176,(a/255-0.55)*0.28,a/255);
+}
+}
+const count=Math.min((sampled.length/4)|0,12000);
+const base=new Float32Array(count*3);
+const ink=new Float32Array(count);
+const pos=new Float32Array(count*3);
+const col=new Float32Array(count*3);
+const scl=new Float32Array(count);
+const born=new Float32Array(count*3);
+for(let i=0;i<count;i++){
+const ang=Math.random()*Math.PI*2,rad=2.4+Math.random()*4.8;
+born[i*3]=Math.cos(ang)*rad;
+born[i*3+1]=(Math.random()-0.5)*3.2;
+born[i*3+2]=Math.sin(ang)*rad*0.45;
+base[i*3]=sampled[i*4];
+base[i*3+1]=sampled[i*4+1];
+base[i*3+2]=sampled[i*4+2];
+ink[i]=sampled[i*4+3];
+scl[i]=0.8;
+}
+const geo=new THREE.BufferGeometry();
+geo.setAttribute("position",new THREE.BufferAttribute(pos,3));
+geo.setAttribute("aColor",new THREE.BufferAttribute(col,3));
+geo.setAttribute("aScale",new THREE.BufferAttribute(scl,1));
+const mat=new THREE.ShaderMaterial({
+uniforms:{uSize:{value:10.5*Math.min(devicePixelRatio||1,2)}},
+vertexShader:`attribute float aScale;attribute vec3 aColor;varying vec3 vColor;uniform float uSize;void main(){vColor=aColor;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_PointSize=aScale*uSize*(260.0/-mv.z);gl_Position=projectionMatrix*mv;}`,
+fragmentShader:`varying vec3 vColor;void main(){vec2 q=gl_PointCoord*2.0-1.0;float d=dot(q,q);if(d>1.0)discard;float a=exp(-d*3.4);gl_FragColor=vec4(vColor*a,a);}`,
+transparent:true,depthWrite:false,blending:THREE.AdditiveBlending
+});
+const points=new THREE.Points(geo,mat);
+const group=new THREE.Group();
+group.add(points);
+const disc=document.createElement("canvas");
+disc.width=disc.height=128;
+const dg=disc.getContext("2d");
+const rad=dg.createRadialGradient(64,64,0,64,64,64);
+rad.addColorStop(0,"rgba(255,255,255,.95)");
+rad.addColorStop(0.25,"rgba(255,255,255,.35)");
+rad.addColorStop(1,"rgba(255,255,255,0)");
+dg.fillStyle=rad;dg.fillRect(0,0,128,128);
+const haloMap=new THREE.CanvasTexture(disc);
+const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:haloMap,color:0xf3d7a1,transparent:true,opacity:0.28,blending:THREE.AdditiveBlending,depthWrite:false}));
+halo.scale.set(8.4,3.6,1);
+halo.position.z=-0.65;
+group.add(halo);
+function ring(radius,tube,color,opacity){
+const m=new THREE.Mesh(new THREE.TorusGeometry(radius,tube,8,220),new THREE.MeshBasicMaterial({color,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false}));
+m.rotation.x=1.18;
+return m;
+}
+const ringA=ring(2.55,0.0045,0xf6e2c4,0.42);
+const ringB=ring(2.92,0.0025,0xe7b7c0,0.28);
+ringA.position.z=-0.9;
+ringB.position.z=-1.15;
+group.add(ringA,ringB);
+scene.add(group);
+const dustN=900;
+const dustBase=new Float32Array(dustN*3);
+const dustPos=new Float32Array(dustN*3);
+const dustCol=new Float32Array(dustN*3);
+const dustScl=new Float32Array(dustN);
+for(let i=0;i<dustN;i++){
+const u=Math.random(),v=Math.random();
+const th=2*Math.PI*u,ph=Math.acos(2*v-1),r=1.6+Math.random()*5.4;
+dustBase[i*3]=r*Math.sin(ph)*Math.cos(th);
+dustBase[i*3+1]=r*Math.sin(ph)*Math.sin(th)*0.62;
+dustBase[i*3+2]=r*Math.cos(ph)*0.7;
+dustScl[i]=0.25+Math.random()*0.7;
+dustCol[i*3]=0.8;dustCol[i*3+1]=0.7;dustCol[i*3+2]=0.55;
+}
+const dustGeo=new THREE.BufferGeometry();
+dustGeo.setAttribute("position",new THREE.BufferAttribute(dustPos,3));
+dustGeo.setAttribute("aColor",new THREE.BufferAttribute(dustCol,3));
+dustGeo.setAttribute("aScale",new THREE.BufferAttribute(dustScl,1));
+const dustMat=mat.clone();
+dustMat.uniforms={uSize:{value:4.2*Math.min(devicePixelRatio||1,2)}};
+const dust=new THREE.Points(dustGeo,dustMat);
+scene.add(dust);
+const mouse={x:0,y:0};
+addEventListener("pointermove",e=>{mouse.x=(e.clientX/innerWidth)*2-1;mouse.y=(e.clientY/innerHeight)*2-1;});
+addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(innerWidth,innerHeight);});
+document.body.addEventListener("htmx:after:swap",ev=>{
+const root=ev.target&&ev.target.querySelector?ev.target:document.getElementById("phrase");
+const node=root.querySelector("[data-tint]")||root;
+if(!node||node.dataset.tint==null)return;
+tintTo=Number(node.dataset.tint)||0;
+document.querySelectorAll("#hours button").forEach((b,i)=>b.classList.toggle("on",i===tintTo));
+});
+const bg=new THREE.Color();
+const mix=(a,b,t)=>a+(b-a)*t;
+let t=0;
+document.body.classList.add("ready");
+function frame(){
+requestAnimationFrame(frame);
+t+=0.0075;
+shown+=(tintTo-shown)*0.028;
+const i0=Math.max(0,Math.min(2,Math.floor(shown)));
+const i1=Math.min(2,i0+1);
+const f=shown-i0;
+const A=palettes[i0],B=palettes[i1];
+const ca=[mix(A.a[0],B.a[0],f),mix(A.a[1],B.a[1],f),mix(A.a[2],B.a[2],f)];
+const cb=[mix(A.b[0],B.b[0],f),mix(A.b[1],B.b[1],f),mix(A.b[2],B.b[2],f)];
+const cbg=[mix(A.bg[0],B.bg[0],f),mix(A.bg[1],B.bg[1],f),mix(A.bg[2],B.bg[2],f)];
+bg.setRGB(cbg[0],cbg[1],cbg[2]);
+renderer.setClearColor(bg,1);
+scene.fog.color.copy(bg);
+document.documentElement.style.setProperty("--veil",`rgb(${(cbg[0]*255)|0},${(cbg[1]*255)|0},${(cbg[2]*255)|0})`);
+document.documentElement.style.setProperty("--ink",`rgb(${mix(parseInt(A.ink.slice(1,3),16),parseInt(B.ink.slice(1,3),16),f)|0},${mix(parseInt(A.ink.slice(3,5),16),parseInt(B.ink.slice(3,5),16),f)|0},${mix(parseInt(A.ink.slice(5,7),16),parseInt(B.ink.slice(5,7),16),f)|0})`);
+fill(t,count);
+const breath=glow(t*0.65);
+const intro=Math.min(1,t/3.4);
+const ease=1-Math.pow(1-intro,3);
+for(let i=0;i<count;i++){
+const wave=field[i];
+const pulse=field[16384+i];
+const tx=base[i*3]+wave*0.28;
+const ty=base[i*3+1]+wave*0.92;
+const tz=base[i*3+2]+(pulse-0.6)*0.22;
+pos[i*3]=born[i*3]+(tx-born[i*3])*ease;
+pos[i*3+1]=born[i*3+1]+(ty-born[i*3+1])*ease;
+pos[i*3+2]=born[i*3+2]+(tz-born[i*3+2])*ease;
+const k=Math.min(1,Math.max(0,(base[i*3+1]+1.15)/2.3));
+const hot=0.55+ink[i]*0.45;
+col[i*3]=(mix(cb[0],ca[0],k)*hot)*(0.75+pulse*0.4);
+col[i*3+1]=(mix(cb[1],ca[1],k)*hot)*(0.75+pulse*0.4);
+col[i*3+2]=(mix(cb[2],ca[2],k)*hot)*(0.75+pulse*0.4);
+scl[i]=(0.45+ink[i]*0.85)*(0.72+pulse*0.5);
+}
+geo.attributes.position.needsUpdate=true;
+geo.attributes.aColor.needsUpdate=true;
+geo.attributes.aScale.needsUpdate=true;
+const spin=glow(t*0.35);
+for(let i=0;i<dustN;i++){
+const w=spin*0.15+i*0.002;
+dustPos[i*3]=dustBase[i*3]*Math.cos(w)-dustBase[i*3+2]*Math.sin(w);
+dustPos[i*3+1]=dustBase[i*3+1]+Math.sin(t*0.2+i)*0.02;
+dustPos[i*3+2]=dustBase[i*3]*Math.sin(w)+dustBase[i*3+2]*Math.cos(w);
+dustCol[i*3]=ca[0]*0.55;dustCol[i*3+1]=ca[1]*0.48;dustCol[i*3+2]=cb[2]*0.6;
+}
+dustGeo.attributes.position.needsUpdate=true;
+dustGeo.attributes.aColor.needsUpdate=true;
+halo.material.color.setRGB(ca[0],ca[1],ca[2]);
+halo.material.opacity=0.18+breath*0.16;
+ringA.rotation.z=t*0.08;
+ringB.rotation.z=-t*0.05;
+group.rotation.y=t*0.045+mouse.x*0.22;
+group.rotation.x=mouse.y*-0.07;
+camera.position.x+=(mouse.x*0.42-camera.position.x)*0.035;
+camera.position.y+=(0.08-mouse.y*0.28-camera.position.y)*0.035;
+camera.lookAt(0,0.02,0);
+renderer.render(scene,camera);
+}
+frame();
+</script>
+</body>
+</html>

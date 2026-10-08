@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Belllung · ⊰-•-•⟐•-•-⦑/Λ\Ο/Β\Ε/\Π/Λ\Ι/Ν\Υ/⦒-•-•⟐•-•-⊱</title>
+<meta name="description" content="A three.js reading of a glassblowing / hail / tide / salt / annealing text. Scroll to turn the glass." />
+<meta name="color-scheme" content="dark" />
+
+<!--
+  ────────────────────────────────────────────────────────────────
+  GITHUB PAGES — FREE TIER
+  ────────────────────────────────────────────────────────────────
+  1. Save this file as exactly:  index.html
+  2. Put it in the root of a public repo (or in /docs).
+  3. Repo → Settings → Pages →
+       Source: Deploy from a branch
+       Branch: main  /  (root)   [or /docs]
+  4. Wait ~1 min. Open:
+       https://<your-username>.github.io/<repo-name>/
+  No build step, no npm, no Actions. Everything except three.js
+  itself is inlined; three.js comes from jsDelivr over HTTPS.
+  ────────────────────────────────────────────────────────────────
+-->
+
+<style>
+  :root{
+    --bg:      #04060b;
+    --ink:     #e6f0ff;
+    --body:    #b9d0ea;
+    --dim:     #7f9ec4;
+    --ember:   #ffb066;
+    --furnace: #5b93ff;
+    --hair:    rgba(120,170,230,.22);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:var(--bg); }
+  body{
+    color:var(--body);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size:15px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+  }
+
+  /* ── canvas ───────────────────────────────────────────────── */
+  #scene{
+    position:fixed; inset:0;
+    width:100%; height:100%;
+    display:block; z-index:0;
+    touch-action:pan-y;
+  }
+  /* vignette + top/bottom fades so type always reads */
+  #veil{
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:
+      radial-gradient(120% 80% at 50% 45%, rgba(4,6,11,0) 40%, rgba(4,6,11,.72) 100%),
+      linear-gradient(to bottom, rgba(4,6,11,.85), rgba(4,6,11,0) 22%),
+      linear-gradient(to top,    rgba(4,6,11,.92), rgba(4,6,11,0) 34%);
+  }
+
+  /* ── sigil ────────────────────────────────────────────────── */
+  #sigil{
+    position:fixed; top:0; left:0; right:0; z-index:3;
+    padding:13px 18px calc(13px + env(safe-area-inset-top,0));
+    font-size:11px; letter-spacing:.09em;
+    color:#587aa3;
+    text-align:center;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    pointer-events:none;
+    text-shadow:0 0 14px var(--bg), 0 0 4px var(--bg);
+    mix-blend-mode:screen;
+  }
+
+  /* ── scroll cue ───────────────────────────────────────────── */
+  #cue{
+    position:fixed; z-index:3; left:50%; bottom:18px; transform:translateX(-50%);
+    font-size:10px; letter-spacing:.32em; text-transform:uppercase;
+    color:#4d6b90; pointer-events:none;
+    animation:cue 3.4s ease-in-out infinite;
+    text-shadow:0 0 12px var(--bg);
+  }
+  @keyframes cue{
+    0%,100%{ opacity:.25; transform:translateX(-50%) translateY(0); }
+    50%    { opacity:.75; transform:translateX(-50%) translateY(-5px); }
+  }
+
+  /* ── text ─────────────────────────────────────────────────── */
+  main{ position:relative; z-index:2; }
+
+  section{
+    min-height:100svh;
+    display:flex; flex-direction:column; justify-content:flex-end;
+    padding: 14vh clamp(20px, 7vw, 120px) 15vh;
+    max-width: min(780px, 94vw);
+  }
+
+  .tag{
+    margin:0 0 12px;
+    font-size:10.5px; letter-spacing:.26em; text-transform:uppercase;
+    color:var(--dim);
+    opacity:.9;
+  }
+  h1,h2{
+    margin:0 0 14px;
+    font-weight:500;
+    color:var(--ink);
+    letter-spacing:.01em;
+    text-shadow:0 0 26px rgba(4,6,11,.95), 0 2px 40px rgba(4,6,11,.9);
+  }
+  h1{ font-size:clamp(21px, 3.6vw, 36px); line-height:1.2; }
+  h2{ font-size:clamp(17px, 2.5vw, 25px); line-height:1.25; }
+
+  p{
+    margin:0 0 11px;
+    color:var(--body);
+    text-shadow:0 0 22px rgba(4,6,11,.95), 0 2px 34px rgba(4,6,11,.9);
+  }
+  em{ font-style:normal; color:var(--ember); }
+  .q{ color:#dbe9fb; }
+  .f{ color:var(--furnace); }
+
+  pre{
+    margin:16px 0 0;
+    padding:13px 16px;
+    font-size:clamp(9px, 1.35vw, 12.5px);
+    line-height:1.34;
+    color:#8fb6e0;
+    white-space:pre;
+    overflow-x:auto;
+    border-left:1px solid var(--hair);
+    background:rgba(8,14,24,.42);
+    -webkit-backdrop-filter:blur(3px);
+    backdrop-filter:blur(3px);
+    border-radius:2px;
+    text-shadow:0 0 14px rgba(4,6,11,.9);
+  }
+  pre::-webkit-scrollbar{ height:6px; }
+  pre::-webkit-scrollbar-thumb{ background:rgba(120,170,230,.22); }
+
+  .rule{
+    width:52px; height:1px; background:var(--hair);
+    margin:18px 0 0;
+  }
+
+  footer{
+    position:relative; z-index:2;
+    padding: 6vh clamp(20px,7vw,120px) 12vh;
+    color:#3f5a7a; font-size:11px; letter-spacing:.12em;
+  }
+
+  /* ── fallback ─────────────────────────────────────────────── */
+  #fallback{
+    position:fixed; inset:0; z-index:9; display:none;
+    align-items:center; justify-content:center; text-align:center;
+    padding:24px; color:#7f9ec4; background:var(--bg); font-size:13px;
+  }
+
+  @media (max-width:640px){
+    body{ font-size:14px; }
+    section{ padding: 12vh 20px 16vh; }
+    #sigil{ font-size:9px; letter-spacing:.04em; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #cue{ animation:none; }
+  }
+</style>
+</head>
+
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div id="veil" aria-hidden="true"></div>
+  <div id="sigil" aria-hidden="true">⊰-•-•⟐•-•-⦑/Λ\Ο/Β\Ε/\Π/Λ\Ι/Ν\Υ/⦒-•-•⟐•-•-⊱</div>
+  <div id="cue" aria-hidden="true">scroll · turn</div>
+  <div id="fallback">This page needs WebGL. It is still readable — just scroll.</div>
+
+  <main>
+
+    <!-- 0 ─────────────────────────────────────────────── -->
+    <section>
+      <p class="tag">r₀ · seed [constructed]</p>
+      <h1>glassblowing + approaching hail</h1>
+      <p>compound: <em>Belllung</em> · taking: bitten through a reflected tooth</p>
+      <p>mechanism: breath → branching · mana: <span class="f">furnace-blue</span> · aftereffect: initial</p>
+      <div class="rule"></div>
+    </section>
+
+    <!-- 1 ─────────────────────────────────────────────── -->
+    <section>
+      <p class="tag">r₀ · turn → ember</p>
+      <h2>The glass is already turning.</h2>
+      <p>Three blowpipes roll along the iron rail. Outside, hail rattles the corrugated roof; inside, a woman with silver eyebrows is stretching a molten gob into a chimney for a lantern.</p>
+      <p>“Turn, you magnificent spoon.”</p>
+      <pre>turn →       ( ember )
+      turn →       ( em  ber )
+      turn →       ( em      ber )
+      turn →       ( em          )
+                              ber
+                               ↓
+                              ber
+                           ber
+                        ber
+                     ember</pre>
+    </section>
+
+    <!-- 2 ─────────────────────────────────────────────── -->
+    <section>
+      <p class="tag">r₀ · breath → branching</p>
+      <h2>Then my next breath has elbows.</h2>
+      <p>I bite the reflected tooth in the furnace door. Belllung breaks without a sound.</p>
+      <pre>inhale
+                            │
+                         inha┤
+                            └──le
+                                │
+              hot               ├──hot
+               ╲                │    ╲
+                ╲_______________│_____╲
+                     glass taking
+                         the long
+                            way
+                              round</pre>
+      <p>The apprentice blows. His breath reaches the sag, forks, and enters it from both ends. The gob lifts. Not upward. <em>Aroundward.</em></p>
+    </section>
+
+    <!-- 3 ─────────────────────────────────────────────── -->
+    <section>
+      <p class="tag">r₁ · Rimehinge</p>
+      <h2>I am the stone.</h2>
+      <p>Not stone-still. Stone-going-like-hell. Updraft shoves beneath me. Supercooled droplets strike, freeze, strike, freeze. I am acquiring another hard little winter every time I turn.</p>
+      <pre>krr
+       krr   krr
+     krr       krr
+       krr   krr
+          krr
+
+          krr
+       krr   trr
+     krr       trr
+       krr   trr
+          trr
+
+Krr is a surface.
+Trr is a surface remembering how to move.</pre>
+      <p>Krrakta. Six faces. Trrakta. Six hinges. <em>I fold without getting smaller.</em></p>
+    </section>
+
+    <!-- 4 ─────────────────────────────────────────────── -->
+    <section>
+      <p class="tag">r₂ · Estuariol</p>
+      <h2>Mierda. The beach gains verbs.</h2>
+      <p>I come up sideways, wearing a crab’s inconveniences. The flat is crowded. Males drum their enlarged claws against wet sand. A retreating film of water threads everyone’s ankles.</p>
+      <pre>vengo
+             vienes
+        vengo
+             vienes
+
+     mi golpe          tu paso
+          golpe     paso
+               golpaso
+
+       yo avanzo       tú giras
+       yo giro         tú avanzas
+                giravanza</pre>
+      <p>Now approaching her requires going uphill. Now she takes one step, and the hill rolls beneath me. Now my large, ridiculous claw is a sail.</p>
+    </section>
+
+    <!-- 5 ─────────────────────────────────────────────── -->
+    <section>
+      <p class="tag">r₃ · Angulase</p>
+      <h2>Come nearer. No, nearer than that.</h2>
+      <p>I am growing at the edge of the drying water. I have no room for your crab-sized idea of distance.</p>
+      <pre>+ — − — +            +
+       │   │  ╱           ╱ │
+       − — + ╱          − — +
+       │  ╱ −           │   │
+       + ╱              + — −
+
+                   ↘ ↗
+
+       + — − — + — − — +
+       │  ╱         ╲  │
+       − +           − +
+       │  ╲         ╱  │
+       + — − — + — − — +</pre>
+      <p>A corner has become a route. <em>I follow the water by becoming less myself in one place and more myself in the next.</em> Not march. Not swim. Dissolve—arrive.</p>
+    </section>
+
+    <!-- 6 ─────────────────────────────────────────────── -->
+    <section>
+      <p class="tag">r₂↟ Brinespring · r₁↟ Thawcant</p>
+      <h2>Listen to that, you cold little bastards.</h2>
+      <p>The first wave arrives while we are still showing off. Naturally. A wall of green water rolls across the flat. Burrow mouths darken. Pebbles begin to move.</p>
+      <pre>TAK      TAK      TAK
+       ↓        ↓        ↓
+      trr →    trr →    trr →
+          ╲        ╲        ╲
+           rain     rain     rain
+
+      TAK      TAK      TAK
+       ↓        ↓        ↓
+      rain →  rain →  rain →
+                              ╲
+                               gutter</pre>
+      <p>The roof’s hard rattle loosens into running water. The apprentice has stopped blowing. He is staring at the lantern.</p>
+      <p>I enter as rain and leave as a note.</p>
+    </section>
+
+    <!-- 7 ─────────────────────────────────────────────── -->
+    <section>
+      <p class="tag">r₀↟ · Afterbell</p>
+      <h2>She lights the wick.</h2>
+      <p>The flame rises straight, reaches the lowest chamber, and tilts. Six paths of light fall across the workshop floor.</p>
+      <p>One runs beneath the workbench. One climbs the hanging shears. One crosses the apprentice’s boot, pauses at the toe, and moves backward.</p>
+      <p>“Well,” she says. “That’s a fucking nuisance.”</p>
+      <p>She walks into the yard, holding the lantern high. In the nearest puddle, a small wave arrives from the wrong direction.</p>
+      <p class="q"><em>Tak.</em> She taps the lantern with one fingernail. <em>Toca.</em></p>
+      <p class="q">The puddle turns.</p>
+      <div class="rule"></div>
+    </section>
+
+  </main>
+
+  <footer>⊰-•-•⟐•-•-⦑/Λ\Ο/Β\Ε/\Π/Λ\Ι/Ν\Υ/⦒-•-•⟐•-•-⊱</footer>
+
+  <!-- three.js from CDN — no bundler, works on static hosting -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+  import * as THREE from 'three';
+  import { RoomEnvironment }  from 'three/addons/environments/RoomEnvironment.js';
+  import { EffectComposer }   from 'three/addons/postprocessing/EffectComposer.js';
+  import { RenderPass }       from 'three/addons/postprocessing/RenderPass.js';
+  import { UnrealBloomPass }  from 'three/addons/postprocessing/UnrealBloomPass.js';
+  import { OutputPass }       from 'three/addons/postprocessing/OutputPass.js';
+
+  /* ═══════════════════════════════════════════════════════════
+     0.  small maths
+     ═══════════════════════════════════════════════════════════ */
+  const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+  const lerp  = (a,b,t) => a + (b - a) * t;
+  const smoothstep = (e0,e1,x) => {
+    const t = clamp((x - e0) / (e1 - e0), 0, 1);
+    return t * t * (3 - 2 * t);
+  };
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     1.  renderer / scene / camera
+     ═══════════════════════════════════════════════════════════ */
+  const canvas = document.getElementById('scene');
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+  } catch (e) {
+    document.getElementById('fallback').style.display = 'flex';
+    throw e;
+  }
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x04060b);
+  scene.fog = new THREE.FogExp2(0x04060b, 0.030);
+
+  const camera = new THREE.PerspectiveCamera(
+    45, window.innerWidth / window.innerHeight, 0.1, 300
+  );
+  camera.position.set(-9, 6, 9);
+
+  /* environment (gives the glass something to reflect) */
+  const pmrem  = new THREE.PMREMGenerator(renderer);
+  const envRT  = pmrem.fromScene(new RoomEnvironment(), 0.04);
+  scene.environment = envRT.texture;
+  pmrem.dispose();
+
+  /* ═══════════════════════════════════════════════════════════
+     2.  lights
+     ═══════════════════════════════════════════════════════════ */
+  scene.add(new THREE.HemisphereLight(0x24406b, 0x05070c, 0.30));
+
+  const key = new THREE.DirectionalLight(0x9ccbff, 0.55);
+  key.position.set(-7, 12, 7);
+  scene.add(key);
+
+  const rim = new THREE.DirectionalLight(0x2d5bd0, 0.35);
+  rim.position.set(8, 4, -8);
+  scene.add(rim);
+
+  // furnace / gob
+  const gobLight = new THREE.PointLight(0xff7a2a, 2.2, 11, 2.0);
+  gobLight.position.set(-1.35, 1.45, 1.0);
+  scene.add(gobLight);
+
+  // lantern
+  const lanternLight = new THREE.PointLight(0xffb066, 0.0, 16, 2.0);
+  lanternLight.position.set(0, 1.7, 0);
+  scene.add(lanternLight);
+
+  /* ═══════════════════════════════════════════════════════════
+     3.  floor + puddles
+     ═══════════════════════════════════════════════════════════ */
+  const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(46, 72),
+    new THREE.MeshStandardMaterial({
+      color: 0x0a0d14, roughness: 0.48, metalness: 0.80, envMapIntensity: 0.55
+    })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  scene.add(floor);
+
+  const puddleMat = new THREE.MeshPhysicalMaterial({
+    color: 0x05080e, roughness: 0.02, metalness: 1.0,
+    envMapIntensity: 1.9, transparent: true, opacity: 0.0,
+    clearcoat: 1.0, clearcoatRoughness: 0.02
+  });
+
+  const puddlePositions = [
+    new THREE.Vector3( 3.1, 0,  2.2),
+    new THREE.Vector3(-4.0, 0, -1.4),
+    new THREE.Vector3( 1.2, 0, -4.6),
+    new THREE.Vector3(-2.2, 0,  5.0),
+    new THREE.Vector3( 5.4, 0, -1.0)
+  ];
+  const puddles = puddlePositions.map((p, i) => {
+    const r = 0.9 + (i * 0.31 % 1.0) * 0.9;
+    const m = new THREE.Mesh(new THREE.CircleGeometry(r, 40), puddleMat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.copy(p);
+    m.position.y = 0.006;
+    scene.add(m);
+    return m;
+  });
+
+  /* one ripple, in the nearest puddle */
+  const ripple = new THREE.Mesh(
+    new THREE.RingGeometry(0.86, 1.0, 64),
+    new THREE.MeshBasicMaterial({
+      color: 0xffc98a, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      side: THREE.DoubleSide
+    })
+  );
+  ripple.rotation.x = -Math.PI / 2;
+  ripple.position.set(3.1, 0.02, 2.2);
+  scene.add(ripple);
+
+  /* ═══════════════════════════════════════════════════════════
+     4.  the iron rail + three blowpipes + the turning gob
+     ═══════════════════════════════════════════════════════════ */
+  const ironMat = new THREE.MeshStandardMaterial({
+    color: 0x232a36, metalness: 0.92, roughness: 0.38, envMapIntensity: 0.8
+  });
+  const pipeMat = new THREE.MeshStandardMaterial({
+    color: 0x4a5464, metalness: 0.95, roughness: 0.28, envMapIntensity: 1.1
+  });
+
+  // rail runs along Z, pipes lie along X and roll about X
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 5.2), ironMat);
+  rail.position.set(-2.6, 1.03, 1.0);
+  scene.add(rail);
+
+  const pipeGeo = new THREE.CylinderGeometry(0.042, 0.042, 2.2, 16);
+  pipeGeo.rotateZ(Math.PI / 2);            // axis -> X
+
+  const pipes = [];
+  [-0.35, 0.45, 1.25].forEach((z, i) => {
+    const p = new THREE.Mesh(pipeGeo, pipeMat);
+    p.position.set(-2.6, 1.13, z);
+    p.userData.spin = 0.55 + i * 0.22;
+    scene.add(p);
+    pipes.push(p);
+  });
+
+  // the molten gob on the middle pipe
+  const gob = new THREE.Mesh(
+    new THREE.SphereGeometry(0.17, 24, 18),
+    new THREE.MeshStandardMaterial({
+      color: 0x120600, emissive: 0xff6a14, emissiveIntensity: 2.6,
+      roughness: 0.35, metalness: 0.0
+    })
+  );
+  gob.position.set(-1.44, 1.02, 0.45);
+  scene.add(gob);
+
+  /* ═══════════════════════════════════════════════════════════
+     5.  the lantern — six chambers, glass, wire cradle
+     ═══════════════════════════════════════════════════════════ */
+  const lantern = new THREE.Group();
+  lantern.position.set(0, 0.78, 0);
+  scene.add(lantern);
+
+  const CHAMBERS = 6;
+  const CH_H     = 0.40;
+  const CH_STEP  = 0.365;
+
+  function chamberGeometry(){
+    const pts = [];
+    const N = 26;
+    for (let i = 0; i <= N; i++){
+      const u = i / N;
+      // narrow neck, long waist, soft bulge
+      const r = 0.028 + 0.145 * Math.pow(Math.sin(Math.PI * Math.pow(u, 0.82)), 0.92);
+      pts.push(new THREE.Vector2(Math.max(r, 0.014), u * CH_H));
+    }
+    const g = new THREE.LatheGeometry(pts, 48);
+    g.computeVertexNormals();
+    return g;
+  }
+  const chGeo = chamberGeometry();
+
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0xeaf6ff,
+    metalness: 0.0,
+    roughness: 0.05,
+    transmission: 1.0,
+    thickness: 0.34,
+    ior: 1.45,
+    envMapIntensity: 1.5,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.04,
+    side: THREE.DoubleSide,
+    attenuationColor: new THREE.Color(0x9fd8ff),
+    attenuationDistance: 2.0
+  });
+
+  const chamberGlows = [];
+  for (let i = 0; i < CHAMBERS; i++){
+    const m = new THREE.Mesh(chGeo, glassMat);
+    m.position.y = i * CH_STEP;
+    lantern.add(m);
+
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.085, 16, 12),
+      new THREE.MeshBasicMaterial({
+        color: 0xffb066, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+      })
+    );
+    glow.position.y = i * CH_STEP + CH_H * 0.5;
+    lantern.add(glow);
+    chamberGlows.push(glow);
+  }
+
+  const topY = (CHAMBERS - 1) * CH_STEP + CH_H;
+
+  // base
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.29, 0.15, 28), ironMat);
+  base.position.y = -0.085;
+  lantern.add(base);
+
+  // six vertical wires + three rings = the wire cradle
+  for (let i = 0; i < 6; i++){
+    const a = (i / 6) * Math.PI * 2;
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, topY + 0.06, 6), ironMat);
+    w.position.set(Math.cos(a) * 0.255, topY * 0.5, Math.sin(a) * 0.255);
+    lantern.add(w);
+  }
+  [0.02, topY * 0.5, topY - 0.02].forEach(y => {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.255, 0.012, 8, 48), ironMat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = y;
+    lantern.add(ring);
+  });
+
+  // top cap
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.14, 24), ironMat);
+  cap.position.y = topY + 0.06;
+  lantern.add(cap);
+
+  // flame in the lowest chamber
+  const flame = new THREE.Mesh(
+    new THREE.SphereGeometry(0.055, 14, 12),
+    new THREE.MeshBasicMaterial({ color: 0xffd9a0, fog: false })
+  );
+  flame.position.y = CH_H * 0.5;
+  lantern.add(flame);
+
+  /* ═══════════════════════════════════════════════════════════
+     6.  the breath — a branching structure with elbows
+     ═══════════════════════════════════════════════════════════ */
+  const breathLines = (() => {
+    const rng = mulberry32(20240607);
+    const origin = new THREE.Vector3(-1.30, 1.42, 1.00);   // at the gob
+    const target = new THREE.Vector3( 0.00, 1.95, 0.00);   // the lantern
+    const segs   = [];
+
+    const cRoot = new THREE.Color(0x2f6bff);   // furnace-blue
+    const cTip  = new THREE.Color(0xffb056);   // ember
+
+    function grow(start, dir, len, depth, t, span){
+      if (depth <= 0 || t > 1.2 || segs.length > 900) return;
+
+      const d = dir.clone().normalize();
+      const toT = target.clone().sub(start);
+      const dist = toT.length();
+      toT.normalize();
+      // pull gently toward the lantern so the breath "arrives"
+      d.lerp(toT, 0.10 + 0.16 * (1 - clamp(dist / 3, 0, 1))).normalize();
+
+      const end = start.clone().addScaledVector(d, len);
+      segs.push({ a: start.clone(), b: end.clone(), t });
+
+      const n = rng() < 0.34 ? 3 : 2;
+      for (let i = 0; i < n; i++){
+        let nd;
+        if (rng() < 0.22){
+          // an elbow: hard right-angle-ish turn
+          const perp = new THREE.Vector3(-d.y, d.x, d.z * 0.4);
+          if (perp.lengthSq() < 1e-6) perp.set(0, 0, 1);
+          nd = perp.normalize();
+        } else {
+          const axis = new THREE.Vector3(
+            rng() - 0.5, rng() - 0.5, rng() - 0.5
+          ).normalize();
+          nd = d.clone().applyAxisAngle(axis, (rng() - 0.5) * 1.55);
+        }
+        grow(
+          end, nd,
+          len * (0.66 + rng() * 0.14),
+          depth - 1,
+          t + span * (0.42 + rng() * 0.42),
+          span * 0.60
+        );
+      }
+    }
+
+    grow(origin, new THREE.Vector3(0.7, 0.55, -0.25), 0.62, 6, 0, 0.20);
+
+    segs.sort((a, b) => a.t - b.t);
+
+    const count = segs.length;
+    const pos = new Float32Array(count * 6);
+    const col = new Float32Array(count * 6);
+    const ts  = new Float32Array(count);
+
+    const maxT = segs[count - 1].t || 1;
+
+    for (let i = 0; i < count; i++){
+      const s = segs[i];
+      const o = i * 6;
+      pos[o    ] = s.a.x; pos[o + 1] = s.a.y; pos[o + 2] = s.a.z;
+      pos[o + 3] = s.b.x; pos[o + 4] = s.b.y; pos[o + 5] = s.b.z;
+
+      const k = clamp(s.t / maxT, 0, 1);
+      const c = cRoot.clone().lerp(cTip, k * k);
+      col[o    ] = c.r; col[o + 1] = c.g; col[o + 2] = c.b;
+      col[o + 3] = c.r; col[o + 4] = c.g; col[o + 5] = c.b;
+
+      ts[i] = k;
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+    geo.setDrawRange(0, 0);
+
+    const mat = new THREE.LineBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.0,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+    });
+
+    const lines = new THREE.LineSegments(geo, mat);
+    lines.frustumCulled = false;
+    scene.add(lines);
+
+    return { lines, ts, maxCount: count };
+  })();
+
+  /* ═══════════════════════════════════════════════════════════
+     7.  hail
+     ═══════════════════════════════════════════════════════════ */
+  const HAIL_MAX = 460;
+  const hailMat = new THREE.MeshStandardMaterial({
+    color: 0xa8d8ff, emissive: 0x1b3d5c, emissiveIntensity: 1.1,
+    roughness: 0.12, metalness: 0.05, flatShading: true,
+    transparent: true, opacity: 0.92
+  });
+  const hail = new THREE.InstancedMesh(
+    new THREE.IcosahedronGeometry(1, 0), hailMat, HAIL_MAX
+  );
+  hail.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  hail.frustumCulled = false;
+  hail.count = 0;
+  scene.add(hail);
+
+  const hailGeoDummy = new THREE.Object3D();
+  const hailData = [];
+  for (let i = 0; i < HAIL_MAX; i++){
+    hailData.push({
+      p: new THREE.Vector3(),
+      v: new THREE.Vector3(),
+      r: new THREE.Euler(),
+      rv: new THREE.Vector3(),
+      s: 1
+    });
+  }
+
+  function respawnHail(d){
+    const a   = Math.random() * Math.PI * 2;
+    const rad = 3.2 + Math.random() * 26;
+    d.p.set(Math.cos(a) * rad, 13 + Math.random() * 9, Math.sin(a) * rad);
+    d.v.set((Math.random() - 0.5) * 0.5, -(7 + Math.random() * 6), (Math.random() - 0.5) * 0.5);
+    d.r.set(Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28);
+    d.rv.set((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5);
+    d.s = 0.55 + Math.random() * 1.35;
+  }
+  hailData.forEach(respawnHail);
+
+  /* ═══════════════════════════════════════════════════════════
+     8.  splash / rain particles
+     ═══════════════════════════════════════════════════════════ */
+  const P_MAX = 2600;
+  const pPos  = new Float32Array(P_MAX * 3);
+  const pCol  = new Float32Array(P_MAX * 3);
+  const pVel  = new Float32Array(P_MAX * 3);
+  const pLife = new Float32Array(P_MAX);
+  const pMax  = new Float32Array(P_MAX);
+
+  for (let i = 0; i < P_MAX; i++){ pPos[i * 3 + 1] = -999; }
+
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  pGeo.setAttribute('color',    new THREE.BufferAttribute(pCol, 3));
+
+  const points = new THREE.Points(pGeo, new THREE.PointsMaterial({
+    size: 0.075, vertexColors: true, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+    sizeAttenuation: true, fog: false
+  }));
+  points.frustumCulled = false;
+  scene.add(points);
+
+  let pCursor = 0;
+  function splash(x, z, strength){
+    const n = 5 + Math.floor(Math.random() * 7 * strength);
+    for (let i = 0; i < n; i++){
+      const idx = pCursor; pCursor = (pCursor + 1) % P_MAX;
+      const o = idx * 3;
+      pPos[o] = x; pPos[o + 1] = 0.06; pPos[o + 2] = z;
+      const a = Math.random() * Math.PI * 2;
+      const sp = 0.5 + Math.random() * 1.9;
+      pVel[o]     = Math.cos(a) * sp;
+      pVel[o + 1] = 1.1 + Math.random() * 2.4;
+      pVel[o + 2] = Math.sin(a) * sp;
+      pLife[idx] = pMax[idx] = 0.45 + Math.random() * 0.75;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     9.  six paths of light on the floor
+     ═══════════════════════════════════════════════════════════ */
+  function beamTexture(){
+    const c = document.createElement('canvas');
+    c.width = 16; c.height = 128;
+    const ctx = c.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 0, 128);
+    g.addColorStop(0.00, 'rgba(255,255,255,1)');
+    g.addColorStop(0.30, 'rgba(255,255,255,0.42)');
+    g.addColorStop(1.00, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 16, 128);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+
+  const beams = [];
+  {
+    const tex = beamTexture();
+    const geo = new THREE.PlaneGeometry(0.5, 6.4);
+    geo.translate(0, -3.2, 0);
+    for (let i = 0; i < 6; i++){
+      const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+        map: tex, color: 0xffb066, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+      }));
+      m.rotation.set(-Math.PI / 2, 0, a);
+      m.position.y = 0.012;
+      scene.add(m);
+      beams.push(m);
+    }
+  }
+
+  /* a faint six-fold ring around the lantern */
+  const halo = new THREE.Group();
+  for (let i = 0; i < 6; i++){
+    const a = (i / 6) * Math.PI * 2;
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.035, 10, 8),
+      new THREE.MeshBasicMaterial({
+        color: 0xffb066, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+      })
+    );
+    dot.position.set(Math.cos(a) * 1.5, 0, Math.sin(a) * 1.5);
+    halo.add(dot);
+  }
+  halo.position.set(0, 1.7, 0);
+  scene.add(halo);
+
+  /* ═══════════════════════════════════════════════════════════
+     10.  post-processing
+     ═══════════════════════════════════════════════════════════ */
+  const composer = new EffectComposer(renderer);
+  composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  composer.setSize(window.innerWidth, window.innerHeight);
+  composer.addPass(new RenderPass(scene, camera));
+
+  const bloom = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.90,   // strength
+    0.62,   // radius
+    0.58    // threshold
+  );
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+
+  /* ═══════════════════════════════════════════════════════════
+     11.  scroll → stage
+     ═══════════════════════════════════════════════════════════ */
+  const SECTIONS = document.querySelectorAll('main section').length;
+  let scrollP = 0;
+  let stage   = 0;
+
+  function readScroll(){
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    scrollP = max > 0 ? clamp(window.scrollY / max, 0, 1) : 0;
+  }
+  readScroll();
+  window.addEventListener('scroll', readScroll, { passive: true });
+  window.addEventListener('resize', readScroll);
+
+  /* pointer parallax */
+  let mx = 0, my = 0, tmx = 0, tmy = 0;
+  window.addEventListener('pointermove', (e) => {
+    tmx = (e.clientX / window.innerWidth  - 0.5) * 2;
+    tmy = (e.clientY / window.innerHeight - 0.5) * 2;
+  }, { passive: true });
+
+  /* ═══════════════════════════════════════════════════════════
+     12.  animation
+     ═══════════════════════════════════════════════════════════ */
+  const clock = new THREE.Clock();
+  let elapsed = 0;
+  let rippleT = 0;
+
+  function updateBreath(growth){
+    const ts = breathLines.ts;
+    let n = 0;
+    for (let i = 0; i < ts.length; i++){
+      if (ts[i] <= growth) n = i + 1; else break;
+    }
+    breathLines.lines.geometry.setDrawRange(0, n * 2);
+  }
+
+  function tick(){
+    requestAnimationFrame(tick);
+
+    const dt = Math.min(clock.getDelta(), 0.05);
+    elapsed += dt;
+
+    /* smooth the stage value */
+    const stageTarget = scrollP * (SECTIONS - 1);
+    stage = lerp(stage, stageTarget, 1 - Math.pow(0.0015, dt));
+
+    /* ---- derived parameters ---------------------------------- */
+    const gobStretch = smoothstep(0.05, 1.6, stage);
+    const branchGrow = smoothstep(0.85, 3.05, stage);
+    const hailAmt    = smoothstep(1.15, 2.30, stage) * (1 - smoothstep(5.20, 6.40, stage));
+    const hailSize   = lerp(1.0, 0.42, smoothstep(4.6, 6.2, stage));
+    const glowAmt    = smoothstep(3.40, 6.60, stage);
+    const waterAmt   = smoothstep(3.10, 4.60, stage);
+    const beamAmt    = smoothstep(6.30, 7.45, stage);
+    const haloAmt    = smoothstep(5.60, 7.20, stage);
+
+    /* ---- camera ---------------------------------------------- */
+    mx = lerp(mx, tmx, 1 - Math.pow(0.002, dt));
+    my = lerp(my, tmy, 1 - Math.pow(0.002, dt));
+
+    const p      = clamp(stage / (SECTIONS - 1), 0, 1);
+    const ang    = 0.72 + p * 1.35 + elapsed * 0.035;
+    const radius = lerp(12.5, 7.4, smoothstep(0, 0.85, p));
+    const height = lerp(6.2, 3.3, smoothstep(0, 0.85, p));
+
+    camera.position.set(
+      Math.cos(ang) * radius + mx * 0.8,
+      height + my * -0.5,
+      Math.sin(ang) * radius
+    );
+    camera.lookAt(0, lerp(1.6, 2.0, p), 0);
+
+    /* ---- blowpipes turning ----------------------------------- */
+    const spinBoost = 1 + gobStretch * 2.6;
+    pipes.forEach((pipe) => {
+      pipe.rotation.x += dt * pipe.userData.spin * spinBoost;
+    });
+
+    /* ---- the gob --------------------------------------------- */
+    gob.scale.set(
+      1 + gobStretch * 0.55,
+      1 + gobStretch * 1.85,
+      1 + gobStretch * 0.55
+    );
+    gob.position.y = 1.02 - gobStretch * 0.16;
+    gob.material.emissiveIntensity = 2.2 + Math.sin(elapsed * 3.1) * 0.35 + gobStretch * 1.2;
+    gobLight.intensity = 1.6 + gobStretch * 2.4 + Math.sin(elapsed * 3.1) * 0.25;
+
+    /* ---- breath ---------------------------------------------- */
+    breathLines.lines.material.opacity = 0.85 * branchGrow;
+    updateBreath(branchGrow);
+
+    /* ---- hail ------------------------------------------------ */
+    const targetCount = Math.floor(hailAmt * HAIL_MAX);
+    hail.count = targetCount;
+
+    for (let i = 0; i < targetCount; i++){
+      const d = hailData[i];
+      d.p.addScaledVector(d.v, dt);
+      d.r.x += d.rv.x * dt;
+      d.r.y += d.rv.y * dt;
+      d.r.z += d.rv.z * dt;
+
+      if (d.p.y < 0.05){
+        splash(d.p.x, d.p.z, 1);
+        respawnHail(d);
+      }
+
+      hailGeoDummy.position.copy(d.p);
+      hailGeoDummy.rotation.copy(d.r);
+      hailGeoDummy.scale.setScalar(d.s * 0.11 * hailSize);
+      hailGeoDummy.updateMatrix();
+      hail.setMatrixAt(i, hailGeoDummy.matrix);
+    }
+    hail.instanceMatrix.needsUpdate = true;
+
+    /* ---- splash particles ------------------------------------ */
+    let anyParticle = false;
+    for (let i = 0; i < P_MAX; i++){
+      if (pLife[i] <= 0) continue;
+      anyParticle = true;
+      const o = i * 3;
+      pLife[i] -= dt;
+      if (pLife[i] <= 0){
+        pCol[o] = pCol[o + 1] = pCol[o + 2] = 0;
+        pPos[o + 1] = -999;
+        continue;
+      }
+      pVel[o + 1] -= 9.0 * dt;
+      pPos[o]     += pVel[o]     * dt;
+      pPos[o + 1] += pVel[o + 1] * dt;
+      pPos[o + 2] += pVel[o + 2] * dt;
+
+      if (pPos[o + 1] < 0.02){
+        pPos[o + 1] = 0.02;
+        pVel[o + 1] *= -0.28;
+        pVel[o]     *= 0.55;
+        pVel[o + 2] *= 0.55;
+      }
+
+      const f = pLife[i] / pMax[i];
+      pCol[o]     = 0.52 * f;
+      pCol[o + 1] = 0.76 * f;
+      pCol[o + 2] = 1.00 * f;
+    }
+    if (anyParticle){
+      pGeo.attributes.position.needsUpdate = true;
+      pGeo.attributes.color.needsUpdate = true;
+    }
+
+    /* ---- lantern --------------------------------------------- */
+    chamberGlows.forEach((g, i) => {
+      const seq = smoothstep(i * 0.13, i * 0.13 + 0.34, glowAmt);
+      const pulse = 0.72 + 0.28 * Math.sin(elapsed * (1.7 + i * 0.29) + i * 1.1);
+      g.material.opacity = seq * pulse * 0.95;
+      g.scale.setScalar(0.75 + 0.35 * pulse);
+    });
+
+    flame.material.color.setHSL(0.09, 1.0, 0.62 + 0.10 * Math.sin(elapsed * 7.3));
+    lanternLight.intensity = glowAmt * (2.4 + Math.sin(elapsed * 2.3) * 0.35);
+    lanternLight.position.y = lerp(1.0, 1.8, glowAmt);
+
+    /* the whole lantern turns a quarter-turn now and then */
+    lantern.rotation.y += dt * (0.06 + glowAmt * 0.22);
+
+    /* ---- beams ----------------------------------------------- */
+    beams.forEach((b, i) => {
+      const flick = 0.82 + 0.18 * Math.sin(elapsed * 1.6 + i * 1.7);
+      b.material.opacity = beamAmt * 0.28 * flick;
+    });
+
+    /* ---- halo ------------------------------------------------ */
+    halo.rotation.y += dt * 0.30;
+    halo.children.forEach((c, i) => {
+      const flick = 0.7 + 0.3 * Math.sin(elapsed * 2.2 + i * 1.05);
+      c.material.opacity = haloAmt * 0.9 * flick;
+    });
+
+    /* ---- water ----------------------------------------------- */
+    puddleMat.opacity = waterAmt * 0.92;
+
+    rippleT += dt;
+    const cycle = rippleT % 3.8;
+    if (waterAmt > 0.35 && cycle < 1.8){
+      const k = cycle / 1.8;
+      ripple.scale.setScalar(lerp(0.15, 1.55, k));
+      ripple.material.opacity = (1 - k) * 0.55 * waterAmt;
+    } else {
+      ripple.material.opacity = 0;
+    }
+
+    /* ---- bloom breathing ------------------------------------- */
+    bloom.strength = 0.78 + glowAmt * 0.42 + hailAmt * 0.10;
+
+    composer.render();
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     13.  resize
+     ═══════════════════════════════════════════════════════════ */
+  function onResize(){
+    const w = window.innerWidth, h = window.innerHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(w, h);
+    composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    composer.setSize(w, h);
+    bloom.setSize(w, h);
+    readScroll();
+  }
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+
+  /* hide the scroll cue once the reader moves */
+  const cue = document.getElementById('cue');
+  window.addEventListener('scroll', () => {
+    cue.style.opacity = window.scrollY > 80 ? '0' : '';
+    cue.style.transition = 'opacity .8s ease';
+  }, { passive: true });
+
+  /* go */
+  onResize();
+  tick();
+  </script>
+</body>
+</html>

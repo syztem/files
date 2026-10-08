@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Hello, world.">
+<meta name="theme-color" content="#0c0b09">
+<title>Hello World</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%230c0b09' width='32' height='32'/%3E%3Cpath d='M7 21h18' stroke='%23e7b199' stroke-width='1'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,560;1,9..144,300&family=Outfit:wght@300;400&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js"
+  }
+}
+</script>
+<style>
+:root {
+  --ink: #0c0b09;
+  --paper: #f4efe6;
+  --mute: #9c917f;
+  --rule: rgba(244, 239, 230, 0.22);
+  --glow: #f0e2c4;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  color-scheme: dark;
+}
+body[data-hour="0"] { --paper: #f6e4d8; --mute: #b59788; --glow: #e7b199; --ink: #120e0c; }
+body[data-hour="1"] { --paper: #f4efe6; --mute: #9c917f; --glow: #f0e2c4; --ink: #0c0b09; }
+body[data-hour="2"] { --paper: #f0e0cc; --mute: #b08a62; --glow: #e39a55; --ink: #110c09; }
+body[data-hour="3"] { --paper: #e4e7ea; --mute: #8d949b; --glow: #9aa3ab; --ink: #07080a; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: Fraunces, "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+  overflow: hidden;
+  transition: background 0.8s var(--ease), color 0.8s var(--ease);
+}
+::selection { background: #e39a55; color: #140e09; }
+#stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 1.4s var(--ease);
+}
+body.ready #stage { opacity: 1; }
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--ink) 72%, transparent) 0%, color-mix(in oklab, var(--ink) 28%, transparent) 24%, transparent 46%, color-mix(in oklab, var(--ink) 42%, transparent) 72%, color-mix(in oklab, var(--ink) 80%, transparent) 100%);
+  transition: background 0.8s var(--ease);
+}
+.mast, main { position: relative; z-index: 2; }
+.mast {
+  position: fixed;
+  z-index: 3;
+  top: max(1.25rem, env(safe-area-inset-top));
+  left: max(1.4rem, env(safe-area-inset-left));
+  right: max(1.4rem, env(safe-area-inset-right));
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--rule);
+  font-family: Outfit, "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+main {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding:
+    clamp(5.5rem, 16vh, 9rem)
+    max(1.4rem, env(safe-area-inset-right))
+    max(1.6rem, env(safe-area-inset-bottom))
+    max(1.4rem, env(safe-area-inset-left));
+}
+h1 {
+  margin: 0;
+  align-self: end;
+  max-width: 16ch;
+  font-weight: 300;
+  font-optical-sizing: auto;
+  font-size: clamp(4.6rem, 13.2vw, 10.75rem);
+  line-height: 0.78;
+  letter-spacing: -0.048em;
+  text-wrap: balance;
+}
+h1 .rule {
+  display: block;
+  width: clamp(1.6rem, 3vw, 2.6rem);
+  height: 1px;
+  margin: 0.34em 0 0.3em 0.06em;
+  background: var(--glow);
+  transition: background 0.8s var(--ease);
+}
+h1 span:last-child {
+  display: block;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 0.7em;
+  letter-spacing: -0.034em;
+  margin-left: 0.48em;
+  color: color-mix(in oklab, var(--paper) 76%, var(--ink));
+}
+.foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 2.5rem;
+  padding-top: clamp(1.5rem, 4vh, 2.75rem);
+}
+#verse {
+  max-width: 26ch;
+  min-height: 2.6em;
+  font-size: clamp(1.08rem, 1.55vw, 1.4rem);
+  font-weight: 300;
+  font-style: italic;
+  line-height: 1.35;
+  letter-spacing: -0.011em;
+  color: color-mix(in oklab, var(--paper) 88%, var(--mute));
+}
+#verse p { margin: 0; animation: rise 0.85s var(--ease) both; }
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+nav { display: flex; gap: clamp(0.9rem, 2vw, 1.6rem); flex-wrap: wrap; justify-content: flex-end; }
+nav button {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 0.4rem 0 0.28rem;
+  color: var(--mute);
+  font-family: Outfit, "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.4s var(--ease), border-color 0.4s var(--ease);
+}
+nav button[aria-pressed="true"] { color: var(--paper); border-bottom-color: var(--glow); }
+nav button:hover { color: var(--paper); }
+nav button:focus-visible { outline: 1px solid var(--paper); outline-offset: 5px; }
+@media (max-width: 740px) {
+  h1 { font-size: clamp(3.6rem, 18vw, 6rem); }
+  h1 span:last-child { margin-left: 0.22em; }
+  .foot { flex-direction: column; align-items: flex-start; gap: 1.4rem; }
+  nav { justify-content: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #stage, body, .veil, h1 .rule, nav button { transition: none; }
+  #verse p { animation: none; }
+  #stage { opacity: 1; }
+}
+</style>
+</head>
+<body data-hour="1">
+<canvas id="stage" aria-hidden="true"></canvas>
+<div class="veil" aria-hidden="true"></div>
+<header class="mast">
+  <span id="folio">02</span>
+  <span id="watch">Noon</span>
+</header>
+<main>
+  <h1><span>Hello</span><span class="rule" aria-hidden="true"></span><span>World</span></h1>
+  <div class="foot">
+    <div id="verse"><p data-hour="1">Hello, world.</p></div>
+    <nav aria-label="Hour">
+      <button type="button" data-line="0" hx-get="/verse/0" hx-target="#verse" hx-swap="innerHTML" aria-pressed="false">Dawn</button>
+      <button type="button" data-line="1" hx-get="/verse/1" hx-target="#verse" hx-swap="innerHTML" aria-pressed="true">Noon</button>
+      <button type="button" data-line="2" hx-get="/verse/2" hx-target="#verse" hx-swap="innerHTML" aria-pressed="false">Dusk</button>
+      <button type="button" data-line="3" hx-get="/verse/3" hx-target="#verse" hx-swap="innerHTML" aria-pressed="false">Void</button>
+    </nav>
+  </div>
+</main>
+<script>
+(function () {
+  var verses = {
+    "/verse/0": '<p data-hour="0">Said once, before the room is warm.</p>',
+    "/verse/1": '<p data-hour="1">Hello, world.</p>',
+    "/verse/2": '<p data-hour="2">The light leaves. The name stays.</p>',
+    "/verse/3": '<p data-hour="3">Hello.</p>'
+  };
+  var orig = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    var raw = typeof input === "string" ? input : (input && input.url) || "";
+    var path = raw;
+    try { path = new URL(raw, location.href).pathname; } catch (e) {}
+    if (verses[path]) {
+      return Promise.resolve(new Response(verses[path], { status: 200, headers: { "Content-Type": "text/html" } }));
+    }
+    return orig(input, init);
+  };
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.0/dist/htmx.min.js"></script>
+<script type="module">
+import * as THREE from "three";
+
+const COLS = 80;
+const ROWS = 18;
+const wasm = "AGFzbQEAAAABDQJgAX0BfWAEfX9/fQADAwIAAQUDAQABBw4CA21lbQIABGZpbGwAAQrtAgJwAQN9IABDg/kiPpSQIQMgACADQ9sPyUCUkyEBIAFD2w/JP14EQEPbD0lAIAGTIQELIAFD2w/Jv10EQEPbD0nAIAGTIQELIAEgAZQhAiABQwAAgD8gAkOrqiq+IAJDiIgIPCACQwENULmUkpSSlJKUC/kBAgJ/CH1DrkdhPiADQwrXoz2UkiELQ83MjD8gA0PNzAw/lJIhDEOamZk+IAND7FE4PZSTIQpBACEFAkADQCAFIAJODQFBACEEAkADQCAEIAFODQEgBLIgAUEBa7KVQwAAAECUQwAAgD+TIQYgBbIgAkEBa7KVQwAAAECUQwAAgD+TIQcgACALlCAGIAyUkiAHQ2Zm5j6UkiIIEAAgCENI4To/lEPbD8k/kiAHQ2ZmBkCUkhAAlCAKlEMAAIA/IAYgBpSTlEMAAIA/IAcgB5STlCEJIAUgAWwgBGpBBGwgCTgCACAEQQFqIQQMAAsLIAVBAWohBQwACwsL";
+const names = ["Dawn", "Noon", "Dusk", "Void"];
+const palettes = {
+  0: { paper: "#f6e4d8", glow: "#e7b199", ink: "#120e0c" },
+  1: { paper: "#f4efe6", glow: "#f0e2c4", ink: "#0c0b09" },
+  2: { paper: "#f0e0cc", glow: "#e39a55", ink: "#110c09" },
+  3: { paper: "#e4e7ea", glow: "#9aa3ab", ink: "#07080a" }
+};
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ canvas: stage, antialias: true, alpha: false, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x0c0b09, 1);
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0c0b09, 0.072);
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.1, 40);
+const fit = () => { camera.position.z = innerWidth < 740 ? 7.1 : 5.6; };
+camera.position.set(0, 0.42, 5.6);
+fit();
+const bg = new THREE.Mesh(
+  new THREE.PlaneGeometry(2, 2),
+  new THREE.ShaderMaterial({
+    depthWrite: false,
+    depthTest: false,
+    toneMapped: false,
+    uniforms: {
+      uTime: { value: 0 },
+      uLift: { value: 0.4 },
+      uGlow: { value: new THREE.Color("#f0e2c4") },
+      uInk: { value: new THREE.Color("#0c0b09") },
+      uPaper: { value: new THREE.Color("#f4efe6") }
+    },
+    vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+    fragmentShader: "precision highp float; varying vec2 vUv; uniform float uTime; uniform float uLift; uniform vec3 uGlow; uniform vec3 uInk; uniform vec3 uPaper; void main(){ vec2 uv = vUv; float slit = exp(-pow((uv.y - uLift) * 6.4, 2.0)); float breath = 0.78 + 0.22 * sin(uTime * 0.31); float dust = exp(-pow((uv.y - (uLift - 0.04)) * 1.7, 2.0)); vec3 col = mix(uInk, uGlow, slit * breath); col = mix(col, uPaper, dust * 0.16); float vign = smoothstep(1.25, 0.22, length((uv - vec2(0.46, 0.5)) * vec2(1.15, 1.0))); col *= mix(0.55, 1.0, vign); float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime * 12.0), vec2(12.9898, 78.233))) * 43758.5453); col += (n - 0.5) * 0.03; gl_FragColor = vec4(col, 1.0); }"
+  })
+);
+bg.frustumCulled = false;
+bg.renderOrder = -1;
+scene.add(bg);
+const sheet = new THREE.Group();
+sheet.rotation.x = -0.46;
+sheet.position.y = -0.22;
+scene.add(sheet);
+const lines = [];
+for (let y = 0; y < ROWS; y++) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(COLS * 3), 3));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 8);
+  const v = y / (ROWS - 1);
+  const edge = 1 - Math.min(1, Math.abs(v - 0.42) * 1.55);
+  const mat = new THREE.LineBasicMaterial({
+    color: 0xf4efe6,
+    transparent: true,
+    opacity: 0.05 + edge * 0.34,
+    depthWrite: false
+  });
+  const line = new THREE.Line(geo, mat);
+  sheet.add(line);
+  lines.push(line);
+}
+let field = new Float32Array(COLS * ROWS);
+let fill = null;
+const bytes = Uint8Array.from(atob(wasm), (c) => c.charCodeAt(0));
+const ready = WebAssembly.instantiate(bytes).then((res) => {
+  fill = res.instance.exports.fill;
+  field = new Float32Array(res.instance.exports.mem.buffer, 0, COLS * ROWS);
+});
+let hour = 1;
+const pointer = { x: 0, y: 0 };
+const look = { x: 0, y: 0 };
+addEventListener("pointermove", (e) => {
+  pointer.x = (e.clientX / innerWidth) * 2 - 1;
+  pointer.y = (e.clientY / innerHeight) * 2 - 1;
+}, { passive: true });
+function syncHour() {
+  const node = document.querySelector("#verse [data-hour]");
+  const next = node ? Number(node.dataset.hour) : hour;
+  if (Number.isNaN(next) || next === hour) return;
+  hour = next;
+  document.body.dataset.hour = String(hour);
+  document.getElementById("folio").textContent = String(hour + 1).padStart(2, "0");
+  document.getElementById("watch").textContent = names[hour] || "Noon";
+  document.querySelectorAll("nav button").forEach((btn, i) => btn.setAttribute("aria-pressed", i === hour ? "true" : "false"));
+  const p = palettes[hour];
+  bg.material.uniforms.uGlow.value.set(p.glow);
+  bg.material.uniforms.uPaper.value.set(p.paper);
+  bg.material.uniforms.uInk.value.set(p.ink);
+  renderer.setClearColor(p.ink, 1);
+  scene.fog.color.set(p.ink);
+  lines.forEach((line) => line.material.color.set(p.paper));
+}
+document.body.addEventListener("htmx:afterSettle", syncHour);
+document.body.addEventListener("htmx:afterSwap", syncHour);
+new MutationObserver(syncHour).observe(document.getElementById("verse"), { childList: true, subtree: true });
+const t0 = performance.now();
+function frame(now) {
+  const t = reduce ? 1.6 : (now - t0) / 1000;
+  if (fill) fill(t, COLS, ROWS, hour);
+  let acc = 0;
+  for (let y = 0; y < ROWS; y++) {
+    const pos = lines[y].geometry.attributes.position.array;
+    for (let x = 0; x < COLS; x++) {
+      const u = x / (COLS - 1);
+      const v = y / (ROWS - 1);
+      const z = field[y * COLS + x];
+      pos[x * 3] = (u - 0.5) * 7.6;
+      pos[x * 3 + 1] = (0.46 - v) * 2.8;
+      pos[x * 3 + 2] = z;
+      acc += z;
+    }
+    lines[y].geometry.attributes.position.needsUpdate = true;
+  }
+  bg.material.uniforms.uLift.value = 0.52 + acc / (COLS * ROWS) * 1.4;
+  bg.material.uniforms.uTime.value = t;
+  if (!reduce) {
+    look.x += (pointer.x * 0.16 - look.x) * 0.035;
+    look.y += (pointer.y * 0.06 - look.y) * 0.035;
+  }
+  camera.position.x = look.x;
+  camera.position.y = 0.42 - look.y;
+  camera.lookAt(0, -0.22, 0);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+ready.then(() => {
+  document.body.classList.add("ready");
+  requestAnimationFrame(frame);
+}).catch(() => {
+  document.body.classList.add("ready");
+  requestAnimationFrame(frame);
+});
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  fit();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
