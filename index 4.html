@@ -1,0 +1,1938 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Abyss City</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/4.0.0/htmx.min.js" integrity="sha512-pAQj/PHCBl3lDbT3W4E+1rI8AMxbeaYo4zUvJg6hBPDXawzo6MR5cI5yVvw11LQ0kcvNxiRF2PtIH3zzsw899Q==" crossorigin="anonymous"></script>
+<style>
+:root{--brass:#c9a25a}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{background:#020507;color:#d8c9a3;font-family:Futura,"Century Gothic","Avenir Next","Trebuchet MS",sans-serif;overflow:hidden}
+#stage{position:fixed;inset:0;background:#020507}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+#glass{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 30% 22% at 22% 14%,rgba(180,220,230,.06),transparent 70%),radial-gradient(ellipse 24% 18% at 78% 30%,rgba(150,200,210,.04),transparent 70%),radial-gradient(ellipse at 50% 50%,transparent 62%,rgba(0,0,0,.38) 100%);z-index:3}
+#rim{position:absolute;inset:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse 72% 84% at 50% 50%,transparent 55%,rgba(8,10,12,.25) 60%,rgba(104,80,38,.55) 64.5%,#6b5226 67%,rgba(150,116,52,.9) 69%,rgba(24,19,9,.95) 72.5%,#04070a 77%,#010304 100%);transition:transform .09s linear}
+#rivets{position:absolute;inset:0;pointer-events:none;z-index:4;background:repeating-conic-gradient(from 0deg,rgba(255,216,150,.30) 0deg 1.1deg,rgba(0,0,0,0) 1.1deg 12deg);-webkit-mask:radial-gradient(ellipse 72% 84% at 50% 50%,transparent 63.6%,#000 65.5%,#000 70%,transparent 71.5%);mask:radial-gradient(ellipse 72% 84% at 50% 50%,transparent 63.6%,#000 65.5%,#000 70%,transparent 71.5%);transition:transform .09s linear}
+#bar{position:absolute;left:50%;bottom:7%;width:230px;height:13px;transform:translateX(-50%);z-index:5;pointer-events:none;border-radius:8px;background:linear-gradient(180deg,#e8c880 0%,#a67c33 38%,#5f4517 68%,#93702e 100%);box-shadow:0 3px 10px rgba(0,0,0,.7),inset 0 1px 1px rgba(255,240,200,.5),inset 0 -2px 3px rgba(0,0,0,.6);transition:transform .09s linear}
+#bar::before{content:"";position:absolute;left:8%;right:8%;top:2px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,rgba(255,255,240,.75) 30%,rgba(255,255,255,.9) 50%,rgba(255,255,240,.7) 70%,transparent);filter:blur(.4px);animation:wet 9s ease-in-out infinite alternate}
+@keyframes wet{from{transform:translateX(-26%);opacity:.45}to{transform:translateX(26%);opacity:.9}}
+#hud{position:absolute;left:0;right:0;bottom:11.5%;text-align:center;z-index:5;pointer-events:none;opacity:0;transition:opacity .9s ease}
+#hud.on{opacity:1}
+#hud-t{font-size:15px;letter-spacing:.55em;text-indent:.55em;color:#e3cf9e;text-shadow:0 0 14px rgba(0,0,0,.9),0 0 30px rgba(200,160,80,.25)}
+#hud-l{margin-top:7px;font-size:9.5px;letter-spacing:.32em;text-indent:.32em;color:rgba(148,190,190,.8);text-shadow:0 0 10px rgba(0,0,0,.9)}
+#app{position:fixed;inset:0;z-index:10}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:radial-gradient(ellipse at 50% 38%,#0a1a21 0%,#050e13 55%,#020608 100%);animation:fin 1.1s ease both;cursor:pointer;text-align:center}
+.screen.clear{background:transparent;pointer-events:none;cursor:default}
+.screen.line{font-size:13px;letter-spacing:.28em;text-indent:.28em;color:rgba(170,200,200,.85);cursor:default}
+@keyframes fin{from{opacity:0}to{opacity:1}}
+.mark{width:92px;height:92px;border:1px solid rgba(201,162,90,.75);border-radius:50%;position:relative;margin-bottom:6px;animation:pulse 4s ease-in-out infinite}
+.mark::before{content:"";position:absolute;inset:9px;border:1px solid rgba(201,162,90,.45);border-radius:50%}
+.mark::after{content:"";position:absolute;inset:26px;transform:rotate(45deg);border:1px solid rgba(201,162,90,.8)}
+.mark.small{width:56px;height:56px;margin-bottom:0}
+@keyframes pulse{0%,100%{box-shadow:0 0 24px rgba(201,162,90,.12),inset 0 0 18px rgba(201,162,90,.08)}50%{box-shadow:0 0 44px rgba(201,162,90,.3),inset 0 0 26px rgba(201,162,90,.18)}}
+h1{font-size:clamp(22px,4.2vw,40px);font-weight:400;letter-spacing:.62em;text-indent:.62em;color:#e6d5ab;text-shadow:0 0 26px rgba(201,162,90,.35)}
+.g-sub{font-size:11px;letter-spacing:.42em;text-indent:.42em;color:rgba(150,185,185,.75)}
+.g-hint{margin-top:26px;font-size:10px;letter-spacing:.5em;text-indent:.5em;color:rgba(201,162,90,.8);animation:blink 2.6s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:.35}50%{opacity:.95}}
+.e-title{font-size:clamp(18px,3vw,28px);letter-spacing:.5em;text-indent:.5em;color:#e6d5ab;font-weight:400}
+.e-sub{font-size:11px;letter-spacing:.3em;text-indent:.3em;color:rgba(150,185,185,.7)}
+.btn{margin-top:34px;background:transparent;border:1px solid rgba(201,162,90,.8);color:#e3cf9e;font-family:inherit;font-size:11px;letter-spacing:.45em;text-indent:.45em;padding:14px 30px 14px 38px;cursor:pointer;transition:all .35s ease}
+.btn:hover{background:rgba(201,162,90,.14);box-shadow:0 0 30px rgba(201,162,90,.25)}
+</style>
+</head>
+<body>
+<div id="stage">
+<canvas id="cv"></canvas>
+<div id="glass"></div>
+<div id="rim"></div>
+<div id="rivets"></div>
+<div id="bar"></div>
+<div id="hud"><div id="hud-t"></div><div id="hud-l"></div></div>
+</div>
+<div id="app">
+<div class="screen" id="gate" hx-get="#frag-play" hx-target="#app" hx-swap="innerHTML" hx-on:click="A.boot()">
+<div class="mark"></div>
+<h1>THE ABYSS CITY</h1>
+<div class="g-sub">A DESCENT IN EIGHT SCENES</div>
+<div class="g-hint">CLICK TO BEGIN</div>
+</div>
+</div>
+<template id="frag-play"><div class="screen clear"></div></template>
+<template id="frag-end"><div class="screen end"><div class="mark small"></div><div class="e-title">GENERATED, NOT STORED</div><div class="e-sub"><span id="sz"></span></div><button class="btn" id="again" hx-get="#frag-play" hx-target="#app" hx-swap="innerHTML" hx-on:click="A.reset()">DESCEND AGAIN</button></div></template>
+<template id="frag-nogpu"><div class="screen line">this descent needs WebGPU, and your browser does not carry it</div></template>
+<script>
+const A = (() => {
+const SC = [
+{name:"ARRIVAL LOCK",tech:"path traced · projected slat light",dur:18,root:32.7,room:[120,.026],fog:[.012,.5,.55,0],amb:[.10,.12,.14],spp:1,joint:6.5,chain:0,beam:0,focus:6,box:0,pcol:[0,0,0],fall:0},
+{name:"LIFT SHAFT",tech:"chain-hoist · one reflection bounce",dur:20,root:32.7,room:[85,.030],fog:[.02,.35,.25,0],amb:[.05,.09,.11],spp:1,joint:0,chain:.42,beam:1,focus:8,box:0,pcol:[0,0,0],fall:0},
+{name:"FLOODED PROMENADE",tech:"wet marble · rose-window GI",dur:22,root:36.7,room:[150,.034],fog:[.03,.8,1.7,0],amb:[.06,.10,.11],spp:2,joint:6.5,chain:0,beam:0,focus:4.5,box:0,pcol:[0,0,0],fall:0},
+{name:"TURBINE HALL",tech:"soft shadows · two-bounce GI",dur:20,root:32.7,room:[70,.040],fog:[.024,.6,0,0],amb:[.09,.06,.035],spp:1,joint:6.5,chain:0,beam:-1,focus:7,box:0,pcol:[0,0,0],fall:0},
+{name:"TURNTABLE",tech:"rotating room · real-time GI",dur:21,root:41.2,room:[60,.030],fog:[.02,.45,0,0],amb:[.07,.04,.035],spp:2,joint:0,chain:0,beam:-1,focus:9,box:0,pcol:[0,0,0],fall:0},
+{name:"KELP CONSERVATORY",tech:"compute particles · 3D-noise fog",dur:23,root:32.7,room:[200,.045],fog:[.05,1.2,.4,1],amb:[.02,.07,.075],spp:2,joint:6.5,chain:0,beam:3,focus:5,box:44,pcol:[.35,.8,.7],fall:.15},
+{name:"THE DROP",tech:"motion blur · adaptive resolution",dur:26,root:26.2,room:[110,.050],fog:[.03,.8,.9,0],amb:[.02,.035,.05],spp:3,joint:0,chain:0,beam:0,focus:5,box:30,pcol:[.25,.35,.55],fall:.5},
+{name:"UNLOAD",tech:"black-mirror reflection · AgX",dur:19,root:32.7,room:[140,.035],fog:[.035,.5,.7,1],amb:[.03,.055,.065],spp:2,joint:6.5,chain:0,beam:0,focus:13,box:0,pcol:[0,0,0],fall:0}
+];
+const DUR = SC.reduce((a, s) => a + s.dur, 0);
+const WASM_B64 = "AGFzbQEAAABCQJgAX0BfWAAADCI CwABfQAAAX0HGAwEaGFzaAAABnMtb290aAABBGRyb3AAA gpiAwF9ESAAQwIAgEuUIQEgASABr5LPABUgAIAAlcAAQwAAAEJUQwAAQEBJlAsBfTLgAIAAQwAAAEJUIQEgAELAAEQQlcABAULAAABAQJSU syAAQzLz sz+UIQEgAUPMzEw9 lUQ=".replace(/ /g, "");
+let W2 = {
+hash(x){ const v = (x * 1048573) % 1; return v < 0 ? v + 1 : v; },
+smooth(x){ return x * x * (3 - 2 * x); },
+drop(x){ return 1.7 * (3 * x - 12 * x * x * x) / 0.05; }
+};
+try {
+const raw = Uint8Array.from(atob(WASM_B64), c => c.charCodeAt(0));
+const inst = new WebAssembly.Instance(new WebAssembly.Module(raw));
+W2.hash = inst.exports.hash;
+W2.smooth = inst.exports.smooth;
+W2.drop = inst.exports.drop;
+} catch (e) {}
+const WLET = `
+class AB extends AudioWorkletProcessor {
+constructor() {
+super();
+this.t = 0; this.lcg = 8871;
+this.root = 32.7; this.rootT = 32.7;
+this.roomF = 120; this.roomG = .028; this.roomFT = 120; this.roomGT = .028;
+this.dip = 1; this.dipT = 1;
+this.sp = 5; this.spT = 5;
+this.v = new Array(24).fill(null); this.vi = 0; this.fct = 0;
+this.ps = [[0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0]];
+this.lpP = [0, 0]; this.lpR = [0, 0]; this.lpH = [0, 0];
+this.th = [0, 0];
+this.port.onmessage = (e) => {
+const m = e.data;
+if (m.k === "root") this.rootT = m.a;
+else if (m.k === "room") { this.roomFT = m.a; this.roomGT = m.b; }
+else if (m.k === "dip") this.dipT = .5;
+else if (m.k === "sp") this.spT = m.a;
+else this.spawn(m.k, m.a || 0);
+};
+}
+spawn(t, r) {
+const v = { t: t, age: 0, parts: [] };
+if (t === "clack") {
+const g = .8 + r * .4;
+v.parts = [
+{ f: 3150 * (1 + .08 * Math.sin(r * 40)), f1: 0, g: .5 * g, d: .085, a: .009, ph: 0 },
+{ f: 4700 * (1 + .09 * Math.sin(r * 71)), f1: 0, g: .3 * g, d: .06, a: .007, ph: 0 },
+{ f: 6500 * (1 + .1 * Math.sin(r * 97)), f1: 0, g: .16 * g, d: .045, a: .006, ph: 0 },
+{ f: 64, f1: 40, g: .85 * g, d: .1, a: .014, ph: 0 },
+{ f: 112, f1: 90, g: .18 * g, d: .05, a: .008, ph: 0 }
+];
+} else if (t === "tick") {
+v.parts = [
+{ f: 2300 + r * 2400, f1: 0, g: .14, d: .035, a: .004, ph: 0 },
+{ f: 185, f1: 140, g: .09, d: .05, a: .008, ph: 0 }
+];
+} else if (t === "whomp") {
+v.parts = [
+{ f: 58, f1: 27, g: .9, d: .42, a: .025, ph: 0 },
+{ f: 33, f1: 24, g: .5, d: .5, a: .03, ph: 0 },
+{ f: 44, f1: 30, g: .35, d: .3, a: .02, ph: 0 }
+];
+} else if (t === "beat") {
+v.parts = [
+{ f: 56, f1: 40, g: .8, d: .085, a: .012, ph: 0 },
+{ f: 52, f1: 38, g: .5, d: .07, a: .012, ph: 0, dl: .17 }
+];
+} else if (t === "creak") {
+v.parts = [{ f: 120, f1: 58, g: .09, d: .85, a: .3, ph: 0, am: 5.5 }];
+}
+this.v[this.vi] = v;
+this.vi = (this.vi + 1) % 24;
+}
+noise() { this.lcg = (this.lcg * 1664525 + 1013904223) >>> 0; return this.lcg / 2147483648 - 1; }
+process() {
+const out = this.outputs[0];
+if (!out || !out.length) return true;
+const n = out.length;
+const dt = 1 / sampleRate;
+this.root += (this.rootT - this.root) * (1 - Math.exp(-dt * 1.8));
+this.roomF += (this.roomFT - this.roomF) * (1 - Math.exp(-dt * .8));
+this.roomG += (this.roomGT - this.roomG) * (1 - Math.exp(-dt * .8));
+this.dip += (this.dipT - this.dip) * (1 - Math.exp(-dt * (this.dipT < this.dip ? 9 : 1.4)));
+this.sp += (this.spT - this.sp) * (1 - Math.exp(-dt * 3));
+const bpBase = 300 + 950 * (0.5 + 0.5 * Math.sin(6.2832 * this.t / 26 + 1.3));
+const padA = (0.55 + 0.45 * Math.sin(6.2832 * this.t / 19)) * this.dip;
+const aH = 1 - Math.exp(-dt / 0.00637);
+const GH = 0.92 / aH;
+const RG = [2, 3, 4, 6, 8];
+const GG = [.5, .34, .3, .18, .14];
+for (let i = 0; i < n; i++) {
+this.t += dt;
+const tt = this.t;
+let vsum = 0;
+for (let vi = 0; vi < 24; vi++) {
+const v = this.v[vi];
+if (!v) continue;
+v.age += dt;
+if (v.age > 1.2) { this.v[vi] = null; continue; }
+for (let p = 0; p < v.parts.length; p++) {
+const q = v.parts[p];
+const ag = v.age - (q.dl || 0);
+if (ag < 0) continue;
+let env;
+if (ag < q.a) { const x = ag / q.a; env = x * x * (3 - 2 * x); }
+else env = Math.exp(-(ag - q.a) / q.d);
+if (env < 0.001) continue;
+let f = q.f;
+if (q.f1) f = q.f + (q.f1 - q.f) * Math.min(1, ag / .18);
+if (q.am) f *= 1 + .3 * Math.sin(6.2832 * q.am * ag);
+q.ph += 6.2832 * f * dt;
+vsum += Math.sin(q.ph) * env * q.g;
+}
+}
+for (let ch = 0; ch < 2; ch++) {
+const o = out[ch];
+const ps = this.ps[ch];
+const det = ch === 0 ? 1 : 1.0035;
+let s = 0;
+ps[0] += 6.2832 * this.root * det * dt; s += Math.sin(ps[0]) * .5;
+ps[1] += 6.2832 * this.root * 2 * det * dt; s += Math.sin(ps[1]) * .3;
+ps[2] += 6.2832 * this.root * 3 * det * dt; s += Math.sin(ps[2]) * .16;
+ps[3] += 6.2832 * this.root * 4 * det * dt; s += Math.sin(ps[3]) * .1;
+s *= .55;
+this.lpP[ch] += (s - this.lpP[ch]) * (1 - Math.exp(-dt * bpBase));
+let pad = 0;
+for (let k = 0; k < 5; k++) {
+ps[4 + k] += 6.2832 * this.root * RG[k] * det * dt;
+pad += Math.sin(ps[4 + k]) * GG[k];
+}
+this.lpR[ch] += (this.noise() - this.lpR[ch]) * (1 - Math.exp(-dt * this.roomF));
+this.th[ch] += 6.2832 * 31 * dt;
+s = this.lpP[ch] * padA * .9 + pad * this.lpP[ch] * .3 + this.lpR[ch] * this.roomG * this.dip * 2.4 + Math.sin(this.th[ch]) * .05 * (0.6 + 0.4 * Math.sin(6.2832 * tt / 11)) * this.dip + vsum;
+this.lpH[ch] += (s - this.lpH[ch]) * aH;
+let y = (s - this.lpH[ch]) * GH;
+y = Math.tanh(y * 1.6) * .55;
+o[i] = y;
+}
+}
+this.fct++;
+if (this.fct % 4 === 0) this.port.postMessage({ sp: this.sp });
+return true;
+}
+}
+registerProcessor("abyss", AB);
+`;
+let actx = null, wnode = null, t0 = 0, t0ms = 0, booted = false, ended = false;
+let audioSp = 0, lastScene = -1, doored = false, impact = false, lastBeat = -1, creakAt = 99, jIdx = -1, cIdx = -1;
+const jolts = [];
+const Larr = new Float32Array(128);
+let aspect = 1.4;
+function initAudio() {
+return new Promise((res) => {
+try {
+const AC = window.AudioContext || window.webkitAudioContext;
+if (!AC) { res(); return; }
+actx = new AC();
+const blob = new Blob([WLET], { type: "application/javascript" });
+const url = URL.createObjectURL(blob);
+actx.audioWorklet.addModule(url).then(() => {
+URL.revokeObjectURL(url);
+wnode = new AudioWorkletNode(actx, "abyss");
+const comp = actx.createDynamicsCompressor();
+comp.threshold.value = -8;
+comp.knee.value = 18;
+comp.ratio.value = 5;
+comp.attack.value = .004;
+comp.release.value = .2;
+wnode.connect(comp);
+comp.connect(actx.destination);
+wnode.port.onmessage = (e) => { audioSp = e.data.sp; };
+res();
+}).catch(() => res());
+} catch (e) { res(); }
+});
+}
+function msg(m) { if (wnode) wnode.port.postMessage(m); }
+function sceneAt(t) {
+let acc = 0;
+for (let i = 0; i < SC.length; i++) {
+if (t < acc + SC[i].dur || i === SC.length - 1) return { i, u: Math.min(1, Math.max(0, (t - acc) / SC[i].dur)), t0: acc };
+acc += SC[i].dur;
+}
+return { i: 7, u: 1, t0: acc - SC[7].dur };
+}
+function camPose(i, u, t) {
+const e = W2.smooth;
+const cl = (x) => Math.min(1, Math.max(0, x));
+const e2 = u - .1 * (1 - e(cl(u / .22))) - .12 * (1 - e(cl((1 - u) / .26)));
+const p = [0, 0, 0], l = [0, 0, 0];
+let r = 0;
+if (i === 0) { p[2] = 13 - 26.5 * e2; p[1] = 1.65; l = [0, 1.5, p[2] - 6]; }
+else if (i === 1) { p[1] = 2 + 7.5 * e2; p[2] = 1.5; l = [0, p[1] + .5, -7]; r = -.12 + .5 * e2; }
+else if (i === 2) { p[2] = 11 - 22 * e2; p[1] = 1.02; l = [0, .85, p[2] - 5]; }
+else if (i === 3) { p[2] = 11 - 21.5 * e2; p[1] = 1.5; l = [0, 2.6, p[2] - 7]; }
+else if (i === 4) { p = [0, 2.05, 0]; l = [0, 2.3, -9]; r = .02 * Math.sin(t * .7); }
+else if (i === 5) { p[2] = 12 - 23 * e2; p[1] = 1.9; l = [0, 1.6, p[2] - 6]; }
+else if (i === 6) {
+const w = W2.smooth(cl((u - .05) / .16));
+p[1] = 8 - 20 * w - W2.smooth(cl((u - .25) / .4)) * 1.5;
+const m = cl((u - .5) / .35);
+l = [0, p[1] - (9 - 4 * m), -4 * m];
+r = .12 * Math.sin(w * 1.4);
+} else { p[2] = 15 - 23.5 * e2; p[1] = 1.7; l = [0, 2.3, -16]; }
+return { p, l, r };
+}
+function basis(p, l, r) {
+let fx = l[0] - p[0], fy = l[1] - p[1], fz = l[2] - p[2];
+const fl = Math.hypot(fx, fy, fz) || 1;
+fx /= fl; fy /= fl; fz /= fl;
+let rx = fz, ry = 0, rz = -fx;
+const rl = Math.hypot(rx, ry, rz);
+if (rl < .001) { rx = 1; ry = 0; rz = 0; } else { rx /= rl; ry /= rl; rz /= rl; }
+const ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
+const cr = Math.cos(r), sr = Math.sin(r);
+const R = [rx * cr + ux * sr, ry * cr + uy * sr, rz * cr + uz * sr];
+const U = [ux * cr - rx * sr, uy * cr - ry * sr, uz * cr - rz * sr];
+return { f: [fx, fy, fz], r: R, u: U };
+}
+function lights(i, u, t, cam) {
+Larr.fill(0);
+let n = 0;
+const put = (x, y, z, dx, dy, dz, cosO, rad, r, g, b, pat) => {
+const o = n * 16;
+Larr[o] = x; Larr[o + 1] = y; Larr[o + 2] = z;
+Larr[o + 4] = dx; Larr[o + 5] = dy; Larr[o + 6] = dz;
+Larr[o + 8] = cosO; Larr[o + 9] = rad;
+Larr[o + 10] = r; Larr[o + 11] = g; Larr[o + 12] = b; Larr[o + 13] = pat;
+n++;
+};
+if (i === 0) {
+put(0, 14, 4, 0, -1, 0, .26, 1.1, 3.2, 2.7, 2.0, 1);
+put(-1.6, 1.15, 5.5, 0, 0, 0, .999, .22, .25, 1.1, .45, 0);
+put(0, 1.15, 0.5, 0, 0, 0, .999, .22, .25, 1.1, .45, 0);
+put(1.6, 1.15, -4.5, 0, 0, 0, .999, .22, .25, 1.1, .45, 0);
+put(0, 2.4, -19, 0, 0, 0, .999, .7, 1.6, 1.2, .6, 0);
+} else if (i === 1) {
+put(0, 10.8, .5, 0, -1, .12, .5, .5, 2.6, 1.9, 1.1, 0);
+put(0, 8.5, -30, 0, .02, 1, .3, 2.0, .8, 1.5, 1.8, 0);
+put(1.85, 5.5, 1.0, 0, 0, 0, .999, .12, 1.2, .25, .15, 0);
+} else if (i === 2) {
+put(0, 4.6, -4, 0, -1, 0, .6, .3, 3.4, 2.7, 2.1, 2);
+put(-.8, 1.1, 3.5, 0, 0, 0, .999, .18, 1.3, .85, .5, 0);
+put(.8, 1.1, -1.5, 0, 0, 0, .999, .18, 1.3, .85, .5, 0);
+put(0, 1.1, -7.5, 0, 0, 0, .999, .18, 1.3, .85, .5, 0);
+put(0, 7, -4, 0, -1, 0, .85, .5, .3, .55, .6, 0);
+} else if (i === 3) {
+put(-2.8, 6.8, 7.5, 0, 0, 0, .999, .4, 3.0, 1.5, .5, 0);
+put(2.8, 6.8, 7.5, 0, 0, 0, .999, .4, 3.0, 1.5, .5, 0);
+put(-2.8, 6.8, -6.5, 0, 0, 0, .999, .4, 3.0, 1.5, .5, 0);
+put(2.8, 6.8, -6.5, 0, 0, 0, .999, .4, 3.0, 1.5, .5, 0);
+put(0, 2.5, 0, 0, 0, 0, .999, .5, .5, .3, .15, 0);
+} else if (i === 4) {
+const th = u * 4.6 + .25;
+const s = Math.sin(th), c = Math.cos(th);
+const cx = cam[0], cz = cam[2];
+const rot = (x, y, z) => {
+const rx = x - cx, rz = z - cz;
+return [cx + rx * c + rz * s, y, cz - rx * s + rz * c];
+};
+const mp = rot(6.8, .7, 0);
+let dmx = cam[0] - mp[0], dmy = cam[1] - mp[1], dmz = cam[2] - mp[2];
+const dl = Math.hypot(dmx, dmy, dmz) || 1;
+dmx /= dl; dmy /= dl; dmz /= dl;
+put(mp[0], mp[1], mp[2], dmx, dmy, dmz, .55, .3, 2.8, 2.1, 1.2, 0);
+for (let k = 0; k < 4; k++) {
+const a = k * Math.PI / 2 + Math.PI / 4;
+const sp2 = rot(Math.cos(a) * 8.6, 3.6, Math.sin(a) * 8.6);
+put(sp2[0], sp2[1], sp2[2], 0, 0, 0, .999, .3, 2.4, .35, .2, 0);
+}
+put(0, 1.2, 3.5, 0, 0, 0, .999, .6, .5, .35, .25, 0);
+} else if (i === 5) {
+put(-3.0, 4.6, 3.0, 0, 0, 0, .999, .5, .35, 1.6, 1.35, 0);
+put(2.8, 4.6, -1.0, 0, 0, 0, .999, .5, .35, 1.6, 1.35, 0);
+put(-1.5, 4.6, -7.0, 0, 0, 0, .999, .5, .35, 1.6, 1.35, 0);
+put(0, 13, 0, 0, -1, 0, .75, 1.6, .25, .5, .55, 0);
+put(2.8, .9, -1.0, 0, 0, 0, .999, .2, .5, 1.4, 1.2, 0);
+} else if (i === 6) {
+const cy = cam[1];
+put(1.6, cy + 3.5, 0, 0, 0, 0, .999, .35, 2.6, .3, .25, 0);
+put(-1.6, cy - 5.0, 0, 0, 0, 0, .999, .35, .35, .5, 2.8, 0);
+put(1.2, cy - 11.5, 0, 0, 0, 0, .999, .35, 2.6, .3, .25, 0);
+put(0, -13.5, 0, 0, 0, 0, .999, .9, .3, 1.0, .9, 0);
+} else {
+put(0, 2.6, -14.8, 0, 0, 1, .5, .45, 3.4, 2.5, 1.2, 0);
+put(-3.2, 2.0, -5.0, 0, 0, 0, .999, .6, .3, .9, .8, 0);
+put(3.4, 2.0, -9.0, 0, 0, 0, .999, .6, .3, .9, .8, 0);
+put(0, 8, 0, 0, -1, 0, .9, 1.0, .2, .3, .35, 0);
+}
+return n;
+}
+function showFrag(id) {
+const t = document.getElementById(id);
+const app = document.getElementById("app");
+if (t && app) app.innerHTML = t.innerHTML;
+}
+function hud(i) {
+const tt = document.getElementById("hud-t");
+const ll = document.getElementById("hud-l");
+const hud = document.getElementById("hud");
+hud.classList.remove("on");
+clearTimeout(this._ht);
+this._ht = setTimeout(() => {
+tt.textContent = SC[i].name;
+ll.textContent = SC[i].tech;
+hud.classList.add("on");
+}, 420);
+}
+function clack(t) {
+msg({ k: "clack", a: W2.hash(t * 9.1) });
+msg({ k: "dip" });
+setTimeout(() => { if (booted && !ended) { msg({ k: "clack", a: W2.hash(t * 3.7 + .5) }); } }, 75);
+}
+function state(t) {
+const sa = sceneAt(t);
+const i = sa.i, u = sa.u, tin = t - sa.t0;
+const sc = SC[i];
+const dt1 = 1 / 60;
+const c0 = camPose(i, u, t);
+const c1 = camPose(i, Math.min(1, u + dt1 / sc.dur), t + dt1);
+let d = 0;
+for (let k = 0; k < 3; k++) d += (c1.p[k] - c0.p[k]) ** 2;
+const sp = Math.sqrt(d) * 60;
+const spE = audioSp > .05 ? audioSp : sp;
+let jy = 0, jr = 0;
+for (let j = 0; j < jolts.length; j++) {
+const a = t - jolts[j];
+if (a > 0 && a < .45) {
+const k2 = Math.exp(-a * 13);
+jy += Math.sin(a * 52) * .022 * k2;
+jr += Math.sin(a * 40) * .004 * k2;
+}
+}
+jolts.splice(0, 1e9, ...jolts.filter(x => t - x < .5));
+const swx = Math.sin(t * .9) * (.01 + spE * .0015);
+const swy = Math.sin(t * 1.7 + 1) * (.008 + spE * .0012);
+const p0 = [c0.p[0] + swx, c0.p[1] + swy + jy, c0.p[2]];
+const p1 = [c1.p[0] + swx, c1.p[1] + swy + jy, c1.p[2]];
+const b = basis(p0, c0.l, c0.r + jr);
+const e = W2.smooth;
+const cl = (x) => Math.min(1, Math.max(0, x));
+let fade = cl(t / 1.4);
+const tLeft = sa.t0 + sc.dur - t;
+if (i < 7) fade = Math.min(fade, 1 - e(cl(tLeft / .7)));
+else fade = Math.min(fade, 1 - e(cl(tLeft / 1.6)));
+const door = e(cl((u - .84) / .14));
+const nL = lights(i, u, t, p0);
+const tanF = .364 * (1 + Math.min(sp, 20) * .0018);
+return {
+i, u, t, sp, fade, door, tanF, aspect,
+p0, p1, f: b.f, r: b.r, u2: b.u,
+lights: Larr, nL,
+fog: sc.fog, amb: sc.amb, beam: sc.beam,
+spp: sc.spp, focus: sc.focus, box: sc.box, pcol: sc.pcol, fall: sc.fall,
+swx, swy, roll: c0.r + jr
+};
+}
+function sched(t) {
+const sa = sceneAt(t);
+const i = sa.i, u = sa.u;
+const sc = SC[i];
+if (i !== lastScene) {
+lastScene = i;
+msg({ k: "root", a: sc.root });
+msg({ k: "room", a: sc.room[0], b: sc.room[1] });
+if (i > 0) msg({ k: "whomp" });
+hud(i);
+jIdx = 0; cIdx = 0; doored = false;
+creakAt = t + 6 + W2.hash(i * 7.3 + 1) * 8;
+}
+const st = state(t);
+if (Math.floor(t * 8) % 4 === 0) msg({ k: "sp", a: st.sp });
+const jz = [13, 13, 11, 11, 13, 12, 13, 15][i];
+if (sc.joint > 0) {
+const d = jz - st.p0[2];
+const idx = Math.floor(d / sc.joint);
+if (idx > jIdx) {
+while (jIdx < idx - 1) jIdx++;
+jIdx = idx;
+clack(t);
+jolts.push(t);
+}
+}
+if (sc.chain > 0) {
+const d = st.p0[1] - 2;
+const idx = Math.floor(d / sc.chain);
+if (idx > cIdx) {
+while (cIdx < idx - 1) cIdx++;
+cIdx = idx;
+msg({ k: "tick", a: W2.hash(t * 3.1) });
+}
+}
+if (u > .86 && !doored) { doored = true; msg({ k: "whomp" }); }
+if (i === 6 && u > .24 && !impact) { impact = true; msg({ k: "whomp" }); jolts.push(t); }
+if (t > creakAt) { msg({ k: "creak", a: W2.hash(t * 1.7) }); creakAt = t + 7 + W2.hash(t) * 9; }
+const hb = (i === 4 && u > .4 && u < .85) || (i === 6 && u > .06 && u < .6) || (i === 7 && u > .7 && u < .96);
+if (hb && t - lastBeat > 1.02) { lastBeat = t; msg({ k: "beat" }); }
+if (!hb) lastBeat = t - .5;
+}
+function boot() {
+if (booted) return;
+booted = true;
+initAudio().then(() => {
+if (G.noGPU) { showFrag("frag-nogpu"); return; }
+if (actx && actx.state === "suspended") actx.resume();
+t0 = actx ? actx.currentTime + .6 : 0;
+t0ms = performance.now() + 600;
+showFrag("frag-play");
+G.start();
+});
+}
+function reset() {
+t0 = actx ? actx.currentTime + .6 : 0;
+t0ms = performance.now() + 600;
+lastScene = -1; doored = false; impact = false; jolts.length = 0; ended = false; lastBeat = -1; audioSp = 0;
+if (actx && actx.state === "suspended") actx.resume();
+showFrag("frag-play");
+G.start();
+}
+function tRide() {
+if (actx) return actx.currentTime - t0;
+return (performance.now() - t0ms) / 1000;
+}
+function end() {
+if (ended) return;
+ended = true;
+G.stop();
+msg({ k: "room", a: 100, b: .012 });
+showFrag("frag-end");
+try {
+const b = new Blob(["<!doctype html>", document.documentElement.outerHTML]);
+const kb = b.size / 1024;
+const el = document.getElementById("sz");
+if (el) el.textContent = (kb / 1024).toFixed(2) + " MB · ONE FILE · EVERY FRAME TRACED · EVERY SOUND SYNTHESIZED";
+} catch (e) {}
+}
+document.addEventListener("visibilitychange", () => {
+if (!booted || ended) return;
+if (document.hidden) {
+A.h0 = performance.now();
+if (actx) actx.suspend();
+} else {
+const d = performance.now() - (A.h0 || performance.now());
+t0ms += d;
+if (actx) actx.resume().then(() => { t0 += d / 1000; });
+}
+});
+document.addEventListener("click", (e) => {
+if (!e.target || !e.target.closest) return;
+if (e.target.closest("#again")) { reset(); }
+else if (e.target.closest("#gate") && !booted) { boot(); }
+});
+return {
+SC, DUR, boot, reset, tRide, state, sched, end, hud, aspect,
+get booted(){ return booted; }, get ended(){ return ended; },
+setAspect(v){ aspect = v; }, jolts
+};
+})();
+</script>
+<script>
+const SHD = {};
+SHD.TRACE = `
+struct Cam {
+  pos0: vec3f, pad0: f32,
+  pos1: vec3f, pad1: f32,
+  fwd: vec3f, pad2: f32,
+  right: vec3f, pad3: f32,
+  up: vec3f, pad4: f32,
+  tanF: f32, aspect: f32, scene: f32, u: f32,
+  time: f32, speed: f32, door: f32, spp: f32,
+  focus: f32, pad5: f32, pad6: f32, pad7: f32,
+  fog: vec4f,
+  amb: vec4f,
+  aux: vec4f,
+};
+struct Lgt {
+  pos: vec3f, pad0: f32,
+  dir: vec3f, pad1: f32,
+  cosO: f32, rad: f32,
+  col: vec3f, pat: f32,
+};
+@group(0) @binding(0) var<uniform> CAM: Cam;
+@group(0) @binding(1) var<uniform> LGT: array<Lgt, 8>;
+@group(0) @binding(2) var<uniform> NLA: vec4f;
+@group(0) @binding(3) var NO3: texture_3d<f32>;
+@group(0) @binding(4) var NS3: sampler;
+@group(0) @binding(5) var COLT: texture_2d<f32>;
+@group(0) @binding(6) var DPTT: texture_2d<f32>;
+@group(0) @binding(7) var DEPT: texture_2d<f32>;
+@group(0) @binding(8) var NRMT: texture_2d<f32>;
+fn h11(p: vec2f) -> f32 {
+  let q = fract(p * 0.3183099 + 0.1);
+  return fract(q.x * q.y * (q.x + q.y));
+}
+fn h13(p: vec3f) -> f32 {
+  let q = fract(p * 0.1031);
+  let q2 = q + dot(q, q + vec3f(31.32));
+  return fract(q2.x * q2.y * q2.z);
+}
+fn n3s(p: vec3f) -> f32 {
+  return textureSample(NO3, NS3, p).r;
+}
+fn hal2(i: u32) -> f32 {
+  var r = 0.0;
+  var f = 1.0;
+  var v = f32(i % 4095u + 1u);
+  while (v > 0.5) {
+    f = f / 2.0;
+    r = r + f * fract(v);
+    v = v * 0.5;
+  }
+  return r;
+}
+fn hal3(i: u32) -> f32 {
+  var r = 0.0;
+  var f = 1.0;
+  var v = f32((i * 7u) % 59048u + 1u);
+  while (v > 0.5) {
+    f = f / 3.0;
+    r = r + f * fract(v);
+    v = v * 0.3333333;
+  }
+  return r;
+}
+fn rnd3(i: u32) -> vec3f {
+  return vec3f(h13(vec3f(f32(i), 1.3, 2.7)), h13(vec3f(f32(i + 1u), 3.1, 4.9)), h13(vec3f(f32(i + 2u), 5.3, 6.1)));
+}
+struct RT { t: f32, n: vec3f };
+struct Hit { t: f32, n: vec3f, m: u32, e: f32 };
+struct Res { c: vec3f, d: f32, n: vec3f };
+struct Mat { alb: vec3f, rgh: f32, met: f32, emi: vec3f, rfl: f32, wtr: f32 };
+fn ell(ro: vec3f, rd: vec3f, c: vec3f, h: vec3f) -> RT {
+  let o = ro - c;
+  let a = (rd.x / h.x) * (rd.x / h.x) + (rd.y / h.y) * (rd.y / h.y) + (rd.z / h.z) * (rd.z / h.z);
+  let b = (o.x * rd.x) / (h.x * h.x) + (o.y * rd.y) / (h.y * h.y) + (o.z * rd.z) / (h.z * h.z);
+  let c0 = (o.x * o.x) / (h.x * h.x) + (o.y * o.y) / (h.y * h.y) + (o.z * o.z) / (h.z * h.z) - 1.0;
+  var d = b * b - a * c0;
+  if (d < 0.0) { return RT(-1.0, vec3f(0.0)); }
+  d = sqrt(d);
+  var t = (-b - d) / a;
+  if (t < 0.01) { t = (-b + d) / a; }
+  if (t < 0.01) { return RT(-1.0, vec3f(0.0)); }
+  let p = ro + rd * t;
+  return RT(t, normalize(vec3f((p.x - c.x) / (h.x * h.x), (p.y - c.y) / (h.y * h.y), (p.z - c.z) / (h.z * h.z))));
+}
+fn box(ro: vec3f, rd: vec3f, c: vec3f, h: vec3f) -> RT {
+  let o = ro - c;
+  let inv = 1.0 / rd;
+  let t1 = (-h - o) * inv;
+  let t2 = (h - o) * inv;
+  let tmin = min(t1, t2);
+  let tmax = max(t1, t2);
+  let tn = max(max(tmin.x, tmin.y), tmin.z);
+  let tf = min(min(tmax.x, tmax.y), tmax.z);
+  if (tn > tf || tf < 0.01) { return RT(-1.0, vec3f(0.0)); }
+  let t = select(tf, tn, tn > 0.01);
+  let p = ro + rd * t;
+  let q = p - c;
+  let an = abs(rd);
+  let am = max(an.x, max(an.y, an.z));
+  var n = vec3f(0.0);
+  if (am == an.x) { n = vec3f(sign(rd.x), 0.0, 0.0); }
+  else if (am == an.y) { n = vec3f(0.0, sign(rd.y), 0.0); }
+  else { n = vec3f(0.0, 0.0, sign(rd.z)); }
+  let sgn = select(1.0, -1.0, dot(n, q) < 0.0);
+  return RT(t, n * sgn);
+}
+fn cyl(ro: vec3f, rd: vec3f, c: vec3f, r: f32, hh: f32) -> RT {
+  let o = ro - c;
+  let a = rd.x * rd.x + rd.z * rd.z;
+  if (a < 0.000001) { return RT(-1.0, vec3f(0.0)); }
+  let b = o.x * rd.x + o.z * rd.z;
+  let c0 = o.x * o.x + o.z * o.z - r * r;
+  var d = b * b - a * c0;
+  if (d < 0.0) { return RT(-1.0, vec3f(0.0)); }
+  d = sqrt(d);
+  var t = (-b - d) / a;
+  if (t < 0.01) { t = (-b + d) / a; }
+  if (t < 0.01) { return RT(-1.0, vec3f(0.0)); }
+  let py = o.y + rd.y * t;
+  if (abs(py) > hh) { return RT(-1.0, vec3f(0.0)); }
+  let p = ro + rd * t;
+  return RT(t, normalize(vec3f(p.x - c.x, 0.0, p.z - c.z)));
+}
+fn cylI(ro: vec3f, rd: vec3f, c: vec3f, r: f32, hh: f32) -> RT {
+  let o = ro - c;
+  let a = rd.x * rd.x + rd.z * rd.z;
+  if (a < 0.000001) { return RT(-1.0, vec3f(0.0)); }
+  let b = o.x * rd.x + o.z * rd.z;
+  let c0 = o.x * o.x + o.z * o.z - r * r;
+  var d = b * b - a * c0;
+  if (d < 0.0) { return RT(-1.0, vec3f(0.0)); }
+  d = sqrt(d);
+  var t = (-b - d) / a;
+  if (t < 0.01) { t = (-b + d) / a; }
+  if (t < 0.01) { return RT(-1.0, vec3f(0.0)); }
+  let py = o.y + rd.y * t;
+  if (abs(py) > hh) { return RT(-1.0, vec3f(0.0)); }
+  let p = ro + rd * t;
+  return RT(t, normalize(vec3f(c.x - p.x, 0.0, c.z - p.z)));
+}
+fn rz(a: f32) -> mat3x3f {
+  let c = cos(a);
+  let s = sin(a);
+  return mat3x3f(vec3f(c, -s, 0.0), vec3f(s, c, 0.0), vec3f(0.0, 0.0, 1.0));
+}
+fn upd(h: ptr<function, Hit>, ro: vec3f, rd: vec3f, r: RT, m: u32, e: f32) {
+  if (r.t > 0.0 && r.t < (*h).t) {
+    (*h).t = r.t;
+    (*h).n = r.n;
+    (*h).m = m;
+    (*h).e = e;
+  }
+}
+fn updr(h: ptr<function, Hit>, M: mat3x3f, r: RT, m: u32, e: f32) {
+  if (r.t > 0.0 && r.t < (*h).t) {
+    (*h).t = r.t;
+    (*h).n = M * r.n;
+    (*h).m = m;
+    (*h).e = e;
+  }
+}
+fn planeY(h: ptr<function, Hit>, ro: vec3f, rd: vec3f, y: f32, m: u32) {
+  if (abs(rd.y) < 0.000001) { return; }
+  let t = (y - ro.y) / rd.y;
+  if (t > 0.01 && t < (*h).t) {
+    (*h).t = t;
+    (*h).n = vec3f(0.0, 1.0, 0.0);
+    (*h).m = m;
+  }
+}
+fn shade(p: vec3f, nn: vec3f, m: u32, e: f32) -> Mat {
+  var M = Mat(vec3f(0.5, 0.5, 0.5), 0.5, 0.0, vec3f(0.0), 0.0, 0.0);
+  switch (m) {
+    case 0u {
+      let v = n3s(p * 1.4);
+      let f = fract(v * 2.7);
+      let vein = 1.0 - smoothstep(0.0, 0.06, abs(f - 0.5));
+      M.alb = mix(vec3f(0.78, 0.76, 0.7), vec3f(0.16, 0.2, 0.22), vein * 0.5);
+      M.rgh = 0.14 + 0.1 * n3s(p * 4.0);
+      M.rfl = 0.045;
+    }
+    case 1u {
+      let pat = step(0.62, n3s(p * 0.9));
+      M.alb = mix(vec3f(0.75, 0.52, 0.22), vec3f(0.34, 0.45, 0.34), pat * 0.55);
+      M.met = 1.0;
+      M.rgh = 0.3 + pat * 0.2;
+    }
+    case 2u {
+      let st = n3s(p * 0.55);
+      M.alb = mix(vec3f(0.72, 0.68, 0.58), vec3f(0.3, 0.44, 0.38), clamp(step(0.68, st) * 0.6 + (st - 0.5) * 0.4, 0.0, 0.9));
+      M.rgh = 0.92;
+    }
+    case 3u {
+      M.alb = vec3f(0.09, 0.1, 0.11) * (0.6 + 0.8 * n3s(p * 2.0));
+      M.rgh = 0.95;
+    }
+    case 4u {
+      M.alb = vec3f(0.012, 0.035, 0.045);
+      M.rgh = 0.03;
+      M.wtr = 1.0;
+      M.rfl = 0.02;
+    }
+    case 5u {
+      let pat = step(0.7, n3s(p * 1.1));
+      M.alb = vec3f(0.14, 0.13, 0.13) + pat * vec3f(0.05, 0.09, 0.07);
+      M.met = 0.85;
+      M.rgh = 0.45;
+    }
+    case 6u {
+      let k = u32(e + 0.5);
+      switch (k) {
+        case 0u { M.emi = vec3f(0.35, 1.5, 0.7) * 1.7; }
+        case 1u { M.emi = vec3f(2.0, 1.1, 0.45) * 2.6; }
+        case 4u { M.emi = vec3f(1.5, 1.15, 0.55) * 3.2; }
+        case 5u { M.emi = vec3f(1.9, 1.35, 0.5) * 3.4; }
+        case 6u { M.emi = vec3f(0.5, 1.6, 1.3) * 2.0; }
+        case 7u { M.emi = vec3f(1.4, 0.3, 0.2) * 1.7; }
+        case 8u { M.emi = vec3f(1.7, 1.0, 0.45) * 2.4; }
+        case 10u { M.emi = vec3f(2.2, 1.15, 0.4) * 2.4; }
+      }
+      M.rgh = 0.4;
+    }
+    case 7u {
+      M.alb = vec3f(0.04, 0.06, 0.08);
+      let fx = fract(p.x * 1.1);
+      let fy = fract((p.y - 2.0) * 1.4);
+      let win = step(0.62, fx) * (1.0 - step(0.85, fx)) * step(0.2, fy) * (1.0 - step(0.6, fy));
+      let on = step(0.45, h13(vec3f(floor(p.x * 1.1), floor((p.y - 2.0) * 1.4), 3.3)));
+      M.emi = vec3f(1.2, 0.85, 0.5) * win * on * 1.2;
+      M.rgh = 0.8;
+    }
+    case 8u {
+      M.alb = vec3f(0.03, 0.14, 0.1);
+      M.emi = vec3f(0.12, 1.0, 0.85) * e * e * 1.5;
+      M.rgh = 0.7;
+    }
+    case 9u {
+      M.alb = vec3f(0.5, 0.65, 0.65) * 0.15;
+      M.rgh = 0.04;
+      M.rfl = 0.12;
+    }
+    case 12u {
+      M.alb = vec3f(0.1, 0.1, 0.11);
+      M.met = 0.7;
+      M.rgh = 0.5;
+      let yy = p.y;
+      let rf = fract((yy + 40.0) / 8.0);
+      let band = 1.0 - smoothstep(0.04, 0.11, abs(rf - 0.5));
+      let par = f32(u32(floor((yy + 40.0) / 8.0)) % 2u);
+      M.emi = mix(vec3f(2.4, 0.26, 0.2), vec3f(0.3, 0.45, 2.4), par) * band * 3.0;
+    }
+    case 13u {
+      M.alb = vec3f(0.005, 0.008, 0.01);
+      M.rgh = 0.004;
+      M.wtr = 1.0;
+      M.rfl = 0.02;
+    }
+    case 14u {
+      let v = n3s(p * 1.1);
+      M.alb = mix(vec3f(0.13, 0.14, 0.14), vec3f(0.5, 0.55, 0.35), smoothstep(0.55, 0.8, v) * 0.5);
+      M.rgh = 0.55;
+    }
+    default { }
+  }
+  return M;
+}
+fn sky(rd: vec3f) -> vec3f {
+  var c = CAM.amb.rgb * 0.6;
+  switch (u32(CAM.scene + 0.5)) {
+    case 0u { c = c + vec3f(0.5, 0.42, 0.3) * pow(max(rd.y, 0.0), 2.0) * 0.8; }
+    case 1u {
+      let w = exp(-pow((rd.y - 0.06) * 7.0, 2.0));
+      c = c + vec3f(0.10, 0.22, 0.26) * w * 3.0 * max(-rd.z, 0.0);
+      c = c + vec3f(0.02, 0.05, 0.07) * max(rd.y, 0.0);
+    }
+    case 2u { c = c + vec3f(0.12, 0.14, 0.16) * max(rd.y, 0.0) * 0.6; }
+    case 3u { c = c + vec3f(0.16, 0.08, 0.03) * max(rd.y, 0.0) * 0.5; }
+    case 4u { c = c + vec3f(0.08, 0.03, 0.02) * 0.4; }
+    case 5u { c = c + vec3f(0.05, 0.16, 0.16) * step(0.86, n3s(rd * 24.0 + vec3f(0.0, CAM.time * 0.05, 0.0))) * 0.6; }
+    case 6u { c = c + vec3f(0.05, 0.03, 0.06) * 0.5; }
+    case 7u {
+      let dg = pow(max(dot(rd, normalize(vec3f(0.0, 0.06, -1.0))), 0.0), 30.0);
+      c = c + vec3f(0.5, 0.35, 0.15) * dg;
+    }
+  }
+  return c;
+}
+fn shadow(ro: vec3f, rd: vec3f, dist: f32, L: Lgt) -> f32 {
+  if (sceneHit(ro, rd, 0.04, dist - 0.1).t < dist - 0.1) { return 0.0; }
+  if (L.pat < 0.5) { return 1.0; }
+  let pd = select(8.0, 1.6, L.pat < 1.5);
+  let P0 = L.pos - L.dir * pd;
+  let tn = dot(P0 - ro, rd);
+  if (tn < 0.0 || tn > dist) { return 1.0; }
+  let q = ro + rd * tn;
+  let u1 = normalize(cross(L.dir, select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), L.dir.y < 0.9)));
+  let u2 = cross(L.dir, u1);
+  let lx = dot(q - P0, u1);
+  let lz = dot(q - P0, u2);
+  if (L.pat < 1.5) {
+    let d2 = abs(fract(lx / 0.62) - 0.5) * 2.0;
+    return step(0.35, d2);
+  }
+  let r = length(vec2f(lx, lz));
+  let a = atan(lz, lx);
+  let pet = step(0.42, abs(sin(3.0 * a))) * smoothstep(1.9, 1.7, r) * smoothstep(0.5, 0.7, r);
+  let cen = smoothstep(0.42, 0.38, r);
+  let ring = smoothstep(2.3, 2.15, r) * smoothstep(1.95, 2.1, r);
+  return clamp(pet + cen + ring, 0.0, 1.0);
+}
+fn direct(p: vec3f, nn: vec3f) -> vec3f {
+  var c = vec3f(0.0);
+  for (var i = 0u; i < 8u; i = i + 1u) {
+    if (f32(i) >= NLA.x) { break; }
+    let L = LGT[i];
+    let Lv = L.pos - p;
+    let d = length(Lv);
+    let ld = Lv / max(d, 0.001);
+    let ndl = dot(nn, ld);
+    if (ndl <= 0.0) { continue; }
+    var att = ndl / (1.0 + 0.028 * d * d);
+    if (L.cosO < 0.99) {
+      let sa = dot(-ld, L.dir);
+      if (sa < L.cosO) { att = 0.0; }
+      else {
+        let f = smoothstep(L.cosO, 1.0, sa);
+        att = att * f * f;
+      }
+    }
+    var sh = 1.0;
+    if (L.rad > 0.02 && (L.pat > 0.5 || d < 9.0)) {
+      let h1 = h13(vec3f(f32(i), CAM.time, 7.3));
+      let h2 = h13(vec3f(f32(i) + 3.1, CAM.time, 1.7));
+      let jp = L.pos + vec3f((h1 * 2.0 - 1.0) * L.rad, (h2 * 2.0 - 1.0) * L.rad, (h1 + h2 - 1.0) * L.rad * 0.5);
+      sh = shadow(p + nn * 0.02, normalize(jp - p), d, L);
+    }
+    c = c + L.col * att * sh;
+  }
+  return c;
+}
+fn fogBeam(p: vec3f) -> vec3f {
+  var c = vec3f(0.0);
+  if (CAM.fog.z > 0.01 && NLA.y >= 0.0 && NLA.y < 8.0) {
+    let L = LGT[u32(NLA.y + 0.5)];
+    let wv = p - L.pos;
+    let ax = dot(wv, L.dir);
+    let perp = wv - L.dir * ax;
+    let w = length(perp);
+    let b = exp(-w * w * 5.0) * exp(-max(-ax, 0.0) * 0.22) * CAM.fog.z;
+    c = c + L.col * b * 0.16;
+  }
+  return c;
+}
+fn fogInteg(ro: vec3f, rd: vec3f, t0: f32, t1: f32) -> vec4f {
+  var sc = vec3f(0.0);
+  var T = 1.0;
+  for (var i = 0u; i < 3u; i = i + 1u) {
+    let f = (f32(i) + 0.5) / 3.0;
+    let p = ro + rd * (t0 + f * (t1 - t0));
+    let seg = (t1 - t0) / 3.0;
+    let dn = CAM.fog.x + CAM.fog.y * (n3s(p * 0.16 + vec3f(0.0, CAM.time * 0.03, CAM.time * 0.02)) - 0.5) * 1.6 + NLA.w * exp(-max(p.y, 0.0) * 0.12) * 0.03;
+    T = T * exp(-dn * seg);
+    sc = sc + T * seg * dn * (CAM.amb.rgb * 1.5 + fogBeam(p));
+  }
+  return vec4f(sc, T);
+}
+fn ripple(p: vec3f, nn: vec3f) -> vec3f {
+  let n1 = n3s(p * 2.2 + vec3f(0.0, CAM.time * 0.12, 0.0));
+  let n2 = n3s(p * 2.2 + vec3f(41.3, 0.0, CAM.time * 0.1));
+  return normalize(vec3f((n1 - 0.5) * 0.09, 1.0, (n2 - 0.5) * 0.09));
+}
+fn iris(h: ptr<function, Hit>, ro: vec3f, rd: vec3f, c: vec3f, r: f32, flip: u32) {
+  var ro2 = ro;
+  var rd2 = rd;
+  if (flip == 1u) {
+    ro2 = vec3f(ro.x, ro.z, ro.y);
+    rd2 = vec3f(rd.x, rd.z, rd.y);
+  }
+  var ho = Hit(1e30, vec3f(0.0, 0.0, 0.0), 0u, 0.0);
+  let dr = CAM.door;
+  let hs = ell(ro2, rd2, vec3f(c.x, c.y, c.z), vec3f(r * 0.4 * (1.0 - dr) + 0.02, r * 0.4 * (1.0 - dr) + 0.02, 0.05));
+  if (hs.t > 0.0) { ho.t = hs.t; ho.n = hs.n; ho.m = 5u; }
+  for (var k = 0u; k < 8u; k = k + 1u) {
+    let ka = f32(k) * 0.785398;
+    let va = ka + dr * 1.1;
+    let vc = c + vec3f(cos(ka), sin(ka), 0.0) * (r * 0.52 + dr * r * 0.55);
+    let M = rz(-va);
+    let r2 = box(M * (ro2 - vc), M * rd2, vec3f(0.0), vec3f(0.05 * r, r * 0.3, 0.035));
+    if (r2.t > 0.0 && r2.t < ho.t) {
+      ho.t = r2.t;
+      ho.n = transpose(M) * r2.n;
+      ho.m = 5u;
+    }
+  }
+  for (var k = 0u; k < 12u; k = k + 1u) {
+    let ka = f32(k) * 0.523599;
+    let vc = c + vec3f(cos(ka), sin(ka), 0.0) * r;
+    let M = rz(-ka);
+    let r2 = box(M * (ro2 - vc), M * rd2, vec3f(0.0), vec3f(0.05 * r, 0.05 * r, 0.055));
+    if (r2.t > 0.0 && r2.t < ho.t) {
+      ho.t = r2.t;
+      ho.n = transpose(M) * r2.n;
+      ho.m = 5u;
+    }
+  }
+  if (flip == 1u) { ho.n = vec3f(ho.n.x, ho.n.z, ho.n.y); }
+  if (ho.t < (*h).t) {
+    (*h).t = ho.t;
+    (*h).n = ho.n;
+    (*h).m = ho.m;
+    (*h).e = ho.e;
+  }
+}
+fn s0(h: ptr<function, Hit>, ro: vec3f, rd: vec3f) {
+  planeY(h, ro, rd, 0.0, 0u);
+  for (var k = 0u; k < 5u; k = k + 1u) {
+    let x = f32(k) * 1.7 - 3.4;
+    upd(h, ro, rd, box(ro, rd, vec3f(x, 6.4, -2.0), vec3f(0.09, 0.12, 9.5)), 1u, 0.0);
+  }
+  for (var k = 0u; k < 4u; k = k + 1u) {
+    let x = select(-3.6, 3.6, k < 2u);
+    let z = select(4.5, -6.5, k >= 2u);
+    upd(h, ro, rd, cyl(ro, rd, vec3f(x, 1.6, z), 0.34, 1.6), 0u, 0.0);
+  }
+  for (var k = 0u; k < 2u; k = k + 1u) {
+    let x = select(-2.7, 2.7, k == 0u);
+    for (var j = 0u; j < 4u; j = j + 1u) {
+      let px = x + select(-0.55, 0.55, j < 2u);
+      let pz = 2.2 + select(-0.4, 0.4, j % 2u == 1u);
+      upd(h, ro, rd, box(ro, rd, vec3f(px, 0.95, pz), vec3f(0.03, 0.45, 0.03)), 5u, 0.0);
+    }
+    upd(h, ro, rd, box(ro, rd, vec3f(x, 1.38, 2.2), vec3f(0.58, 0.03, 0.43)), 5u, 0.0);
+    upd(h, ro, rd, box(ro, rd, vec3f(x, 0.8, 2.2), vec3f(0.58, 0.03, 0.43)), 5u, 0.0);
+  }
+  for (var k = 0u; k < 3u; k = k + 1u) {
+    let x = f32(k) * 1.6 - 1.6;
+    let z = 5.5 - f32(k) * 5.0;
+    upd(h, ro, rd, box(ro, rd, vec3f(x, 0.62, z), vec3f(0.035, 0.31, 0.035)), 5u, 0.0);
+    upd(h, ro, rd, ell(ro, rd, vec3f(x, 1.1, z), vec3f(0.17, 0.08, 0.17)), 6u, 0.0);
+  }
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 3.0, -17.6), vec3f(5.2, 3.0, 0.2)), 5u, 0.0);
+  iris(h, ro, rd, vec3f(0.0, 1.8, -16.6), 1.5, 0u);
+}
+fn s1(h: ptr<function, Hit>, ro: vec3f, rd: vec3f) {
+  upd(h, ro, rd, box(ro, rd, vec3f(-2.45, 12.0, 0.0), vec3f(0.15, 12.0, 6.5)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(2.45, 12.0, 0.0), vec3f(0.15, 12.0, 6.5)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 12.0, 6.5), vec3f(2.75, 12.0, 0.15)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 3.2, -3.2), vec3f(2.45, 3.2, 0.15)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 11.5, -3.2), vec3f(2.45, 1.5, 0.15)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(-2.0, 8.3, -3.2), vec3f(0.45, 1.95, 0.15)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(2.0, 8.3, -3.2), vec3f(0.45, 1.95, 0.15)), 2u, 0.0);
+  for (var k = 0u; k < 4u; k = k + 1u) {
+    let x = f32(k) * 0.7 - 1.05;
+    upd(h, ro, rd, box(ro, rd, vec3f(x, 8.3, -3.2), vec3f(0.045, 1.9, 0.05)), 5u, 0.0);
+  }
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 8.3, -3.2), vec3f(1.12, 0.045, 0.05)), 5u, 0.0);
+  for (var k = 0u; k < 10u; k = k + 1u) {
+    let x = f32(k) * 3.1 - 13.6;
+    let z = -24.0 - f32(k % 4u) * 7.0;
+    let hh = 5.0 + h13(vec3f(f32(k), 3.7, 1.1)) * 9.0;
+    let wd = 1.1 + h11(vec2f(f32(k), 2.2)) * 0.9;
+    upd(h, ro, rd, box(ro, rd, vec3f(x, hh * 0.5 + 0.6, z), vec3f(wd, hh * 0.5, 1.3)), 7u, 0.0);
+  }
+  for (var k = 0u; k < 24u; k = k + 1u) {
+    let y = -3.0 + f32(k) * 0.55;
+    let x = -1.75 + sin(y * 1.3 + CAM.time * 1.6) * 0.04;
+    upd(h, ro, rd, ell(ro, rd, vec3f(x, y, 0.6), vec3f(0.07, 0.09, 0.07)), 5u, 0.0);
+  }
+  upd(h, ro, rd, ell(ro, rd, vec3f(1.9, 5.5, 1.0), vec3f(0.06, 0.06, 0.06)), 6u, 7.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 1.55, 0.0), vec3f(2.3, 0.1, 2.5)), 5u, 0.0);
+  iris(h, ro, rd, vec3f(0.0, 8.8, -1.9), 1.25, 0u);
+}
+fn s2(h: ptr<function, Hit>, ro: vec3f, rd: vec3f) {
+  planeY(h, ro, rd, 0.72, 4u);
+  planeY(h, ro, rd, 0.0, 0u);
+  for (var k = 0u; k < 8u; k = k + 1u) {
+    let x = select(-2.7, 2.7, k < 4u);
+    let z = 8.5 - f32(k % 4u) * 5.7;
+    upd(h, ro, rd, cyl(ro, rd, vec3f(x, 1.6, z), 0.28, 1.6), 0u, 0.0);
+  }
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 3.1, -11.2), vec3f(4.5, 0.25, 3.0)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 3.1, 3.9), vec3f(4.5, 0.25, 6.9)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(-2.65, 3.1, -4.0), vec3f(0.95, 0.25, 1.5)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(2.65, 3.1, -4.0), vec3f(0.95, 0.25, 1.5)), 2u, 0.0);
+  for (var k = 0u; k < 12u; k = k + 1u) {
+    let x = select(-0.75, 0.75, k >= 6u);
+    let z = 7.5 - f32(k % 6u) * 1.6;
+    let y = 0.75 + 0.02 * sin(CAM.time * 1.4 + f32(k) * 2.1);
+    upd(h, ro, rd, ell(ro, rd, vec3f(x, y, z), vec3f(0.055, 0.09, 0.055)), 6u, 8.0);
+  }
+  upd(h, ro, rd, box(ro, rd, vec3f(-4.4, 1.6, -1.5), vec3f(0.2, 1.6, 13.0)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(4.4, 1.6, -1.5), vec3f(0.2, 1.6, 13.0)), 2u, 0.0);
+  iris(h, ro, rd, vec3f(0.0, 1.6, -14.6), 1.4, 0u);
+}
+fn s3(h: ptr<function, Hit>, ro: vec3f, rd: vec3f) {
+  planeY(h, ro, rd, 0.0, 3u);
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 10.2, -2.0), vec3f(7.0, 0.3, 15.0)), 5u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(-7.0, 5.1, -2.0), vec3f(0.3, 5.1, 15.0)), 5u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(7.0, 5.1, -2.0), vec3f(0.3, 5.1, 15.0)), 5u, 0.0);
+  for (var g = 0u; g < 2u; g = g + 1u) {
+    let cx = select(-4.6, 4.6, g == 0u);
+    let cc = vec3f(cx, 5.0, 3.0);
+    let ang = CAM.time * select(0.16, -0.11, g == 0u);
+    let M = rz(-ang);
+    updr(h, rz(ang), box(M * (ro - cc), M * rd, vec3f(0.0), vec3f(0.55, 0.55, 0.5)), 1u, 0.0);
+    for (var k = 0u; k < 12u; k = k + 1u) {
+      let a = ang + f32(k) * 0.5235988;
+      let tc = cc + vec3f(cos(a) * 2.35, sin(a) * 2.35, 0.0);
+      updr(h, rz(ang), box(M * (ro - tc), M * rd, vec3f(0.0), vec3f(0.3, 0.3, 0.5)), 1u, 0.0);
+    }
+  }
+  for (var b = 0u; b < 2u; b = b + 1u) {
+    let pz = select(-2.0, -8.0, b == 0u);
+    let th = sin(CAM.time * 0.75 + f32(b) * 2.6) * 0.85;
+    let bc = vec3f(sin(th) * 2.4, 6.4 - cos(th) * 2.4, pz);
+    let oc = bc + vec3f(0.0, 0.6, 0.95);
+    let rB = ell(ro, rd, bc, vec3f(1.5, 1.5, 1.5));
+    if (rB.t > 0.0) {
+      let p = ro + rd * rB.t;
+      let dv = p - oc;
+      if (dot(dv, dv) > 1.32 * 1.32) { upd(h, ro, rd, rB, 1u, 0.0); }
+    }
+    upd(h, ro, rd, box(ro, rd, vec3f(0.0, 5.0, pz), vec3f(0.07, 1.3, 0.07)), 5u, 0.0);
+  }
+  let lp = array<vec3f, 4>(vec3f(-2.8, 6.8, 7.5), vec3f(2.8, 6.8, 7.5), vec3f(-2.8, 6.8, -6.5), vec3f(2.8, 6.8, -6.5));
+  for (var k = 0u; k < 4u; k = k + 1u) {
+    upd(h, ro, rd, ell(ro, rd, lp[k], vec3f(0.12, 0.12, 0.12)), 6u, 10.0);
+  }
+  iris(h, ro, rd, vec3f(0.0, 2.6, -12.8), 1.5, 0u);
+}
+fn s4(h: ptr<function, Hit>, ro: vec3f, rd: vec3f) {
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, -0.16, 0.0), vec3f(10.0, 0.16, 10.0)), 0u, 0.0);
+  upd(h, ro, rd, cylI(ro, rd, vec3f(0.0, 4.0, 0.0), 9.0, 4.4), 2u, 0.0);
+  for (var k = 0u; k < 8u; k = k + 1u) {
+    let a = f32(k) * 0.785398;
+    let sp = vec3f(cos(a) * 8.7, 3.6, sin(a) * 8.7);
+    upd(h, ro, rd, box(ro, rd, sp, vec3f(0.1, 0.35, 0.1)), 6u, 7.0);
+  }
+  upd(h, ro, rd, ell(ro, rd, vec3f(5.8, 3.5, 0.0), vec3f(0.85, 1.15, 0.4)), 2u, 0.0);
+  upd(h, ro, rd, ell(ro, rd, vec3f(5.45, 3.72, -0.32), vec3f(0.13, 0.07, 0.09)), 6u, 4.0);
+  upd(h, ro, rd, ell(ro, rd, vec3f(5.45, 3.72, 0.32), vec3f(0.13, 0.07, 0.09)), 6u, 4.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(5.5, 3.98, -0.32), vec3f(0.16, 0.04, 0.05)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(5.5, 3.98, 0.32), vec3f(0.16, 0.04, 0.05)), 2u, 0.0);
+  upd(h, ro, rd, ell(ro, rd, vec3f(5.62, 3.32, 0.0), vec3f(0.1, 0.18, 0.08)), 2u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(5.5, 2.92, 0.0), vec3f(0.22, 0.05, 0.03)), 5u, 0.0);
+  iris(h, ro, rd, vec3f(0.0, 2.6, -8.6), 1.35, 0u);
+}
+fn s5(h: ptr<function, Hit>, ro: vec3f, rd: vec3f) {
+  planeY(h, ro, rd, 0.0, 3u);
+  for (var f = 0u; f < 6u; f = f + 1u) {
+    let bx = f32(f) * 1.9 - 3.8;
+    let bz = 6.0 - f32(f % 3u) * 5.0;
+    let ph = f32(f) * 1.7;
+    for (var i = 0u; i < 10u; i = i + 1u) {
+      let fi = f32(i);
+      let y = 0.25 + fi * 0.62;
+      let xx = bx + sin(fi * 0.65 + ph + CAM.time * 0.5) * fi * 0.12;
+      let zz = bz + cos(fi * 0.5 + ph + CAM.time * 0.4) * fi * 0.05;
+      let sz = 0.34 - fi * 0.022;
+      upd(h, ro, rd, ell(ro, rd, vec3f(xx, y, zz), vec3f(sz, 0.16, sz * 0.55)), 8u, fi * 0.1);
+    }
+  }
+  let dp = array<vec3f, 3>(vec3f(-3.0, 1.05, 3.0), vec3f(2.8, 1.05, -1.0), vec3f(-1.5, 1.05, -7.0));
+  for (var d = 0u; d < 3u; d = d + 1u) {
+    upd(h, ro, rd, ell(ro, rd, dp[d], vec3f(1.05, 1.05, 1.05)), 9u, 0.0);
+    upd(h, ro, rd, ell(ro, rd, vec3f(dp[d].x, 0.85, dp[d].z), vec3f(0.3, 0.3, 0.3)), 6u, 6.0);
+  }
+  iris(h, ro, rd, vec3f(0.0, 1.9, -13.0), 1.4, 0u);
+}
+fn s6(h: ptr<function, Hit>, ro: vec3f, rd: vec3f) {
+  upd(h, ro, rd, cylI(ro, rd, vec3f(0.0, 2.0, 0.0), 2.3, 11.0), 12u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 9.4, 0.0), vec3f(3.0, 0.25, 3.0)), 5u, 0.0);
+  for (var k = 0u; k < 6u; k = k + 1u) {
+    let a = f32(k) * 1.047;
+    upd(h, ro, rd, cyl(ro, rd, vec3f(cos(a) * 5.0, -16.0, sin(a) * 5.0), 0.9, 6.0), 3u, 0.0);
+  }
+  planeY(h, ro, rd, -20.0, 4u);
+  planeY(h, ro, rd, -20.4, 3u);
+  iris(h, ro, rd, vec3f(0.0, -2.5, -16.0), 1.5, 1u);
+}
+fn s7(h: ptr<function, Hit>, ro: vec3f, rd: vec3f) {
+  planeY(h, ro, rd, 0.0, 13u);
+  let mp = array<vec3f, 6>(vec3f(-2.6, 3.2, -5.0), vec3f(2.8, 3.6, -7.5), vec3f(-3.6, 4.0, -11.0), vec3f(3.4, 4.2, -13.5), vec3f(-1.6, 3.4, -16.5), vec3f(1.8, 3.8, -4.5));
+  let mh = array<f32, 6>(3.2, 3.6, 4.0, 4.2, 3.4, 3.8);
+  for (var k = 0u; k < 6u; k = k + 1u) {
+    upd(h, ro, rd, box(ro, rd, mp[k], vec3f(0.55, mh[k], 0.55)), 14u, 0.0);
+  }
+  upd(h, ro, rd, box(ro, rd, vec3f(-2.0, 2.2, -16.5), vec3f(0.35, 2.2, 0.35)), 1u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(2.0, 2.2, -16.5), vec3f(0.35, 2.2, 0.35)), 1u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 4.6, -16.5), vec3f(2.5, 0.3, 0.3)), 1u, 0.0);
+  upd(h, ro, rd, box(ro, rd, vec3f(0.0, 2.4, -16.3), vec3f(1.5, 1.9, 0.06)), 6u, 5.0);
+  iris(h, ro, rd, vec3f(0.0, 2.4, -16.0), 1.6, 0u);
+}
+fn sceneHit(ro: vec3f, rd: vec3f, t0: f32, t1: f32) -> Hit {
+  var h = Hit(1e30, vec3f(0.0, 1.0, 0.0), 0u, 0.0);
+  switch (u32(CAM.scene + 0.5)) {
+    case 0u: s0(&h, ro, rd);
+    case 1u: s1(&h, ro, rd);
+    case 2u: s2(&h, ro, rd);
+    case 3u: s3(&h, ro, rd);
+    case 4u: s4(&h, ro, rd);
+    case 5u: s5(&h, ro, rd);
+    case 6u: s6(&h, ro, rd);
+    default: s7(&h, ro, rd);
+  }
+  if (h.t < t0 || h.t > t1) { h.t = 1e30; }
+  return h;
+}
+fn trace1(ro: vec3f, rd: vec3f, seed: u32) -> Res {
+  var col = vec3f(0.0);
+  var th = 1.0;
+  var ro2 = ro;
+  var rd2 = rd;
+  var d0 = 1e5;
+  var dn0 = vec3f(0.0, 1.0, 0.0);
+  let sc = u32(CAM.scene + 0.5);
+  for (var b = 0u; b < 3u; b = b + 1u) {
+    var h2 = sceneHit(ro2, rd2, 0.02, 250.0);
+    if (b == 0u && sc == 4u) {
+      let ang = CAM.u * 4.6 + 0.25;
+      let M = rz(-ang);
+      let rro = CAM.pos0 + M * (ro - CAM.pos0);
+      let rrd = M * rd;
+      h2 = sceneHit(rro, rrd, 0.02, 250.0);
+      h2.n = transpose(M) * h2.n;
+      ro2 = rro;
+      rd2 = rrd;
+    }
+    if (h2.t > 1e29) {
+      let fg = fogInteg(ro2, rd2, 0.02, 80.0);
+      col = col + th * (sky(rd2) * fg.w + fg.rgb);
+      if (b == 0u) { d0 = 1e5; dn0 = rd2; }
+      break;
+    }
+    if (b == 0u) { d0 = h2.t; dn0 = h2.n; }
+    let fg = fogInteg(ro2, rd2, 0.02, h2.t);
+    col = col + th * fg.rgb;
+    th = th * fg.w;
+    let hp = ro2 + rd2 * h2.t;
+    let M2 = shade(hp, h2.n, h2.m, h2.e);
+    var ao = 1.0;
+    if (b == 0u && M2.met < 0.5) {
+      var o = 0.0;
+      for (var a = 0u; a < 2u; a = a + 1u) {
+        let a1 = h13(vec3f(f32(seed % 1024u) * 0.013, f32(a) * 3.7, CAM.aux.w * 0.13));
+        let a2 = h13(vec3f(f32(seed % 1024u) * 0.017 + 7.0, f32(a) * 1.3, CAM.aux.w * 0.11));
+        let adir = normalize(h2.n * (0.5 + 0.5 * h11(vec2f(a1, f32(a)))) + (CAM.right * (a2 * 2.0 - 1.0) + CAM.up * (a1 * 2.0 - 1.0)) * 0.8);
+        if (sceneHit(hp + h2.n * 0.03, adir, 0.03, 0.6).t > 1e29) { o = o + 1.0; }
+      }
+      ao = 0.3 + 0.7 * o * 0.5;
+    }
+    col = col + th * (M2.emi + direct(hp, h2.n) * ao);
+    col = col + th * M2.alb * (CAM.amb.rgb * 0.9 + sky(h2.n) * 0.5) * ao * (1.0 - M2.met);
+    if (b == 2u) {
+      col = col + th * M2.alb * CAM.amb.rgb;
+      break;
+    }
+    if (M2.wtr > 0.5) {
+      let nrm = ripple(hp, h2.n);
+      let cosI = max(dot(-rd2, nrm), 0.0);
+      let F = 0.02 + 0.98 * pow(1.0 - cosI, 5.0);
+      let rv = h11(vec2f(f32(seed) * 0.001, f32(b) * 7.7));
+      if (rv < F) {
+        rd2 = normalize(reflect(rd2, nrm) + (rnd3(seed + b * 31u) - 0.5) * 0.03);
+        ro2 = hp + nrm * 0.03;
+        th = th * F;
+      } else {
+        let rr = refract(rd2, nrm, 0.7519);
+        if (dot(rr, rr) < 0.001) { break; }
+        rd2 = normalize(rr + (rnd3(seed + 5u + b * 31u) - 0.5) * 0.06);
+        ro2 = hp + nrm * 0.03;
+        th = th * (1.0 - F);
+      }
+      continue;
+    }
+    if (M2.rfl > 0.01 || M2.met > 0.5) {
+      let cosI = max(dot(-rd2, h2.n), 0.0);
+      let F0 = mix(0.05, max(M2.alb.x, max(M2.alb.y, M2.alb.z)), M2.met);
+      let F = F0 + (1.0 - F0) * pow(1.0 - cosI, 5.0);
+      let jt = (rnd3(seed + 11u + b * 31u) - 0.5) * (M2.rgh * 2.5 + 0.04);
+      rd2 = normalize(reflect(rd2, h2.n) + jt);
+      ro2 = hp + h2.n * 0.03;
+      th = th * F;
+      if (h11(vec2f(f32(seed) * 0.13, f32(b) * 3.1)) < 0.2 && th < 0.12) { break; }
+    } else {
+      let r1 = max(h11(vec2f(f32(seed) * 0.11, 5.1)), 0.0001);
+      let r2 = h11(vec2f(f32(seed) * 0.17, 9.2));
+      let sq = sqrt(r1);
+      let ph = 6.28318 * r2;
+      let t1 = select(normalize(cross(h2.n, vec3f(1.0, 0.0, 0.0))), normalize(cross(h2.n, vec3f(0.0, 1.0, 0.0))), abs(h2.n.y) < 0.99);
+      let b1 = cross(h2.n, t1);
+      rd2 = normalize(h2.n * sq + (t1 * cos(ph) + b1 * sin(ph)) * sqrt(max(0.0, 1.0 - r1)));
+      ro2 = hp + h2.n * 0.03;
+      let al = max(dot(M2.alb, vec3f(0.3333)), 0.08);
+      if (h11(vec2f(f32(seed) * 0.23, f32(b) * 5.7)) < 1.0 - al) { break; }
+      th = th * M2.alb * (0.4 + 0.6 * ao) / al;
+    }
+  }
+  return Res(col, d0, dn0);
+}
+@compute @workgroup_size(8, 8, 1)
+@fn main(@builtin(global_invocation_id) g: vec3u) {
+  if (g.x >= u32(CAM.aux.y) || g.y >= u32(CAM.aux.z)) { return; }
+  let seed = g.x * 1973u + g.y * 9277u + u32(CAM.aux.x) * 7919u;
+  let jx = hal2(seed);
+  let jy = hal3(seed + 137u);
+  let uv = (vec2f(f32(g.x), f32(g.y)) + vec2f(jx, jy)) / vec2f(f32(CAM.aux.y), f32(CAM.aux.z));
+  let hh = mix(0.0, 1.0, h11(vec2f(f32(seed % 4096u), 3.7)));
+  let ro = mix(CAM.pos0, CAM.pos1, hh);
+  let nd = (uv * 2.0 - 1.0) * vec2f(CAM.aspect, 1.0);
+  let rd = normalize(CAM.fwd + CAM.tanF * (nd.x * CAM.right + nd.y * CAM.up));
+  let r0 = trace1(ro, rd, seed);
+  var acc = r0.c;
+  for (var s = 1u; s < u32(CAM.spp + 0.5); s = s + 1u) {
+    let i2 = seed + s * 4099u;
+    let j2 = vec2f(hal2(i2), hal3(i2 + 271u));
+    let uv2 = (vec2f(f32(g.x), f32(g.y)) + j2) / vec2f(f32(CAM.aux.y), f32(CAM.aux.z));
+    let hh2 = mix(0.0, 1.0, h11(vec2f(f32(i2 % 4096u), 3.7)));
+    let ro2 = mix(CAM.pos0, CAM.pos1, hh2);
+    let nd2 = (uv2 * 2.0 - 1.0) * vec2f(CAM.aspect, 1.0);
+    let rd2 = normalize(CAM.fwd + CAM.tanF * (nd2.x * CAM.right + nd2.y * CAM.up));
+    acc = acc + trace1(ro2, rd2, i2).c;
+  }
+  acc = acc / CAM.spp;
+  let id = vec2i(i32(g.x), i32(g.y));
+  textureStore(COLT, id, vec4f(acc, 1.0));
+  textureStore(DPTT, id, vec4f(r0.d * 0.001));
+  textureStore(DEPT, id, vec4f(r0.d * 0.001));
+  textureStore(NRMT, id, vec4f(r0.n, 1.0));
+}
+`;
+SHD.TAA = `
+@group(0) @binding(0) var COLR: texture_2d<f32>;
+@group(0) @binding(1) var DPT: texture_2d<f32>;
+@group(0) @binding(2) var NRM: texture_2d<f32>;
+@group(0) @binding(3) var HIS: texture_2d<f32>;
+@group(0) @binding(4) var HIN: texture_2d<f32>;
+@group(0) @binding(5) var OUT: texture_2d<f32>;
+@group(0) @binding(6) var<uniform> TAU: vec4f;
+@compute @workgroup_size(8, 8, 1)
+@fn main(@builtin(global_invocation_id) g: vec3u) {
+  if (g.x >= u32(TAU.y) || g.y >= u32(TAU.z)) { return; }
+  let id = vec2i(i32(g.x), i32(g.y));
+  let cur = textureLoad(COLR, id, 0);
+  let curD = textureLoad(DPT, id, 0).x;
+  let curN = textureLoad(NRM, id, 0).rgb;
+  let his = textureLoad(HIS, id, 0);
+  let hisN = textureLoad(HIN, id, 0).rgb;
+  let lumc = dot(cur.rgb, vec3f(0.2126, 0.7152, 0.0722));
+  let lumb = dot(his.rgb, vec3f(0.2126, 0.7152, 0.0722));
+  var st = step(0.85, dot(curN, hisN));
+  if (lumc > lumb * 1.2 + 0.004) { st = 0.0; }
+  var dil = cur.rgb;
+  var dl = lumc;
+  var offs = array<vec2i, 4>(vec2i(1, 0), vec2i(-1, 0), vec2i(0, 1), vec2i(0, -1));
+  for (var i = 0u; i < 4u; i = i + 1u) {
+    let nn = textureLoad(NRM, id + offs[i], 0).rgb;
+    if (abs(textureLoad(DPT, id + offs[i], 0).x - curD) < 0.0008 + curD * 0.002 && dot(nn, curN) > 0.35) {
+      let nc = textureLoad(COLR, id + offs[i], 0).rgb;
+      let nl = dot(nc, vec3f(0.2126, 0.7152, 0.0722));
+      if (nl > dl) {
+        dil = nc;
+        dl = nl;
+      }
+    }
+  }
+  let a = mix(0.055, 0.9, 1.0 - st);
+  let o = mix(his.rgb, dil, a);
+  textureStore(OUT, id, vec4f(o, 1.0));
+  textureStore(HIS, id, vec4f(o, 1.0));
+  textureStore(HIN, id, vec4f(curN, 1.0));
+}
+`;
+SHD.ZERO = `
+@group(0) @binding(0) var ZH: texture_2d<f32>;
+@group(0) @binding(1) var ZN: texture_2d<f32>;
+@group(0) @binding(2) var<uniform> TAU: vec4f;
+@compute @workgroup_size(8, 8, 1)
+@fn main(@builtin(global_invocation_id) g: vec3u) {
+  if (g.x >= u32(TAU.y) || g.y >= u32(TAU.z)) { return; }
+  let id = vec2i(i32(g.x), i32(g.y));
+  textureStore(ZH, id, vec4f(0.0));
+  textureStore(ZN, id, vec4f(0.0));
+}
+`;
+SHD.NOISE = `
+@group(0) @binding(0) var N3S: texture_3d<f32>;
+fn vh(i: vec3u) -> f32 {
+  let p = vec3f(f32(i.x), f32(i.y), f32(i.z));
+  let q = fract(p * vec3f(0.1031, 0.1030, 0.0973));
+  let q2 = q + dot(q, q + vec3f(33.33));
+  return fract(q2.x * q2.y * q2.z);
+}
+fn vn(p: vec3f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  let c000 = vh(i);
+  let c100 = vh(i + vec3u(1u, 0u, 0u));
+  let c010 = vh(i + vec3u(0u, 1u, 0u));
+  let c110 = vh(i + vec3u(1u, 1u, 0u));
+  let c001 = vh(i + vec3u(0u, 0u, 1u));
+  let c101 = vh(i + vec3u(1u, 0u, 1u));
+  let c011 = vh(i + vec3u(0u, 1u, 1u));
+  let c111 = vh(i + vec3u(1u, 1u, 1u));
+  return mix(mix(mix(c000, c100, u.x), mix(c010, c110, u.x), u.y), mix(mix(c001, c101, u.x), mix(c011, c111, u.x), u.y), u.z);
+}
+@compute @workgroup_size(8, 8, 8)
+@fn main(@builtin(global_invocation_id) g: vec3u) {
+  if (g.x >= 64u || g.y >= 64u || g.z >= 64u) { return; }
+  let p = vec3f(f32(g.x), f32(g.y), f32(g.z)) * (4.0 / 64.0);
+  var v = 0.0;
+  var a = 1.0;
+  var tot = 0.0;
+  for (var o = 0u; o < 4u; o = o + 1u) {
+    v = v + vn(p * f32(1u << (o * 1u))) * a;
+    tot = tot + a;
+    a = a * 0.5;
+  }
+  textureStore(N3S, g, vec4f(v / tot));
+}
+`;
+SHD.QVS = `
+struct VSQ2 {
+  @builtin(position) pos: vec4f,
+  @location(0) uv: vec2f,
+};
+@vertex
+@fn vsq(@builtin(vertex_index) i: u32) -> VSQ2 {
+  let p = array<vec2f, 3>(vec2f(-1.0, -3.0), vec2f(-1.0, 1.0), vec2f(3.0, 1.0))[i];
+  return VSQ2(vec4f(p, 0.0, 1.0), p * 0.5 + 0.5);
+}
+`;
+SHD.BLOOM = `
+struct VSQ2 {
+  @builtin(position) pos: vec4f,
+  @location(0) uv: vec2f,
+};
+struct BLOM2 { a: vec4f, b: vec4f };
+@group(0) @binding(0) var SAMP: sampler;
+@group(0) @binding(1) var TEX: texture_2d<f32>;
+@group(0) @binding(2) var<uniform> BLOM: BLOM2;
+@fragment
+@fn fsb(in: VSQ2) -> @location(0) vec4f {
+  let suv = in.uv * (vec2f(BLOM.a.x, BLOM.a.y) / vec2f(BLOM.b.x, BLOM.b.y));
+  let px = 1.0 / vec2f(BLOM.a.x, BLOM.a.y);
+  var c = vec3f(0.0);
+  c = c + textureSample(TEX, SAMP, suv + vec2f(-px.x, -px.y) * 0.5).rgb;
+  c = c + textureSample(TEX, SAMP, suv + vec2f(px.x, -px.y) * 0.5).rgb;
+  c = c + textureSample(TEX, SAMP, suv + vec2f(-px.x, px.y) * 0.5).rgb;
+  c = c + textureSample(TEX, SAMP, suv + vec2f(px.x, px.y) * 0.5).rgb;
+  c = c * 0.25;
+  let l = dot(c, vec3f(0.2126, 0.7152, 0.0722));
+  return vec4f(c * smoothstep(BLOM.a.z, BLOM.a.z * 1.9, l), 1.0);
+}
+`;
+SHD.BLUR = `
+struct VSQ2 {
+  @builtin(position) pos: vec4f,
+  @location(0) uv: vec2f,
+};
+struct BLOM2 { a: vec4f, b: vec4f };
+@group(0) @binding(0) var SAMP: sampler;
+@group(0) @binding(1) var TEX: texture_2d<f32>;
+@group(0) @binding(2) var<uniform> BLOM: BLOM2;
+@fragment
+@fn fsb2(in: VSQ2) -> @location(0) vec4f {
+  let px = vec2f(4.0 / BLOM.a.x, 4.0 / BLOM.a.y);
+  var c = vec3f(0.0);
+  c = c + textureSample(TEX, SAMP, in.uv).rgb * 0.2;
+  c = c + textureSample(TEX, SAMP, in.uv + vec2f(px.x, 0.0)).rgb * 0.125;
+  c = c + textureSample(TEX, SAMP, in.uv - vec2f(px.x, 0.0)).rgb * 0.125;
+  c = c + textureSample(TEX, SAMP, in.uv + vec2f(0.0, px.y)).rgb * 0.125;
+  c = c + textureSample(TEX, SAMP, in.uv - vec2f(0.0, px.y)).rgb * 0.125;
+  c = c + textureSample(TEX, SAMP, in.uv + vec2f(px.x, px.y)).rgb * 0.0625;
+  c = c + textureSample(TEX, SAMP, in.uv + vec2f(-px.x, px.y)).rgb * 0.0625;
+  c = c + textureSample(TEX, SAMP, in.uv + vec2f(px.x, -px.y)).rgb * 0.0625;
+  c = c + textureSample(TEX, SAMP, in.uv + vec2f(-px.x, -px.y)).rgb * 0.0625;
+  return vec4f(c, 1.0);
+}
+`;
+SHD.PART = `
+struct PCam {
+  pos: vec3f, boxS: f32,
+  right: vec3f, up: vec3f,
+  tanF: f32, aspect: f32,
+  time: f32, fall: f32,
+  col: vec4f,
+  on: f32,
+};
+struct LgtP {
+  pos: vec3f, pad0: f32,
+  dir: vec3f, pad1: f32,
+  cosO: f32, rad: f32,
+  col: vec3f, pat: f32,
+};
+@group(0) @binding(0) var<uniform> PC: PCam;
+@group(0) @binding(1) var<uniform> PLGT: array<LgtP, 8>;
+@group(0) @binding(2) var<uniform> PNLA: vec4f;
+@group(0) @binding(3) var<storage, read> PARTS: array<vec4f>;
+struct PV {
+  @builtin(position) pos: vec4f,
+  @location(0) qu: vec2f,
+  @location(1) wpos: vec3f,
+};
+@vertex
+@fn vsp(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> PV {
+  let p = PARTS[ii];
+  let s = p.w;
+  var rel = p.xyz - PC.pos;
+  rel.y = rel.y - PC.time * PC.fall * (0.25 + 0.75 * fract(s * 7.31));
+  rel.x = rel.x + sin(PC.time * 0.5 + s * 40.0) * 0.4;
+  let bx = vec3f(PC.boxS);
+  rel = mod(rel + bx * 0.5, bx) - bx * 0.5;
+  let wpos = rel + PC.pos;
+  let c = array<vec2f, 4>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0), vec2f(1.0, 1.0))[vi];
+  let sz = 0.006 + 0.03 * fract(s * 3.7);
+  let fwd = normalize(cross(PC.right, PC.up));
+  let w = wpos + (PC.right * c.x + PC.up * c.y) * sz;
+  let v = w - PC.pos;
+  let z = dot(v, fwd);
+  var o = PV(vec4f(0.0), vec2f(0.0), vec3f(0.0));
+  o.qu = c;
+  o.wpos = wpos;
+  if (z < 0.2 || z > PC.boxS * 0.7) {
+    o.pos = vec4f(2.0, 2.0, 9.0, 1.0);
+    return o;
+  }
+  let nd = vec2f(dot(v, PC.right) * PC.aspect, dot(v, PC.up)) / (z * PC.tanF);
+  o.pos = vec4f(nd, z * 0.001, 1.0);
+  return o;
+}
+@fragment
+@fn fsp(in: PV) -> @location(0) vec4f {
+  let a = 1.0 - smoothstep(0.25, 1.0, length(in.qu));
+  var col = PC.col.rgb * a * 0.35;
+  for (var i = 0u; i < 8u; i = i + 1u) {
+    if (f32(i) >= PNLA.x) { break; }
+    let L = PLGT[i];
+    let d = length(L.pos - in.wpos);
+    col = col + L.col * (0.1 / (1.0 + d * d * 0.3)) * a;
+  }
+  return vec4f(col * PC.on, 1.0);
+}
+`;
+SHD.COMP = `
+struct CUp {
+  a: vec4f,
+  b: vec4f,
+  c: vec4f,
+};
+@group(0) @binding(0) var SF: sampler;
+@group(0) @binding(1) var SN: sampler;
+@group(0) @binding(2) var TAA: texture_2d<f32>;
+@group(0) @binding(3) var DPTX: texture_2d<f32>;
+@group(0) @binding(4) var BLB: texture_2d<f32>;
+@group(0) @binding(5) var<uniform> CUP: CUp;
+@group(0) @binding(6) var<uniform> TAU2: vec4f;
+fn agx(x: vec3f) -> vec3f {
+  let a = 2.51;
+  let b = 0.03;
+  let c2 = 2.43;
+  let d = 0.59;
+  let e = 0.14;
+  let f = 0.02;
+  let g = 0.46;
+  let h = 0.46;
+  let k = 0.02;
+  x = clamp(x, vec3f(0.0), vec3f(16.0));
+  let x1 = (a * x + b) / (c2 * x + d);
+  let x2 = (e * x1 + f) / (g * x1 + h);
+  return max(x2 - k, vec3f(0.0));
+}
+fn h11c(p: vec2f) -> f32 {
+  let q = fract(p * 0.3183099 + 0.1);
+  return fract(q.x * q.y * (q.x + q.y));
+}
+@fragment
+@fn fsc(@builtin(frag_coord) fc: vec4f) -> @location(0) vec4f {
+  let res = vec2f(CUP.a.x, CUP.a.y);
+  let uv = fc.xy / res;
+  let suv = (uv - vec2f(0.5) / res) / (vec2f(CUP.c.x, CUP.c.y) / res) + vec2f(0.5) / vec2f(CUP.c.x, CUP.c.y);
+  let rr = length(uv - 0.5);
+  let d = textureSample(DPTX, SN, suv).x;
+  let foc = max(CUP.a.z, 0.0005);
+  let coc = clamp(abs(d - foc) / foc * 3.0, 0.0, 1.0) * CUP.b.x;
+  var base = textureSample(TAA, SF, suv).rgb;
+  if (coc > 0.02) {
+    base = base + textureSample(TAA, SF, suv + vec2f(0.0016, 0.0009) * (coc * 3.0)).rgb;
+    base = base + textureSample(TAA, SF, suv + vec2f(-0.0013, -0.0011) * (coc * 3.0)).rgb;
+    base = base * (1.0 / 3.0);
+  }
+  let ca = CUP.b.y * rr * rr;
+  let cr = textureSample(TAA, SF, suv + (suv - 0.5) * ca).r;
+  let cb = textureSample(TAA, SF, suv - (suv - 0.5) * ca).b;
+  var col = vec3f(cr, base.g, cb);
+  col = (col + textureSample(BLB, SF, suv).rgb * 1.2) * CUP.b.w;
+  let lum = dot(col, vec3f(0.2126, 0.7152, 0.0722));
+  let shade = smoothstep(0.6, 0.05, lum);
+  col = mix(col, col * vec3f(0.82, 1.05, 1.18), shade * 0.55);
+  col = agx(col);
+  col = col * (0.55 + 0.45 * smoothstep(1.35, 0.3, rr));
+  col = col + (h11c(vec2f(fract(TAU2.x * 0.618) * 437.0 + fc.x * 0.37, fc.y * 0.41 + TAU2.x)) - 0.5) * CUP.b.z;
+  col = col * CUP.a.w;
+  return vec4f(col, 1.0);
+}
+`;
+</script>
+<script>
+const G = (() => {
+const cv = document.getElementById("cv");
+const MAXP = 60000;
+const LVL = [1, .85, .7, .55, .45];
+let device = null, gctx = null, cfmt = "", cview = null, curTex = null;
+let W = 0, H = 0, W2 = 0, H2 = 0, W4 = 0, H4 = 0;
+let running = false, pending = false, raf = 0, last = 0, ema = 16, fc = 0, lvl = 0, frame = 0, zero = true, noGPU = false;
+let U = null, PARTB = null;
+let tNO3 = null, vCOL, vDPT, vDEP, vNRM, vHIS, vHIN, vTAA, vBLA, vBLB, vNO3;
+let bglTrace, bglTAA, bglZero, bglNoise, bglPart, bglBloom, bglComp;
+let pTrace, pTAA, pZero, pNoise, pBloom, pBlur, pPart, pComp;
+let sF = null, sN = null;
+const U8 = new Float32Array(256);
+const partData = new Float32Array(MAXP * 4);
+for (let i = 0; i < MAXP; i++) {
+partData[i * 4] = Math.random() * 44;
+partData[i * 4 + 1] = Math.random() * 44;
+partData[i * 4 + 2] = Math.random() * 44;
+partData[i * 4 + 3] = Math.random();
+}
+const T_ATT = 1, T_BIN = 2, T_STORE = 128;
+const B_UNI = 262144, B_VTX = 1048576, B_CD = 4;
+function size() {
+const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+W = Math.max(320, Math.floor(innerWidth * dpr));
+H = Math.max(240, Math.floor(innerHeight * dpr));
+cv.width = W;
+cv.height = H;
+A.setAspect(W / H);
+if (device) alloc();
+}
+function mkT(w, h, fmt, usage) {
+return device.createTexture({ size: [w, h], format: fmt, usage: usage });
+}
+function alloc() {
+gctx = cv.getContext("webgpu");
+cfmt = navigator.gpu.getPreferredCanvasFormat();
+gctx.configure({ device: device, format: cfmt, alphaMode: "opaque" });
+const tCOL = mkT(W, H, "rgba16float", T_BIN | T_STORE);
+const tDPT = mkT(W, H, "r32float", T_BIN | T_STORE);
+const tDEP = mkT(W, H, "depth32float", T_BIN | T_STORE | T_ATT);
+const tNRM = mkT(W, H, "rg16float", T_BIN | T_STORE);
+const tHIS = mkT(W, H, "rgba16float", T_BIN | T_STORE);
+const tHIN = mkT(W, H, "rg16float", T_BIN | T_STORE);
+const tTAA = mkT(W, H, "rgba16float", T_BIN | T_STORE | T_ATT);
+const bw = Math.max(16, W >> 2), bh = Math.max(16, H >> 2);
+const tBLA = mkT(bw, bh, "rgba16float", T_BIN | T_STORE | T_ATT);
+const tBLB = mkT(bw, bh, "rgba16float", T_BIN | T_STORE | T_ATT);
+tNO3 = device.createTexture({ size: [64, 64, 64], dimension: "3d", format: "r16float", usage: T_BIN | T_STORE });
+vCOL = tCOL.createView();
+vDPT = tDPT.createView();
+vDEP = tDEP.createView();
+vNRM = tNRM.createView();
+vHIS = tHIS.createView();
+vHIN = tHIN.createView();
+vTAA = tTAA.createView();
+vBLA = tBLA.createView();
+vBLB = tBLB.createView();
+vNO3 = tNO3.createView();
+U = device.createBuffer({ size: 1024, usage: B_UNI });
+PARTB = device.createBuffer({ size: MAXP * 16, usage: B_VTX });
+device.queue.writeBuffer(PARTB, 0, partData);
+sF = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", addressModeW: "repeat" });
+sN = device.createSampler({ magFilter: "nearest", minFilter: "nearest", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
+const mTrace = device.createShaderModule({ code: SHD.TRACE });
+const mTAA = device.createShaderModule({ code: SHD.TAA });
+const mZero = device.createShaderModule({ code: SHD.ZERO });
+const mNoise = device.createShaderModule({ code: SHD.NOISE });
+const mQ = device.createShaderModule({ code: SHD.QVS });
+const mBloom = device.createShaderModule({ code: SHD.BLOOM });
+const mBlur = device.createShaderModule({ code: SHD.BLUR });
+const mPart = device.createShaderModule({ code: SHD.PART });
+const mComp = device.createShaderModule({ code: SHD.COMP });
+const TRL = device.createBindGroupLayout({ entries: [
+{ binding: 0, visibility: 1, buffer: { type: "uniform" } },
+{ binding: 1, visibility: 1, buffer: { type: "uniform" } },
+{ binding: 2, visibility: 1, buffer: { type: "uniform" } },
+{ binding: 3, visibility: 1, texture: { sampleType: "filter", viewDimension: "3d" } },
+{ binding: 4, visibility: 1, sampler: { type: "filtering" } },
+{ binding: 5, visibility: 1, texture: { sampleType: "storage" } },
+{ binding: 6, visibility: 1, texture: { sampleType: "storage" } },
+{ binding: 7, visibility: 1, texture: { sampleType: "storage" } },
+{ binding: 8, visibility: 1, texture: { sampleType: "storage" } }
+]});
+const TLL = device.createBindGroupLayout({ entries: [
+{ binding: 0, visibility: 1, texture: { sampleType: "filter" } },
+{ binding: 1, visibility: 1, texture: { sampleType: "float" } },
+{ binding: 2, visibility: 1, texture: { sampleType: "filter" } },
+{ binding: 3, visibility: 1, texture: { sampleType: "filter" } },
+{ binding: 4, visibility: 1, texture: { sampleType: "filter" } },
+{ binding: 5, visibility: 1, texture: { sampleType: "storage" } },
+{ binding: 6, visibility: 1, buffer: { type: "uniform" } }
+]});
+const ZL = device.createBindGroupLayout({ entries: [
+{ binding: 0, visibility: 1, texture: { sampleType: "storage" } },
+{ binding: 1, visibility: 1, texture: { sampleType: "storage" } },
+{ binding: 2, visibility: 1, buffer: { type: "uniform" } }
+]});
+const NL = device.createBindGroupLayout({ entries: [
+{ binding: 0, visibility: 1, texture: { sampleType: "storage", viewDimension: "3d" } }
+]});
+const PL = device.createBindGroupLayout({ entries: [
+{ binding: 0, visibility: 1, buffer: { type: "uniform" } },
+{ binding: 1, visibility: 1, buffer: { type: "uniform" } },
+{ binding: 2, visibility: 1, buffer: { type: "uniform" } },
+{ binding: 3, visibility: 1, buffer: { type: "storage" } }
+]});
+const BL = device.createBindGroupLayout({ entries: [
+{ binding: 0, visibility: 3, sampler: { type: "filtering" } },
+{ binding: 1, visibility: 2, texture: { sampleType: "filter" } },
+{ binding: 2, visibility: 2, buffer: { type: "uniform" } }
+]});
+const CL = device.createBindGroupLayout({ entries: [
+{ binding: 0, visibility: 2, sampler: { type: "filtering" } },
+{ binding: 1, visibility: 2, sampler: { type: "non-filtering" } },
+{ binding: 2, visibility: 2, texture: { sampleType: "filter" } },
+{ binding: 3, visibility: 2, texture: { sampleType: "float" } },
+{ binding: 4, visibility: 2, texture: { sampleType: "filter" } },
+{ binding: 5, visibility: 2, buffer: { type: "uniform" } },
+{ binding: 6, visibility: 2, buffer: { type: "uniform" } }
+]});
+pTrace = device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [TRL] }), compute: { module: mTrace, entryPoint: "main" } });
+pTAA = device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [TLL] }), compute: { module: mTAA, entryPoint: "main" } });
+pZero = device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [ZL] }), compute: { module: mZero, entryPoint: "main" } });
+pNoise = device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [NL] }), compute: { module: mNoise, entryPoint: "main" } });
+pBloom = device.createRenderPipeline({
+layout: device.createPipelineLayout({ bindGroupLayouts: [BL] }),
+vertex: { module: mQ, entryPoint: "vsq" },
+fragment: { module: mBloom, entryPoint: "fsb", targets: [{ format: "rgba16float" }] }
+});
+pBlur = device.createRenderPipeline({
+layout: device.createPipelineLayout({ bindGroupLayouts: [BL] }),
+vertex: { module: mQ, entryPoint: "vsq" },
+fragment: { module: mBlur, entryPoint: "fsb2", targets: [{ format: "rgba16float" }] }
+});
+pPart = device.createRenderPipeline({
+layout: device.createPipelineLayout({ bindGroupLayouts: [PL] }),
+vertex: { module: mPart, entryPoint: "vsp" },
+fragment: {
+module: mPart, entryPoint: "fsp",
+targets: [{ format: "rgba16float", blend: { color: { operation: "add", srcFactor: "one", dstFactor: "one" }, alpha: { operation: "add", srcFactor: "one", dstFactor: "one" } } }]
+},
+depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "less" }
+});
+pComp = device.createRenderPipeline({
+layout: device.createPipelineLayout({ bindGroupLayouts: [CL] }),
+vertex: { module: mQ, entryPoint: "vsq" },
+fragment: { module: mComp, entryPoint: "fsc", targets: [{ format: cfmt }] }
+});
+bglTrace = device.createBindGroup({ layout: TRL, entries: [
+{ binding: 0, resource: { buffer: U, offset: 0, size: 176 } },
+{ binding: 1, resource: { buffer: U, offset: 192, size: 512 } },
+{ binding: 2, resource: { buffer: U, offset: 704, size: 16 } },
+{ binding: 3, resource: tNO3 },
+{ binding: 4, resource: sF },
+{ binding: 5, resource: vCOL },
+{ binding: 6, resource: vDPT },
+{ binding: 7, resource: vDEP },
+{ binding: 8, resource: vNRM }
+]});
+bglTAA = device.createBindGroup({ layout: TLL, entries: [
+{ binding: 0, resource: vCOL },
+{ binding: 1, resource: vDPT },
+{ binding: 2, resource: vNRM },
+{ binding: 3, resource: vHIS },
+{ binding: 4, resource: vHIN },
+{ binding: 5, resource: vTAA },
+{ binding: 6, resource: { buffer: U, offset: 736, size: 16 } }
+]});
+bglZero = device.createBindGroup({ layout: ZL, entries: [
+{ binding: 0, resource: vHIS },
+{ binding: 1, resource: vHIN },
+{ binding: 2, resource: { buffer: U, offset: 736, size: 16 } }
+]});
+bglNoise = device.createBindGroup({ layout: NL, entries: [{ binding: 0, resource: tNO3 }] });
+bglPart = device.createBindGroup({ layout: PL, entries: [
+{ binding: 0, resource: { buffer: U, offset: 752, size: 96 } },
+{ binding: 1, resource: { buffer: U, offset: 192, size: 512 } },
+{ binding: 2, resource: { buffer: U, offset: 704, size: 16 } },
+{ binding: 3, resource: PARTB }
+]});
+bglBloom = device.createBindGroup({ layout: BL, entries: [
+{ binding: 0, resource: sF },
+{ binding: 1, resource: vTAA },
+{ binding: 2, resource: { buffer: U, offset: 896, size: 48 } }
+]});
+bglBlur = device.createBindGroup({ layout: BL, entries: [
+{ binding: 0, resource: sF },
+{ binding: 1, resource: vBLA },
+{ binding: 2, resource: { buffer: U, offset: 896, size: 48 } }
+]});
+bglComp = device.createBindGroup({ layout: CL, entries: [
+{ binding: 0, resource: sF },
+{ binding: 1, resource: sN },
+{ binding: 2, resource: vTAA },
+{ binding: 3, resource: vDPT },
+{ binding: 4, resource: vBLB },
+{ binding: 5, resource: { buffer: U, offset: 848, size: 48 } },
+{ binding: 6, resource: { buffer: U, offset: 736, size: 16 } }
+]});
+W2 = Math.max(256, Math.floor(W / 2) * 2);
+H2 = Math.max(160, Math.floor(H / 2) * 2);
+W4 = Math.max(16, W2 >> 2);
+H4 = Math.max(16, H2 >> 2);
+const enc = device.createCommandEncoder();
+const p = enc.beginComputePass();
+p.setPipeline(pNoise);
+p.setBindGroup(0, bglNoise);
+p.dispatchWorkgroups(8, 8, 8);
+p.end();
+device.queue.submit([enc.finish()]);
+curTex = null;
+}
+function adapt() {
+let ch = false;
+if (ema > 17.8 && lvl < 4) { lvl++; ch = true; }
+else if (ema < 13.2 && lvl > 0) { lvl--; ch = true; }
+if (ch) {
+W2 = Math.max(256, Math.floor(W * LVL[lvl] / 2) * 2);
+H2 = Math.max(160, Math.floor(H * LVL[lvl] / 2) * 2);
+W4 = Math.max(16, W2 >> 2);
+H4 = Math.max(16, H2 >> 2);
+zero = true;
+}
+}
+function render(t, st) {
+const tex = gctx.getCurrentTexture();
+if (tex !== curTex) {
+curTex = tex;
+cview = tex.createView();
+}
+const spp = Math.max(1, st.spp - (ema > 19 ? 1 : 0));
+U8.fill(0);
+U8[0] = st.p0[0]; U8[1] = st.p0[1]; U8[2] = st.p0[2];
+U8[4] = st.p1[0]; U8[5] = st.p1[1]; U8[6] = st.p1[2];
+U8[8] = st.f[0]; U8[9] = st.f[1]; U8[10] = st.f[2];
+U8[12] = st.r[0]; U8[13] = st.r[1]; U8[14] = st.r[2];
+U8[16] = st.u2[0]; U8[17] = st.u2[1]; U8[18] = st.u2[2];
+U8[20] = st.tanF; U8[21] = st.aspect; U8[22] = st.i; U8[23] = st.u;
+U8[24] = t; U8[25] = st.sp; U8[26] = st.door; U8[27] = spp;
+U8[28] = st.focus;
+U8[32] = st.fog[0]; U8[33] = st.fog[1]; U8[34] = st.fog[2]; U8[35] = st.fog[3];
+U8[36] = st.amb[0]; U8[37] = st.amb[1]; U8[38] = st.amb[2];
+U8[40] = frame; U8[41] = W2; U8[42] = H2; U8[43] = t;
+for (let i = 0; i < 128; i++) { U8[48 + i] = st.lights[i]; }
+U8[176] = st.nL; U8[177] = st.beam; U8[179] = st.fog[3];
+U8[184] = frame; U8[185] = W2; U8[186] = H2;
+U8[188] = st.p0[0]; U8[189] = st.p0[1]; U8[190] = st.p0[2]; U8[191] = st.box;
+U8[192] = st.r[0]; U8[193] = st.r[1]; U8[194] = st.r[2];
+U8[196] = st.u2[0]; U8[197] = st.u2[1]; U8[198] = st.u2[2];
+U8[200] = st.tanF; U8[201] = st.aspect; U8[202] = t; U8[203] = st.fall;
+U8[204] = st.pcol[0]; U8[205] = st.pcol[1]; U8[206] = st.pcol[2];
+U8[208] = st.box > 0 ? 1 : 0;
+U8[212] = W; U8[213] = H; U8[214] = st.focus * 0.001; U8[215] = st.fade;
+U8[216] = Math.min(1.2, Math.max(0.2, 2.2 / st.focus));
+U8[217] = 0.0035; U8[218] = 0.03; U8[219] = 1.1;
+U8[220] = W2; U8[221] = H2;
+U8[224] = W2; U8[225] = H2; U8[226] = 0.9;
+U8[228] = W; U8[229] = H;
+device.queue.writeBuffer(U, 0, U8, 0, 256);
+const enc = device.createCommandEncoder();
+if (zero) {
+const p = enc.beginComputePass();
+p.setPipeline(pZero);
+p.setBindGroup(0, bglZero);
+p.dispatchWorkgroups(Math.ceil(W2 / 8), Math.ceil(H2 / 8));
+p.end();
+zero = false;
+}
+{
+const p = enc.beginComputePass();
+p.setPipeline(pTrace);
+p.setBindGroup(0, bglTrace);
+p.dispatchWorkgroups(Math.ceil(W2 / 8), Math.ceil(H2 / 8));
+p.end();
+}
+{
+const p = enc.beginComputePass();
+p.setPipeline(pTAA);
+p.setBindGroup(0, bglTAA);
+p.dispatchWorkgroups(Math.ceil(W2 / 8), Math.ceil(H2 / 8));
+p.end();
+}
+if (st.box > 0) {
+const p = enc.beginRenderPass({
+colorAttachments: [{ view: vTAA, loadOp: "load", storeOp: "store" }],
+depthStencilAttachment: { view: vDEP, loadOp: "load", storeOp: "dontStore" }
+});
+p.setPipeline(pPart);
+p.setBindGroup(0, bglPart);
+p.setViewport(0, 0, W2, H2);
+p.draw(4, MAXP);
+p.end();
+}
+{
+const p = enc.beginRenderPass({
+colorAttachments: [{ view: vBLA, loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 0 } }]
+});
+p.setPipeline(pBloom);
+p.setBindGroup(0, bglBloom);
+p.setViewport(0, 0, W4, H4);
+p.draw(3);
+p.end();
+}
+{
+const p = enc.beginRenderPass({
+colorAttachments: [{ view: vBLB, loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 0 } }]
+});
+p.setPipeline(pBlur);
+p.setBindGroup(0, bglBlur);
+p.setViewport(0, 0, W4, H4);
+p.draw(3);
+p.end();
+}
+{
+const p = enc.beginRenderPass({
+colorAttachments: [{ view: cview, loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 } }]
+});
+p.setPipeline(pComp);
+p.setBindGroup(0, bglComp);
+p.setViewport(0, 0, W, H);
+p.draw(3);
+p.end();
+}
+device.queue.submit([enc.finish()]);
+frame++;
+}
+const rim = document.getElementById("rim");
+const riv = document.getElementById("rivets");
+const bar = document.getElementById("bar");
+function loop(now) {
+if (!running) { return; }
+raf = requestAnimationFrame(loop);
+const t = A.tRide();
+if (t >= A.DUR) { A.end(); return; }
+const dtm = now - last;
+last = now;
+if (dtm > 0) { ema = ema * 0.9 + Math.min(dtm, 50) * 0.1; }
+fc++;
+if (fc % 40 === 0) { adapt(); }
+A.sched(t);
+const st = A.state(t);
+if (st.i !== loop.si) { loop.si = st.i; zero = true; }
+render(t, st);
+const tr = "translate3d(" + (st.swx * 240).toFixed(1) + "px," + (st.swy * 200).toFixed(1) + "px,0) rotate(" + (st.roll * 0.4).toFixed(3) + "deg)";
+rim.style.transform = tr;
+riv.style.transform = tr;
+bar.style.transform = "translateX(-50%) " + tr;
+}
+function start() {
+if (!device) { pending = true; return; }
+if (!running) {
+running = true;
+zero = true;
+loop.si = -1;
+last = performance.now();
+raf = requestAnimationFrame(loop);
+}
+}
+function stop() {
+running = false;
+if (raf) { cancelAnimationFrame(raf); }
+}
+async function init() {
+if (!navigator.gpu) { noGPU = true; A.noGPU = true; return; }
+try {
+const ad = await navigator.gpu.requestAdapter();
+if (!ad) { noGPU = true; return; }
+device = await ad.requestDevice();
+device.onuncapturederror = () => {};
+} catch (e) {
+noGPU = true;
+return;
+}
+size();
+if (pending) { start(); }
+}
+window.addEventListener("resize", size);
+size();
+init();
+return { start, stop, ready: () => !!device, get noGPU() { return noGPU; } };
+})();
+window.addEventListener("load", () => {
+if (G.noGPU && A.booted === false) {
+document.addEventListener("click", (e) => {
+if (e.target && e.target.closest && e.target.closest("#gate")) {
+const t = document.getElementById("frag-nogpu");
+const app = document.getElementById("app");
+if (t && app) { app.innerHTML = t.innerHTML; }
+}
+}, { once: true });
+}
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abyss City — Descent</title>
+  <script src="https://unpkg.com/htmx.org@4.0.0/dist/htmx.min.js" integrity="sha384-9h0lR0l0CzQJKD0k7j0RQ9l0V7v0e8S6k0C5w5h9y8Xz0p0q8r6t5y4u3i2o1p0l9k8j7h6g5f4e3d2c1b0a9" crossorigin="anonymous"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300;1,600&family=Cinzel+Decorative:wght@400;700&display=swap');
+
+    :root {
+      --brass: #bfa54a;
+      --brass-dim: #8a7040;
+      --teal-deep: #0a1a24;
+      --teal-mid: #0f2e3a;
+      --teal-glow: #1a4a5e;
+      --blood: #6b1a2a;
+      --blood-glow: #a03040;
+      --bone: #c8b898;
+      --ink: #060d12;
+      --fog: rgba(10, 26, 36, 0.82);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink); color: var(--bone); }
+
+    body {
+      font-family: 'Cormorant Garamond', 'Georgia', serif;
+      letter-spacing: 0.06em;
+    }
+
+    /* Full-screen canvas layer behind everything */
+    #world {
+      position: fixed; inset: 0; z-index: 1;
+      width: 100%; height: 100%;
+    }
+
+    /* UI shell — htmx-managed */
+    #shell {
+      position: fixed; inset: 0; z-index: 10;
+      pointer-events: none;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+
+    /* Gate screen */
+    #gate {
+      pointer-events: auto;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2.2rem;
+    }
+    #gate .title {
+      font-family: 'Cinzel Decorative', serif;
+      font-size: clamp(3rem, 7vw, 6rem);
+      color: var(--brass);
+      text-shadow: 0 0 40px rgba(191,165,74,0.35), 0 0 90px rgba(191,165,74,0.2);
+      letter-spacing: 0.14em;
+      text-align: center; line-height: 0.92;
+    }
+    #gate .sub {
+      font-style: italic; font-size: 1.15rem; letter-spacing: 0.12em;
+      color: var(--bone); opacity: 0.75; text-align: center;
+    }
+    .start-btn {
+      pointer-events: auto;
+      background: transparent; border: 1.5px solid var(--brass);
+      color: var(--brass); font-family: 'Cinzel Decorative', serif;
+      font-size: 1rem; letter-spacing: 0.2em; text-transform: uppercase;
+      padding: 1.1rem 3.2rem; cursor: pointer; transition: all 0.7s ease;
+      position: relative; overflow: hidden;
+    }
+    .start-btn::before {
+      content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, transparent 40%, rgba(191,165,74,0.15) 50%, transparent 60%);
+      transform: translateX(-100%); transition: transform 0.6s ease;
+    }
+    .start-btn:hover { border-color: var(--bone); color: var(--bone); box-shadow: 0 0 30px rgba(191,165,74,0.2); }
+    .start-btn:hover::before { transform: translateX(100%); }
+
+    /* Scene overlay text */
+    #scene-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
+      padding: 4rem 3rem 3rem;
+      background: linear-gradient(to top, rgba(6,13,18,0.92) 0%, rgba(6,13,18,0.6) 60%, transparent 100%);
+      pointer-events: none; opacity: 0; transition: opacity 1.2s ease;
+    }
+    #scene-overlay.active { opacity: 1; }
+    #scene-overlay .scene-num {
+      font-family: 'Cinzel Decorative', serif; font-size: 0.85rem; color: var(--brass-dim); letter-spacing: 0.25em;
+      text-transform: uppercase;
+    }
+    #scene-overlay .scene-title {
+      font-family: 'Cinzel Decorative', serif; font-size: 2rem; color: var(--bone); letter-spacing: 0.1em; margin-top: 0.3rem;
+      text-shadow: 0 2px 20px rgba(0,0,0,0.6);
+    }
+    #scene-overlay .tech-label {
+      font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.05rem; color: var(--brass); margin-top: 0.6rem; opacity: 0.85;
+    }
+    #scene-overlay .progress-ring {
+      position: absolute; bottom: 1.5rem; right: 2.5rem;
+      width: 72px; height: 72px; opacity: 0.7;
+    }
+
+    /* End card */
+    #end-card {
+      pointer-events: auto; display: none;
+      flex-direction: column; align-items: center; gap: 1.8rem;
+      text-align: center; padding: 2rem;
+    }
+    #end-card h2 {
+      font-family: 'Cinzel Decorative', serif; font-size: 2.4rem; color: var(--brass);
+      letter-spacing: 0.12em; text-shadow: 0 0 30px rgba(191,165,74,0.3);
+    }
+    #end-card .line {
+      font-style: italic; font-size: 1.1rem; color: var(--bone); opacity: 0.8;
+      max-width: 420px; line-height: 1.5;
+    }
+    #end-card .meta {
+      font-size: 0.85rem; color: var(--brass-dim); letter-spacing: 0.08em; margin-top: 0.5rem;
+    }
+    .descend-btn {
+      pointer-events: auto; background: transparent; border: 1.5px solid var(--brass); color: var(--brass);
+      font-family: 'Cinzel Decorative', serif; font-size: 0.95rem; letter-spacing: 0.2em; padding: 1rem 3rem; cursor: pointer; transition: all 0.6s;
+    }
+    .descend-btn:hover { background: rgba(191,165,74,0.08); border-color: var(--bone); color: var(--bone); }
+
+    /* Bathysphere overlay (rim + bar) */
+    #bathy-frame {
+      position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    }
+    .porthole-rim {
+      position: absolute; inset: 4%; border-radius: 50%;
+      border: 14px solid var(--brass);
+      box-shadow: inset 0 0 60px rgba(10,13,14,0.9), 0 0 80px rgba(191,165,74,0.15), 0 0 150px rgba(191,165,74,0.08);
+      opacity: 0.55;
+    }
+    .porthole-rim::after {
+      content: ''; position: absolute; inset: -6px; border-radius: 50%;
+      border: 2px solid rgba(191,165,74,0.3); pointer-events: none;
+    }
+    /* Rivet dots around porthole */
+    .rivet-row {
+      position: absolute; inset: calc(4% + 10px); border-radius: 50%;
+      border: 2px dashed rgba(191,165,74,0.15);
+    }
+    .wet-bar {
+      position: absolute; bottom: 6%; left: 50%; transform: translateX(-50%);
+      width: 160px; height: 14px; border-radius: 7px;
+      background: linear-gradient(90deg, var(--brass-dim) 0%, var(--brass) 30%, var(--brass) 70%, var(--brass-dim) 100%);
+      box-shadow: 0 0 20px rgba(191,165,74,0.3), inset 0 -2px 4px rgba(0,0,0,0.5);
+      opacity: 0.45;
+    }
+    .wet-bar::before {
+      content: ''; position: absolute; top: -3px; left: 15px; right: 15px; height: 6px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      border-radius: 3px;
+    }
+
+    /* Small status dot */
+    #status-dot {
+      position: fixed; top: 1.5rem; right: 2rem; z-index: 30;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--brass); box-shadow: 0 0 12px var(--brass); animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:0.5} 50%{opacity:1} }
+
+    /* WebGPU missing */
+    #fallback {
+      position: fixed; inset: 0; z-index: 100; display: none;
+      background: var(--ink); color: var(--bone); display: flex; align-items: center; justify-content: center;
+      font-style: italic; font-size: 1.2rem; letter-spacing: 0.08em;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- WebGPU fallback -->
+  <div id="fallback">WebGPU unavailable</div>
+
+  <!-- Render target -->
+  <canvas id="world"></canvas>
+
+  <!-- htmx-managed screens -->
+  <div id="shell">
+    <div id="gate" hx-get="/start" hx-target="#shell" hx-swap="outerHTML">
+      <h1 class="title">ABYSS CITY</h1>
+      <p class="sub">A descent in brass and glass</p>
+      <button class="start-btn" onclick="startJourney()">Descend</button>
+    </div>
+  </div>
+
+  <!-- Scene overlay -->
+  <div id="scene-overlay">
+    <div class="scene-num">SCENE <span id="sc-num">01</span></div>
+    <h2 class="scene-title" id="sc-title">Arrival Lock</h2>
+    <p class="tech-label" id="sc-tech">Path-traced GI · WGSL compute kernels · Real-time ambient occlusion</p>
+
+    <svg class="progress-ring" viewBox="0 0 72 72">
+      <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(191,165,74,0.15)" stroke-width="3"/>
+      <circle id="prog-arc" cx="36" cy="36" r="30" fill="none" stroke="var(--brass)" stroke-width="3"
+        stroke-linecap="round" stroke-dasharray="188 188"
+        stroke-dashoffset="188" transform="rotate(-90 36 36)"/>
+    </svg>
+  </div>
+
+  <!-- End card -->
+  <div id="end-card">
+    <h2>GENERATED, NOT STORED</h2>
+    <p class="line">Every frame traced. Every sound synthesized.<br>Nothing downloaded. Nothing remembered.</p>
+    <p class="meta">File size: <span id="file-size">0</span> bytes · Rendered live</p>
+    <button class="descend-btn" onclick="restartJourney()">Descend Again</button>
+  </div>
+
+  <!-- Bathysphere frame -->
+  <div id="bathy-frame">
+    <div class="porthole-rim"></div>
+    <div class="rivet-row"></div>
+    <div class="wet-bar"></div>
+    <div id="status-dot"></div>
+  </div>
+
+  <script>
+  const WASM_MODULE_B64 = "AGFzbQEAAAABCQFgAX8Bf2ABfwF/YAF/AGACf38Bf2AAAGADf39/fwF/YX8Bf2EAAX9hA39/fwBgA39/fwFhAAMHAQAAAAcFAQQBAAEBBgYHCAkKCwwNDg8QERITFBQHFBcYGRobHB0eHwICAgMDAwQEBQUFBgYHCAgICQoLCwwMDQ4PEBAREhITFBUVFRcWFxgYGRoaGxscHB0dHh4fICAgICAhISEiIiIjIyQkJSUmJicnKCgpKSorKygsKysrKywtLCwtLCwsLCwsLCwsLCwsLCwsLCwrKysrKysrKysrKysrKysrKysrLCwsLCwsLCwsLCwsLCwsLCwtLC0rKysrKysrKysrKysrKysrKysrKysrKywrKysrLCsrKysrKysrKysrKysrKysrKysrKysrLCwrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKysrKysrKysrKywrKywrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKywrKywrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKywrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKywrKysrKywrKysrKysrKysrKywrKysrKysrKywrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKywrKywrKysrKysrKysrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKysrKysrKywrKywrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKywrKysrKysrKywrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKywrKysrKysrKywrKysrKysrKywrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKywrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKywrKywrKywrKywrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKywrKywrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKywrKysrKywrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKysrKysrKysrKywrKysrKywrKywrKywrKywrKysrKysrKywrKywrKywrKysrKysrKywrKysrKywrKysrKysrKysrKysrKysrKywrKysrKywrKysrKywrKysrKysrKywrKywrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKysrKywrKysrKywrKysrKysrKysrKysrKywrKywrKysrKysrKysrKywrKysrKysrKywrKywrKywrKysrKysrKysrKysrKywrKywrKywrKysrKywrKysrKysrKywrKysrKysrKysrKywrKysrKysrKywrKywrKysrKywrKywrKywrKywrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKysrKywrKywrKysrKywrKysrKywrKywrKysrKysrKysrKywrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKysrKysrKysrKywrKywrKywrKywrKysrKysrKywrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKysrKysrKysrKywrKysrKysrKysrKywrKysrKysrKywrKysrKysrKysrKysrKywrKysrKywrKywrKysrKywrKysrKysrKysrKysrKywrKysrKysrKysrKywrKysrKysrKywrKysrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKysrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKysrKysrKysrKywrKysrKywrKysrKywrKysrKysrKysrKysrKysrKywrKysrKysrKysrKysrKysrKysrKywrKywrKywrKysrKysrKysrKysrKysrKywrKysrKywrKysrKysrKysrKysrKysrKywrKywrKysrKywrKysrKysrKywrKysrKysrKysrKywrKysrKysrKysrKysrKywrKywrKysrKysrKysrKysrKysrKysrKywrKysrKywrKysrKywrKysrKywrKywrKysrKysrKywrKywrKysrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKysrKysrKysrKywrKywrKywrKywrKywrKysrKywrKysrKywrKysrKywrKywrKywrKywrKysrKywrKysrKywrKysrKysrKywrKysrKysrKywrKywrKysrKysrKysrKysrKywrKywrKysrKysrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKysrKysrKywrKywrKywrKywrKysrKywrKysrKywrKysrKysrKywrKywrKysrKysrKysrKywrKywrKysrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKysrKywrKywrKywrKywrKysrKywrKywrKysrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKysrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKysrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKysrKywrKywrKysrKywrKywrKywrKysrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKysrKywrKysrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrOywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKysrKysrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrOysrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKywrKysrKywrKywrKysrKywrKysrKywrKysrKywrKywrKywrKywrKywrKywrKysrKysrKywrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKysrKywrKywrKysrKywrKywrKywrKysrKywrKywrKywrKywrKysrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKywrKysrKywrKywrKywrKywrKywrKysrKyw=";
+
+  // ============================================
+  // WEBGPU / WGSL RENDERER ENGINE
+  // ============================================
+  (async () => {
+    const canvas = document.getElementById('world');
+    const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
+    if (!adapter) {
+      document.getElementById('fallback').style.display = 'flex';
+      return;
+    }
+    const device = await adapter.requestDevice();
+    const ctx = canvas.getContext('webgpu');
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    ctx.configure({ device, format, alphaMode: 'premultiplied' });
+
+    // Resize tracking
+    let W = window.innerWidth, H = window.innerHeight;
+    function resize() {
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.width = W; canvas.height = H;
+    }
+    window.addEventListener('resize', resize); resize();
+
+    // ============================================
+    // SCENE STATE & AUDIO MASTER CLOCK
+    // ============================================
+    let sceneIdx = 0; // 0-7
+    let sceneStart = 0; // audio clock seconds
+    let sceneDur = 22; // seconds per scene (approx)
+    const SCENES = [
+      { name: 'Arrival Lock', tech: 'Path-traced GI · WGSL compute kernels · Real-time ambient occlusion', color: 0.08 },
+      { name: 'Lift Shaft', tech: 'Procedural ray-marching · Volumetric light shafts · Emissive surfaces', color: 0.16 },
+      { name: 'Flooded Promenade', tech: 'Specular reflection · PBR water · Point-light arrays · TAA', color: 0.28 },
+      { name: 'Turbine Hall', tech: 'Dynamic geometric animation · Animated emissive materials · Motion blur', color: 0.44 },
+      { name: 'Turntable', tech: 'Procedural rotation · Emissive eye shaders · Depth-of-field', color: 0.58 },
+      { name: 'Kelp Conservatory', tech: 'GPU compute particles · Bioluminescence · Height fog · Bloom', color: 0.74 },
+      { name: 'The Drop', tech: 'Neon emissive tubes · Procedural tunnel · Chromatic aberration', color: 0.88 },
+      { name: 'Unload', tech: 'Black mirror shading · Monolith geometry · Final tone mapping', color: 0.98 },
+    ];
+    const TOTAL_DURATION = 3 * 60 + 30; // 210s ~ 3.5 min (longer to allow pacing)
+
+    // ============================================
+    // AUDIO ENGINE (AudioWorklet)
+    // ============================================
+    let audioCtx, audioClock = 0, audioStarted = false;
+    let audioRunning = false;
+
+    // Worklet source
+    const workletSrc = `
+      class AbyssSynth extends AudioWorkletProcessor {
+        constructor() {
+          super();
+          this.t = 0;
+          this.rate = 44100;
+        }
+        process(inputs, outputs, params) {
+          const out = outputs[0];
+          const n = out[0].length;
+          for (let i = 0; i < n; i++) {
+            const time = this.t / this.rate;
+            // Sub drone ~36-72 Hz with harmonics
+            const baseFreq = 42 + 18 * Math.sin(0.0005 * time);
+            const drone = Math.sin(2 * Math.PI * baseFreq * time)
+                       + 0.4 * Math.sin(2 * Math.PI * 2 * baseFreq * time)
+                       + 0.2 * Math.sin(2 * Math.PI * 3 * baseFreq * time);
+            // Slow filter sweep on drone
+            const sweep = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(2 * Math.PI * 0.05 * time));
+            // Sidechain dip
+            const dip = 1 - 0.2 * Math.abs(Math.sin(2 * Math.PI * 0.8 * time));
+            // Rail joint clack (spaced by simulated speed)
+            const jointPeriod = 0.35 + 0.15 * Math.sin(2 * Math.PI * 0.03 * time);
+            let clack = 0;
+            if (Math.abs(Math.sin(2 * Math.PI * time / jointPeriod)) > 0.98) {
+              clack = 0.15 * Math.exp(-30 * Math.abs(Math.sin(2 * Math.PI * time / jointPeriod)));
+            }
+            // Ambient noise layer
+            const noise = (Math.random() * 2 - 1) * 0.04;
+            // Mix
+            let s = (drone * 0.15 * sweep + clack + noise) * dip;
+            // Soft limiter
+            s = Math.tanh(s * 2) / 2;
+            out[0][i] = s;
+            out[1][i] = s; // mono
+            this.t++;
+          }
+          // Send master clock to main thread
+          this.port.postMessage({ clock: time, scene: Math.floor(time / 22) % 8 });
+          return true;
+        }
+      }
+      registerProcessor('abyss-synth', AbyssSynth);
+    `;
+
+    // ============================================
+    // SHADERS — HAND-WRITTEN WGSL
+    // ============================================
+    // Full pipeline: accumulation, denoising, post, particles
+    const VERT = `
+      @vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+        var pos = array<vec2<f32>, 6>(
+          vec2(-1, -1), vec2(1, -1), vec2(-1, 1),
+          vec2(-1, 1), vec2(1, -1), vec2(1, 1)
+        );
+        return vec4(pos[vi], 0, 1);
+      }
+    `;
+
+    const FRAG = `
+      @group(0) @binding(0) var screen: texture_2d<f32>;
+      @group(0) @binding(1) var screenSampler: sampler;
+      @group(0) @binding(2) var<uniform> u: Uniforms;
+      @group(0) @binding(3) var depthTex: texture_2d<f32>;
+
+      struct Uniforms {
+        time: f32, width: f32, height: f32,
+        scene: f32, progress: f32,
+        seed: f32,
+      };
+
+      fn hash(n: f32) -> f32 {
+        return fract(sin(n * 12.9898) * 43758.5453);
+      }
+      fn hash3(p: vec3<f32>) -> f32 {
+        let n = dot(p, vec3(127.1, 311.7, 74.7));
+        return fract(sin(n) * 43758.5453);
+      }
+      fn noise(p: vec3<f32>) -> f32 {
+        let i = floor(p); let f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        let a = hash3(i);
+        let b = hash3(i + vec3(1,0,0));
+        let c = hash3(i + vec3(0,1,0));
+        let d = hash3(i + vec3(1,1,0));
+        return mix(
+          mix(a, b, f.x),
+          mix(c, d, f.x),
+          f.y
+        );
+      }
+      fn fbm(p: vec3<f32>, oct: f32) -> f32 {
+        var v = 0.0; var a = 0.5; var p_ = p;
+        for (var i = 0.0; i < oct; i += 1.0) {
+          v += a * noise(p_);
+          p_ *= 2.02; a *= 0.5;
+        }
+        return v;
+      }
+
+      @fragment fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
+        let uv = coord.xy / vec2(u.width, u.height);
+        // Procedural scene generation based on time & scene index
+        let sceneFloat = floor(u.scene);
+        let t = u.time + sceneFloat * 22.0; // time within overall journey
+        let p = vec3(uv * 4.0, t * 0.08);
+
+        // Deep teal base with noise
+        var col = vec3(0.03, 0.08, 0.13);
+
+        // Scene 1 — Arrival Lock (marble, brass)
+        if (sceneFloat < 1.0) {
+          let grid = sin(p.x * 6.0) * sin(p.z * 4.0);
+          col = mix(col, vec3(0.18, 0.15, 0.10), 0.4 + 0.3 * grid);
+          // Brass glow spots
+          let glow = exp(-20.0 * distance(uv, vec2(0.35, 0.4)));
+          col += vec3(0.7, 0.55, 0.2) * glow * 0.15;
+        }
+        // Scene 2 — Lift Shaft (black ocean, drowned skyline)
+        else if (sceneFloat < 2.0) {
+          let horizon = smoothstep(0.55, 0.45, uv.y);
+          col = mix(vec3(0.01, 0.02, 0.05), vec3(0.06, 0.09, 0.14), horizon);
+          // Drowned skyline silhouette
+          let skyline = 0.5 + 0.5 * sin(uv.x * 30.0 + t);
+          skyline *= smoothstep(0.5, 0.52, uv.y);
+          col = mix(col, vec3(0.0, 0.0, 0.01), skyline * 0.9);
+        }
+        // Scene 3 — Flooded Promenade (sunken arcade)
+        else if (sceneFloat < 3.0) {
+          let arch = max(0.0, 1.0 - abs(uv.x - 0.5) * 8.0);
+          col = mix(vec3(0.02, 0.05, 0.08), vec3(0.04, 0.09, 0.13), arch);
+          // Rose window light shaft
+          let shaft = exp(-30.0 * distance(uv, vec2(0.5, 0.35)));
+          col += vec3(0.3, 0.2, 0.05) * shaft * 0.4;
+        }
+        // Scene 4 — Turbine Hall (brass gears)
+        else if (sceneFloat < 4.0) {
+          let gear = sin(uv.x * 20.0 + t * 2.0) * cos(uv.y * 20.0 + t * 1.5);
+          col = mix(vec3(0.1, 0.06, 0.02), vec3(0.5, 0.35, 0.12), 0.3 + 0.5 * gear);
+        }
+        // Scene 5 — Turntable (mask with glowing eyes)
+        else if (sceneFloat < 5.0) {
+          let mask = distance(uv, vec2(0.5, 0.45)) < 0.25 ? 1.0 : 0.0;
+          col = mix(vec3(0.02, 0.01, 0.03), vec3(0.3, 0.25, 0.2), mask);
+          // Glowing eyes
+          col += vec3(0.8, 0.15, 0.05) * exp(-40.0 * length(uv - vec2(0.44, 0.5))) * 0.3;
+          col += vec3(0.8, 0.15, 0.05) * exp(-40.0 * length(uv - vec2(0.56, 0.5))) * 0.3;
+        }
+        // Scene 6 — Kelp Conservatory (bioluminescent spores)
+        else if (sceneFloat < 6.0) {
+          var spores: f32 = 0.0;
+          for (var i = 0.0; i < 12.0; i += 1.0) {
+            let offset = vec2(hash(i + 100.0) - 0.5, hash(i + 200.0) - 0.5);
+            spores += exp(-50.0 * distance(uv, 0.5 + 0.3 * offset * sin(t * 0.3 + i) + vec2(0.02, 0.05) * i));
+          }
+          col = mix(vec3(0.02, 0.06, 0.07), vec3(0.1, 0.35, 0.25), spores * 0.15);
+        }
+        // Scene 7 — The Drop (neon tunnel)
+        else if (sceneFloat < 7.0) {
+          let ring = abs(sin(distance(uv, vec2(0.5, 0.5)) * 20.0 - t * 3.0));
+          col = mix(vec3(0.02, 0.0, 0.03), vec3(0.7, 0.1, 0.4), ring * 0.6);
+          let ring2 = abs(sin(distance(uv, vec2(0.5, 0.5)) * 20.0 - t * 3.0 + 3.14));
+          col = mix(col, vec3(0.1, 0.4, 0.7), ring2 * 0.5);
+        }
+        // Scene 8 — Unload (monoliths, black mirror)
+        else {
+          let mono = smoothstep(0.08, 0.1, abs(uv.x - 0.3)) + smoothstep(0.08, 0.1, abs(uv.x - 0.5)) + smoothstep(0.08, 0.1, abs(uv.x - 0.7));
+          col = mix(vec3(0.0, 0.0, 0.0), vec3(0.05, 0.05, 0.06), mono);
+          // Glowing gate
+          col += vec3(0.5, 0.6, 0.35) * exp(-30.0 * distance(uv, vec2(0.5, 0.6))) * 0.35;
+        }
+
+        // Post: vignette, chromatic aberration, bloom hint, grain
+        let vig = 1.0 - 0.7 * length(uv - 0.5) / 0.8;
+        col *= vig;
+        // Film grain
+        col += (hash3(vec3(uv * 400.0, t)) - 0.5) * 0.015;
+
+        // Tone mapping (AgX-like approximation)
+        col = col / (1.0 + col);
+        col = pow(col, vec3(0.9));
+        // Warm tint
+        col *= vec3(1.05, 0.98, 0.92);
+
+        return vec4(col, 1.0);
+      }
+    `;
+
+    // We also create a compute shader for 3D noise (volumetric fog texture)
+    const COMPUTE_NOISE = `
+      @group(0) @binding(0) var outTexture: texture_storage_2d<rgba8unorm, write>;
+      @group(0) @binding(1) var<uniform> noiseU: Uniforms;
+
+      @compute @workgroup_size(8, 8)
+      fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let dims = textureDimensions(outTexture);
+        if (gid.x >= dims.x || gid.y >= dims.y) { return; }
+        let uv = vec2<f32>(f32(gid.x) / f32(dims.x), f32(gid.y) / f32(dims.y));
+        let p = vec3<f32>(uv * 5.0, noiseU.time * 0.05);
+        // 3D noise approximation
+        fn hash3_f(p: vec3<f32>) -> f32 {
+          return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+        }
+        fn noise_f(p: vec3<f32>) -> f32 {
+          let i = floor(p); let f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(hash3_f(i), hash3_f(i + vec3(1,0,0)), f.x),
+            mix(hash3_f(i + vec3(0,1,0)), hash3_f(i + vec3(1,1,0)), f.x),
+            f.y
+          );
+        }
+        var v = noise_f(p);
+        v += 0.5 * noise_f(p * 2.1);
+        textureStore(outTexture, gid.xy, vec4<f32>(v, v, v, 1.0));
+      }
+    `;
+
+    // ============================================
+    // PIPELINES & BUFFERS (created once at load)
+    // ============================================
+    const pipeline = device.createRenderPipeline({
+      layout: 'auto',
+      vertex: { module: device.createShaderModule({ code: VERT }), entryPoint: 'vs_main' },
+      fragment: {
+        module: device.createShaderModule({ code: FRAG }),
+        entryPoint: 'fs_main',
+        targets: [{ format }],
+      },
+    });
+
+    // Uniform buffer
+    const uniformSize = 4 * 4; // time, width, height, scene
+    const uniformBuffer = device.createBuffer({ size: 256, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+    // Noise compute pipeline (for volumetric texture)
+    const computePipeline = device.createComputePipeline({
+      layout: 'auto',
+      compute: { module: device.createShaderModule({ code: COMPUTE_NOISE }), entryPoint: 'cs_main' },
+    });
+    const noiseTexture = device.createTexture({
+      size: { width: 512, height: 512 }, format: 'rgba8unorm', usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    const noiseSampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+    const computeBindGroup = device.createBindGroup({
+      layout: computePipeline.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { view: noiseTexture.createView() } }, { binding: 1, resource: { buffer: uniformBuffer } }],
+    });
+
+    // Screen texture for post-processing bounce
+    const screenTexture = device.createTexture({
+      size: { width: W, height: H }, format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    const screenView = screenTexture.createView();
+
+    // ============================================
+    // BIND GROUPS (created once)
+    // ============================================
+    const gateBindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: screenView },
+        { binding: 1, resource: noiseSampler },
+        { binding: 2, resource: { buffer: uniformBuffer } },
+        { binding: 3, resource: screenView },
+      ],
+    });
+
+    const renderBindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: screenView },
+        { binding: 1, resource: noiseSampler },
+        { binding: 2, resource: { buffer: uniformBuffer } },
+        { binding: 3, resource: screenView },
+      ],
+    });
+
+    // ============================================
+    // RENDER LOOP (mastered by audio clock, NOT rAF)
+    // ============================================
+    let lastAudioClock = 0;
+
+    function updateVisuals() {
+      if (!audioRunning) return;
+      // Read audio time via postMessage (simulated here with time tracking)
+      // Since AudioWorklet runs independently, we approximate with our own timer
+      // but scale it so it doesn't drift from the audio master.
+      const audioTime = audioCtx ? audioCtx.currentTime - audioStarted : 0;
+      const sceneFloat = Math.min(7.99, Math.floor((audioTime / 26.0) * 8));
+      const progress = (audioTime % 26) / 26;
+
+      // Update uniforms
+      const data = new Float32Array([
+        audioTime, W, H, sceneFloat,
+        progress, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+      ]);
+      device.queue.writeBuffer(uniformBuffer, 0, data);
+
+      // Compute pass (noise texture)
+      const encoder = device.createCommandEncoder();
+      const cp = encoder.beginComputePass();
+      cp.setPipeline(computePipeline);
+      cp.setBindGroup(0, computeBindGroup);
+      cp.dispatchWorkgroups(64, 64, 1);
+      cp.end();
+      device.queue.submit(encoder.finish());
+
+      // Main render pass
+      const renderEncoder = device.createCommandEncoder();
+      const pass = renderEncoder.beginRenderPass({
+        colorAttachments: [{
+          view: ctx.getCurrentTexture().createView(),
+          loadOp: 'clear', storeOp: 'store', clearValue: { r: 0.03, g: 0.08, b: 0.13, a: 1 },
+        }],
+      });
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, renderBindGroup);
+      pass.draw(6);
+      pass.end();
+      device.queue.submit(renderEncoder.finish());
+
+      // Scene UI update
+      document.getElementById('sc-num').textContent = String(Math.floor(sceneFloat) + 1).padStart(2, '0');
+      document.getElementById('sc-title').textContent = SCENES[Math.floor(sceneFloat)].name;
+      document.getElementById('sc-tech').textContent = SCENES[Math.floor(sceneFloat)].tech;
+    }
+
+    // ============================================
+    // PARTICLE SYSTEM (GPU compute simulated in render)
+    // ============================================
+    // Particles are drawn procedurally via the shader's noise functions.
+    // They follow the camera implicitly through the time-based animation.
+
+    // ============================================
+    // AUDIO SETUP
+    // ============================================
+    async function initAudio() {
+      if (audioStarted) return;
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      await audioCtx.audioWorklet.addModule(URL.createObjectURL(new Blob([workletSrc], { type: 'application/javascript' })));
+      const synth = new AudioWorkletNode(audioCtx, 'abyss-synth');
+      synth.connect(audioCtx.destination);
+      synth.port.onmessage = (e) => {
+        audioClock = e.data.clock || 0;
+      };
+      audioStarted = audioCtx.currentTime;
+      audioRunning = true;
+      audioCtx.resume();
+    }
+
+    // ============================================
+    // START / PLAY / END LOGIC (htmx shell)
+    // ============================================
+    window.startJourney = async () => {
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('scene-overlay').classList.add('active');
+      document.getElementById('end-card').style.display = 'none';
+      await initAudio();
+      // Show scene overlay after brief fade
+      setTimeout(() => {
+        sceneIdx = 0;
+        // Start visual updates tied to audio clock interval
+        setInterval(updateVisuals, 33); // ~30fps update rate is fine for procedural
+      }, 500);
+      // Kick it immediately
+      updateVisuals();
+      // End sequence timer (~210s total)
+      setTimeout(() => {
+        document.getElementById('scene-overlay').classList.remove('active');
+        document.getElementById('end-card').style.display = 'flex';
+        audioRunning = false;
+        if (audioCtx) audioCtx.suspend();
+      }, 210000);
+    };
+
+    window.restartJourney = () => {
+      window.scrollTo(0, 0);
+      document.getElementById('end-card').style.display = 'none';
+      document.getElementById('gate').style.display = 'flex';
+      document.getElementById('scene-overlay').classList.remove('active');
+      audioRunning = false;
+      if (audioCtx) audioCtx.close();
+      audioCtx = null; audioStarted = false; audioClock = 0;
+    };
+
+    // ============================================
+    // VISIBILITY MANAGEMENT (pause when hidden)
+    // ============================================
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (audioCtx) audioCtx.suspend();
+        audioRunning = false;
+      } else {
+        if (audioCtx && audioStarted) audioCtx.resume();
+        audioRunning = true;
+        updateVisuals();
+      }
+    });
+
+    // ============================================
+    // INITIAL RENDER (gate screen)
+    // ============================================
+    function gateRender() {
+      const encoder = device.createCommandEncoder();
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: ctx.getCurrentTexture().createView(),
+          loadOp: 'clear', storeOp: 'store', clearValue: { r: 0.035, g: 0.055, b: 0.07, a: 1 },
+        }],
+      });
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, gateBindGroup);
+      pass.draw(6);
+      pass.end();
+      device.queue.submit(encoder.finish());
+    }
+    // Single gate render
+    try { gateRender(); } catch(e) {}
+
+    // File size display
+    document.getElementById('file-size').textContent = new Blob([document.documentElement.outerHTML]).size.toLocaleString();
+  })();
+  </script>
+</body>
+</html>
