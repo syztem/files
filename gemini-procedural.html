@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>fr-08 Homage</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; color: white; font-family: monospace; user-select: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #ui { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; cursor: pointer; }
+        #msg { text-transform: lowercase; letter-spacing: 2px; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div id="ui"><div id="msg">initializing hardware...</div></div>
+    <canvas id="gfx" class="hidden"></canvas>
+
+    <script type="module">
+        // ==========================================
+        // 1. INLINED WGSL SHADERS
+        // ==========================================
+        const computeWGSL = `
+            @group(0) @binding(0) var tex_out: texture_storage_2d<rgba8unorm, write>;
+
+            fn hash(p: vec2<f32>) -> vec2<f32> {
+                var p2 = vec2<f32>(dot(p, vec2<f32>(127.1, 311.7)), dot(p, vec2<f32>(269.5, 183.3)));
+                return -1.0 + 2.0 * fract(sin(p2) * 43758.5453123);
+            }
+
+            fn perlin(p: vec2<f32>) -> f32 {
+                let pi = floor(p);
+                let pf = fract(p);
+                let w = pf * pf * (3.0 - 2.0 * pf);
+                let v00 = dot(hash(pi + vec2<f32>(0.0, 0.0)), pf - vec2<f32>(0.0, 0.0));
+                let v10 = dot(hash(pi + vec2<f32>(1.0, 0.0)), pf - vec2<f32>(1.0, 0.0));
+                let v01 = dot(hash(pi + vec2<f32>(0.0, 1.0)), pf - vec2<f32>(0.0, 1.0));
+                let v11 = dot(hash(pi + vec2<f32>(1.0, 1.0)), pf - vec2<f32>(1.0, 1.0));
+                return mix(mix(v00, v10, w.x), mix(v01, v11, w.x), w.y) * 0.5 + 0.5;
+            }
+
+            @compute @workgroup_size(16, 16)
+            fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+                let dim = vec2<f32>(textureDimensions(tex_out));
+                let uv = vec2<f32>(id.xy) / dim;
+                var noise = 0.0;
+                var freq = 5.0;
+                var amp = 0.5;
+                for(var i: i32 = 0; i < 4; i++) {
+                    noise += perlin(uv * freq) * amp;
+                    freq *= 2.0;
+                    amp *= 0.5;
+                }
+                let color = vec4<f32>(vec3<f32>(noise) * vec3<f32>(0.8, 0.9, 1.0), 1.0);
+                textureStore(tex_out, id.xy, color);
+            }
+        `;
+
+        const renderWGSL = `
+            struct Uniforms { modelViewProjectionMatrix : mat4x4<f32> }
+            @group(0) @binding(0) var<uniform> uniforms : Uniforms;
+            @group(0) @binding(1) var myTexture: texture_2d<f32>;
+
+            struct VertexInput {
+                @location(0) position : vec3<f32>,
+                @location(1) normal : vec3<f32>,
+                @location(2) uv : vec2<f32>,
+            }
+
+            struct VertexOutput {
+                @builtin(position) position : vec4<f32>,
+                @location(0) normal : vec3<f32>,
+                @location(1) uv : vec2<f32>,
+                @location(2) world_pos : vec3<f32>,
+            }
+
+            @vertex
+            fn vs_main(in: VertexInput) -> VertexOutput {
+                var out: VertexOutput;
+                out.position = uniforms.modelViewProjectionMatrix * vec4<f32>(in.position, 1.0);
+                out.normal = in.normal;
+                out.uv = in.uv;
+                out.world_pos = in.position;
+                return out;
+            }
+
+            @fragment
+            fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+                let view_dir = normalize(vec3<f32>(0.0, 0.0, 1.0) - in.world_pos);
+                let reflect_dir = reflect(-view_dir, normalize(in.normal));
+                let env_uv = reflect_dir.xy * 0.5 + 0.5;
+                let tex_color = textureLoad(myTexture, vec2<i32>(env_uv * 1024.0), 0).rgb;
+                let final_color = tex_color * max(dot(normalize(in.normal), vec3<f32>(0.5, 0.8, 0.5)), 0.2);
+                let mapped = final_color / (final_color + vec3<f32>(1.0)); 
+                return vec4<f32>(mapped, 1.0);
+            }
+        `;
+
+        // ==========================================
+        // 2. INLINED AUDIO WORKLET (Blob URI)
+        // ==========================================
+        const workletCode = `
+            class SynthProcessor extends AudioWorkletProcessor {
+                constructor() {
+                    super();
+                    this.phase = 0;
+                    this.time = 0;
+                }
+                process(inputs, outputs, parameters) {
+                    const output = outputs[0];
+                    const frames = output[0].length;
+                    const sampleRate = 44100;
+                    
+                    // Fallback pure JS Synth if Wasm isn't bound in Worklet context yet
+                    for (let i = 0; i < frames; i++) {
+                        let beat_time = this.time * 2.0;
+                        let env = Math.max(0.0, 1.0 - (beat_time % 1.0) * 4.0);
+                        this.phase += 55.0 / sampleRate;
+                        if (this.phase > 1.0) this.phase -= 1.0;
+                        let saw = (this.phase * 2.0 - 1.0) * env * 0.5;
+                        
+                        for (let channel = 0; channel < output.length; ++channel) {
+                            output[channel][i] = saw;
+                        }
+                        this.time += 1.0 / sampleRate;
+                    }
+                    return true;
+                }
+            }
+            registerProcessor('synth-processor', SynthProcessor);
+        `;
+        const workletBlob = new Blob([workletCode], { type: 'application/javascript' });
+        const workletUrl = URL.createObjectURL(workletBlob);
+
+        // ==========================================
+        // 3. INLINED WASM (Base64)
+        // ==========================================
+        // Replace this string with the actual base64 of your compiled `engine_core_bg.wasm`
+        // e.g. `cat dist/wasm/engine_core_bg.wasm | base64`
+        const wasmBase64 = "AGASMwEAAAA="; // Dummy minimal Wasm header
+
+        function base64ToUint8Array(base64) {
+            const binaryString = window.atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes;
+        }
+
+        // ==========================================
+        // 4. MAIN ENGINE BOOTSTRAP
+        // ==========================================
+        async function bootstrap() {
+            const ui = document.getElementById('ui');
+            const msg = document.getElementById('msg');
+            const canvas = document.getElementById('gfx');
+
+            if (!navigator.gpu) {
+                msg.textContent = "webgpu required.";
+                return;
+            }
+
+            const adapter = await navigator.gpu.requestAdapter();
+            const device = await adapter.requestDevice();
+            const context = canvas.getContext('webgpu');
+            context.configure({ device, format: navigator.gpu.getPreferredCanvasFormat() });
+
+            msg.textContent = "compiling shaders & extracting wasm...";
+
+            // Decode Wasm
+            const wasmBytes = base64ToUint8Array(wasmBase64);
+            // In a real scenario, you instantiate the Wasm module here. 
+            // const wasmModule = await WebAssembly.instantiate(wasmBytes, {});
+
+            // Procedural Texture Generation (WGSL)
+            const textureSize = 1024;
+            const proceduralTex = device.createTexture({
+                size: [textureSize, textureSize, 1],
+                format: 'rgba8unorm',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+            });
+
+            const computePipeline = device.createComputePipeline({
+                layout: 'auto',
+                compute: { 
+                    module: device.createShaderModule({ code: computeWGSL }), 
+                    entryPoint: 'main' 
+                }
+            });
+
+            const computeBindGroup = device.createBindGroup({
+                layout: computePipeline.getBindGroupLayout(0),
+                entries: [{ binding: 0, resource: proceduralTex.createView() }]
+            });
+
+            const cmdEncoder = device.createCommandEncoder();
+            const passEncoder = cmdEncoder.beginComputePass();
+            passEncoder.setPipeline(computePipeline);
+            passEncoder.setBindGroup(0, computeBindGroup);
+            passEncoder.dispatchWorkgroups(textureSize / 16, textureSize / 16);
+            passEncoder.end();
+            device.queue.submit([cmdEncoder.finish()]);
+
+            // Render Pipeline Setup
+            const renderPipeline = device.createRenderPipeline({
+                layout: 'auto',
+                vertex: {
+                    module: device.createShaderModule({ code: renderWGSL }),
+                    entryPoint: 'vs_main',
+                    buffers: [{
+                        arrayStride: 32,
+                        attributes: [
+                            { shaderLocation: 0, offset: 0, format: 'float32x3' },
+                            { shaderLocation: 1, offset: 12, format: 'float32x3' },
+                            { shaderLocation: 2, offset: 24, format: 'float32x2' }
+                        ]
+                    }]
+                },
+                fragment: {
+                    module: device.createShaderModule({ code: renderWGSL }),
+                    entryPoint: 'fs_main',
+                    targets: [{ format: navigator.gpu.getPreferredCanvasFormat() }]
+                },
+                primitive: { topology: 'triangle-list' }
+            });
+
+            const uniformBuffer = device.createBuffer({
+                size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            });
+
+            const renderBindGroup = device.createBindGroup({
+                layout: renderPipeline.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: { buffer: uniformBuffer } },
+                    { binding: 1, resource: proceduralTex.createView() }
+                ]
+            });
+
+            // Geometry (Mocked here; usually fetched from Wasm mesh generator)
+            const vertices = new Float32Array([
+                -0.5, -0.5, 0,  0,0,1,  0,0,
+                 0.5, -0.5, 0,  0,0,1,  1,0,
+                 0.0,  0.5, 0,  0,0,1,  0.5,1
+            ]);
+            const vertexBuffer = device.createBuffer({
+                size: vertices.byteLength,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+            });
+            device.queue.writeBuffer(vertexBuffer, 0, vertices);
+
+            // Audio Setup
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            await audioCtx.audioWorklet.addModule(workletUrl);
+            const synthNode = new AudioWorkletNode(audioCtx, 'synth-processor');
+            synthNode.connect(audioCtx.destination);
+
+            msg.textContent = ".click to start.";
+            let audioStarted = false;
+
+            document.body.addEventListener('click', () => {
+                if (!audioStarted) {
+                    audioCtx.resume();
+                    audioStarted = true;
+                    ui.classList.add('hidden');
+                    canvas.classList.remove('hidden');
+                    requestAnimationFrame(render);
+                }
+            });
+
+            let resScale = 1.0;
+
+            function render() {
+                if (document.hidden) {
+                    requestAnimationFrame(render);
+                    return;
+                }
+
+                const t0 = performance.now();
+                const audioTime = audioCtx.currentTime; // Sync visual clock to audio clock
+
+                // Spline camera translation
+                const z = Math.sin(audioTime * 2.0) * 3.0 - 5.0;
+                const camMatrix = new Float32Array([
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    0, 0, z, 1
+                ]);
+                device.queue.writeBuffer(uniformBuffer, 0, camMatrix);
+
+                canvas.width = window.innerWidth * resScale;
+                canvas.height = window.innerHeight * resScale;
+
+                const cmd = device.createCommandEncoder();
+                const pass = cmd.beginRenderPass({
+                    colorAttachments: [{
+                        view: context.getCurrentTexture().createView(),
+                        loadOp: 'clear', clearValue: { r: 0.05, g: 0.05, b: 0.05, a: 1.0 },
+                        storeOp: 'store',
+                    }]
+                });
+
+                pass.setPipeline(renderPipeline);
+                pass.setBindGroup(0, renderBindGroup);
+                pass.setVertexBuffer(0, vertexBuffer);
+                pass.draw(3, 1, 0, 0); 
+                pass.end();
+                device.queue.submit([cmd.finish()]);
+
+                const frameMs = performance.now() - t0;
+                if (frameMs > 16.0) resScale = Math.max(0.5, resScale - 0.05);
+                else if (frameMs < 12.0) resScale = Math.min(1.0, resScale + 0.01);
+
+                requestAnimationFrame(render);
+            }
+        }
+        
+        bootstrap();
+    </script>
+</body>
+</html>
