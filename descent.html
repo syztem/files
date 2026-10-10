@@ -1,0 +1,2387 @@
+<!doctype html>
+<html lang="en" data-phase="load">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#050607">
+<meta name="description" content="Core Breach: a real-time procedural zero-g mine run in WebGPU and WGSL, with a synthesized score.">
+<title>core breach</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http:%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 fill=%22%23050607%22%2F%3E%3Ccircle cx=%228%22 cy=%228%22 r=%223.5%22 fill=%22%23ff6a2a%22%2F%3E%3C%2Fsvg%3E">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:#050607;overflow:hidden}
+body{font:400 14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#d9dde2;-webkit-font-smoothing:antialiased}
+#cv{position:fixed;inset:0;width:100%;height:100%;display:block}
+#ui{position:fixed;inset:0;display:grid;place-items:center;z-index:2;pointer-events:none}
+.st{display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;padding:28px;pointer-events:auto;animation:in 1s cubic-bezier(.2,.7,.2,1) both}
+.big{font:300 clamp(30px,6.4vw,78px)/1 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.42em;margin-right:-.42em;text-transform:uppercase;color:#f1f3f5;text-shadow:0 0 30px rgba(255,106,42,.25)}
+.sub{font:400 11px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.3em;text-transform:uppercase;color:#9aa3ad}
+.lb{width:min(300px,60vw);height:1px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:10px}
+.lb i{display:block;height:100%;background:#ff6a2a;transform-origin:0 50%;transform:scaleX(0);transition:transform .35s ease}
+.msg{font:400 10px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#6c747d;letter-spacing:.24em;text-transform:uppercase;min-height:1em}
+.go{appearance:none;cursor:pointer;margin-top:10px;font:500 12px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.42em;text-transform:uppercase;color:#fff;padding:17px 34px 17px 39px;border-radius:2px;border:1px solid rgba(255,140,90,.55);background:rgba(255,106,42,.08);transition:background .25s,border-color .25s,box-shadow .25s}
+.go:hover,.go:focus-visible{outline:none;background:rgba(255,106,42,.2);border-color:#ff8a55;box-shadow:0 0 28px rgba(255,106,42,.3)}
+.fine{font:400 10px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.22em;color:#5f6770;text-transform:uppercase}
+.one{font:400 15px/1.6 ui-sans-serif,system-ui,sans-serif;color:#c9ced4;max-width:40ch}
+#hud{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity .8s ease}
+html[data-phase="play"] #hud{opacity:1}
+#ttl{position:absolute;left:clamp(18px,3.4vw,44px);top:clamp(16px,3.2vw,40px);display:flex;align-items:baseline;gap:14px;font:400 11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.34em;text-transform:uppercase;color:#e9ecef;text-shadow:0 1px 8px rgba(0,0,0,.85);opacity:0}
+#ttl .n{color:#ff7a3d}
+#ttl.on{animation:ttl 3.6s ease both}
+#pr{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(255,255,255,.07)}
+#pb{position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,106,42,.55),rgba(255,160,110,.85));transform-origin:0 50%;transform:scaleX(0)}
+#pr b{position:absolute;top:-2px;width:1px;height:4px;background:rgba(255,255,255,.28)}
+html[data-phase="play"],html[data-phase="play"] *{cursor:none}
+html[data-phase="end"] #cv{opacity:.18;transition:opacity 1s}
+html[data-phase="gate"] #ui{background:radial-gradient(90% 80% at 50% 50%,rgba(5,6,7,.2),rgba(5,6,7,.9))}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ttl{0%{opacity:0;transform:translateX(-6px)}12%{opacity:1;transform:none}78%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.st,#ttl.on{animation:none}#ttl.on{opacity:1}}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="hud"><div id="ttl"></div><div id="pr"><i id="pb"></i><b style="left:12.05%"></b><b style="left:25.30%"></b><b style="left:37.35%"></b><b style="left:49.40%"></b><b style="left:60.24%"></b><b style="left:72.29%"></b><b style="left:85.54%"></b></div></div>
+<main id="ui" aria-live="polite"><section class="st"><h1 class="big">core breach</h1><div class="lb" role="progressbar" aria-label="Generating"><i id="lbar"></i></div><p class="msg" id="msg">starting</p></section></main>
+<script type="text/plain" id="w-u">
+struct U {
+  cam: vec4f, cx: vec4f, cy: vec4f, cz: vec4f,
+  pcam: vec4f, pcx: vec4f, pcy: vec4f, pcz: vec4f,
+  res: vec4f, jit: vec4f, tm: vec4f, fx: vec4f,
+  fog: vec4f, amb: vec4f, sun: vec4f, sunc: vec4f,
+  ship: vec4f, shf: vec4f, shu: vec4f, nl: vec4f, nd: vec4f,
+  L: array<vec4f, 32>,
+  R: array<vec4f, 24>,
+  B: array<vec4f, 48>,
+  X: array<vec4f, 16>,
+  D: array<vec4f, 24>,
+  P: array<vec4f, 8>
+}
+@group(0) @binding(0) var<uniform> u: U;
+</script>
+<script type="text/plain" id="w-common">
+@group(0) @binding(1) var nt: texture_3d<f32>;
+@group(0) @binding(2) var sr: sampler;
+const PI = 3.14159265;
+const TAU = 6.2831853;
+var<private> FP: f32 = 0.0;
+var<private> PA: f32 = 0.001;
+fn h1(n: f32) -> f32 { return fract(sin(n * 127.1 + 0.37) * 43758.5453); }
+fn h21(p: vec2f) -> f32 { var p3 = fract(vec3f(p.x, p.y, p.x) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+fn h31(p: vec3f) -> f32 { var p3 = fract(p * 0.1031); p3 += dot(p3, p3.zyx + 31.32); return fract((p3.x + p3.y) * p3.z); }
+fn nl(p: vec3f, k: f32) -> vec4f { return textureSampleLevel(nt, sr, p * k, clamp(log2(max(FP * k * 64.0, 1.0)), 0.0, 6.0)); }
+fn n0(p: vec3f) -> vec4f { return textureSampleLevel(nt, sr, p, 0.0); }
+fn aaf(w: f32) -> f32 { return clamp(1.0 - FP / max(w, 1e-4) * 0.5, 0.0, 1.0); }
+fn line(d: f32, w: f32) -> f32 { let f = max(FP, 1e-4); return (1.0 - smoothstep(w - f, w + f, d)) * aaf(w * 2.0); }
+fn stripe(x: f32, k: f32) -> f32 {
+  let w = max(FP * k, 1e-4);
+  let tw = abs(fract(x) - 0.5) * 2.0;
+  let v = smoothstep(0.5 - w, 0.5 + w, tw);
+  return mix(v, 0.5, smoothstep(0.15, 0.4, w));
+}
+fn r2(a: f32) -> mat2x2f { let c = cos(a); let s = sin(a); return mat2x2f(c, s, -s, c); }
+fn sat(x: f32) -> f32 { return clamp(x, 0.0, 1.0); }
+fn sdBox(p: vec3f, b: vec3f) -> f32 { let q = abs(p) - b; return length(max(q, vec3f(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0); }
+fn sdRB(p: vec3f, b: vec3f, r: f32) -> f32 { return sdBox(p, b - vec3f(r)) - r; }
+fn sdB2(p: vec2f, b: vec2f) -> f32 { let q = abs(p) - b; return length(max(q, vec2f(0.0))) + min(max(q.x, q.y), 0.0); }
+fn sdCap(p: vec3f, a: vec3f, b: vec3f, r: f32) -> f32 { let pa = p - a; let ba = b - a; let h = sat(dot(pa, ba) / dot(ba, ba)); return length(pa - ba * h) - r; }
+fn sdTor(p: vec3f, R: f32, r: f32) -> f32 { return length(vec2f(length(p.xz) - R, p.y)) - r; }
+fn sdCylY(p: vec3f, r: f32, h: f32, rr: f32) -> f32 { let d = vec2f(length(p.xz) - r + rr, abs(p.y) - h + rr); return min(max(d.x, d.y), 0.0) + length(max(d, vec2f(0.0))) - rr; }
+fn sdEll(p: vec3f, r: vec3f) -> f32 { let k0 = length(p / r); let k1 = length(p / (r * r)); return k0 * (k0 - 1.0) / max(k1, 1e-5); }
+fn sdOct(p0: vec2f, r: f32) -> f32 {
+  let k = vec3f(-0.9238795325, 0.3826834323, 0.4142135623);
+  var p = abs(p0);
+  p -= 2.0 * min(dot(vec2f(k.x, k.y), p), 0.0) * vec2f(k.x, k.y);
+  p -= 2.0 * min(dot(vec2f(-k.x, k.y), p), 0.0) * vec2f(-k.x, k.y);
+  p -= vec2f(clamp(p.x, -k.z * r, k.z * r), r);
+  return length(p) * sign(p.y);
+}
+fn smin(a: f32, b: f32, k: f32) -> f32 { let h = max(k - abs(a - b), 0.0) / k; return min(a, b) - h * h * k * 0.25; }
+fn smax(a: f32, b: f32, k: f32) -> f32 { return -smin(-a, -b, k); }
+fn U2(a: vec2f, b: vec2f) -> vec2f { return select(a, b, b.x < a.x); }
+fn ry(p: vec3f, a: f32) -> vec3f { let q = r2(a) * p.xz; return vec3f(q.x, p.y, q.y); }
+fn rx(p: vec3f, a: f32) -> vec3f { let q = r2(a) * p.yz; return vec3f(p.x, q.x, q.y); }
+fn rz(p: vec3f, a: f32) -> vec3f { let q = r2(a) * p.xy; return vec3f(q.x, q.y, p.z); }
+fn raxis(p: vec3f, ax: vec3f, a: f32) -> vec3f { let c = cos(a); let s = sin(a); return p * c + cross(ax, p) * s + ax * dot(ax, p) * (1.0 - c); }
+</script>
+<script type="text/plain" id="w-obj">
+fn rHulk(p: vec3f) -> vec2f {
+  let q = vec3f(abs(p.x), p.y, p.z);
+  var d = sdRB(p - vec3f(0.0, 0.15, 0.0), vec3f(0.95, 1.05, 0.72), 0.32);
+  d = smin(d, sdRB(p - vec3f(0.0, 0.3, 0.5), vec3f(0.68, 0.62, 0.32), 0.18), 0.2);
+  d = smin(d, length(q - vec3f(1.15, 0.8, 0.0)) - 0.55, 0.3);
+  d = smin(d, sdCap(q, vec3f(1.3, 0.6, 0.0), vec3f(1.42, -0.5, 0.45), 0.3), 0.2);
+  d = smin(d, sdCap(q, vec3f(0.45, -0.85, 0.0), vec3f(0.55, -1.75, 0.15), 0.28), 0.25);
+  d = smin(d, sdRB(p - vec3f(0.0, 1.35, 0.12), vec3f(0.44, 0.3, 0.42), 0.15), 0.18);
+  var r = vec2f(d, 0.0);
+  let g = sdCap(q, vec3f(1.42, -0.55, 0.3), vec3f(1.42, -0.6, 1.55), 0.22);
+  let gi = max(g, -sdCap(q, vec3f(1.42, -0.6, 1.2), vec3f(1.42, -0.6, 2.0), 0.12));
+  r = U2(r, vec2f(gi, 2.0));
+  r = U2(r, vec2f(sdRB(q - vec3f(0.0, -0.1, -0.78), vec3f(0.5, 0.45, 0.12), 0.08), 2.0));
+  let e = sdRB(p - vec3f(0.0, 1.38, 0.52), vec3f(0.33, 0.07, 0.06), 0.035);
+  r = U2(r, vec2f(e, 1.0));
+  return r;
+}
+fn rDrone(p: vec3f) -> vec2f {
+  let q = vec3f(abs(p.x), p.y, p.z);
+  var d = sdEll(p, vec3f(0.85, 0.62, 1.25));
+  d = smin(d, sdRB(p - vec3f(0.0, 0.55, -0.25), vec3f(0.06, 0.32, 0.6), 0.05), 0.15);
+  d = smin(d, sdRB(q - vec3f(0.75, -0.05, -0.2), vec3f(0.35, 0.08, 0.55), 0.06), 0.12);
+  let eyeS = length(p - vec3f(0.0, 0.05, 1.08)) - 0.34;
+  d = smax(d, -(length(p - vec3f(0.0, 0.05, 1.2)) - 0.4), 0.06);
+  var r = vec2f(d, 0.0);
+  var c = sdCap(q, vec3f(0.5, -0.25, 0.7), vec3f(0.85, -0.38, 1.55), 0.14);
+  c = smin(c, sdCap(q, vec3f(0.85, -0.38, 1.55), vec3f(0.5, -0.32, 2.05), 0.1), 0.08);
+  r = U2(r, vec2f(c, 2.0));
+  r = U2(r, vec2f(sdTor(rx(p - vec3f(0.0, 0.0, -1.15), 1.5708), 0.42, 0.11), 3.0));
+  r = U2(r, vec2f(eyeS, 1.0));
+  return r;
+}
+fn rSph(p: vec3f) -> vec2f {
+  let q = vec3f(abs(p.x), p.y, p.z);
+  var d = length(p) - 1.15;
+  d = smax(d, -(length(p - vec3f(0.0, 0.0, 1.25)) - 0.62), 0.08);
+  var r = vec2f(d, 0.0);
+  r = U2(r, vec2f(sdTor(p, 1.16, 0.1), 3.0));
+  r = U2(r, vec2f(sdCap(q, vec3f(0.55, 0.85, -0.2), vec3f(0.85, 1.45, -0.45), 0.07), 2.0));
+  r = U2(r, vec2f(length(p - vec3f(0.0, 0.0, 0.78)) - 0.42, 1.0));
+  return r;
+}
+fn rBoss(p: vec3f, t: f32) -> vec2f {
+  var d = length(p) - 2.1;
+  d = smax(d, -(length(p - vec3f(0.0, 0.0, 2.25)) - 1.05), 0.12);
+  var r = vec2f(d, 0.0);
+  let pr = rz(p, t * 0.9);
+  r = U2(r, vec2f(sdTor(rx(pr, 1.5708), 3.05, 0.3), 3.0));
+  var a = pr;
+  let ang = atan2(a.y, a.x);
+  let sec = round(ang / 1.5708) * 1.5708;
+  a = rz(a, -sec);
+  r = U2(r, vec2f(sdRB(a - vec3f(3.05, 0.0, 0.0), vec3f(0.35, 0.55, 0.55), 0.12), 2.0));
+  let k = rz(p, 0.7854);
+  let kq = vec3f(abs(k.x), abs(k.y), k.z);
+  var c = sdCap(kq, vec3f(1.2, 1.2, 0.8), vec3f(1.8, 1.8, 2.4), 0.24);
+  c = smin(c, sdCap(kq, vec3f(1.8, 1.8, 2.4), vec3f(1.15, 1.15, 3.4), 0.17), 0.12);
+  r = U2(r, vec2f(c, 2.0));
+  r = U2(r, vec2f(sdCylY(rx(p - vec3f(0.0, 0.0, -2.0), 1.5708), 0.9, 0.35, 0.1), 2.0));
+  r = U2(r, vec2f(length(p - vec3f(0.0, 0.0, 1.55)) - 0.92, 1.0));
+  return r;
+}
+fn rTur(p: vec3f, yaw: f32, pit: f32) -> vec2f {
+  var r = vec2f(sdCylY(p, 1.3, 0.35, 0.12), 2.0);
+  r = U2(r, vec2f(sdCylY(p - vec3f(0.0, 0.45, 0.0), 0.75, 0.25, 0.1), 3.0));
+  let h = rx(ry(p - vec3f(0.0, 0.95, 0.0), yaw), pit);
+  var d = length(h * vec3f(1.0, 1.15, 1.0)) - 0.78;
+  d = smin(d, sdRB(h - vec3f(0.0, 0.0, 0.1), vec3f(0.95, 0.38, 0.55), 0.16), 0.2);
+  r = U2(r, vec2f(d, 0.0));
+  let hq = vec3f(abs(h.x), h.y, h.z);
+  r = U2(r, vec2f(max(sdCap(hq, vec3f(0.42, 0.0, 0.3), vec3f(0.42, 0.0, 1.9), 0.13), -sdCap(hq, vec3f(0.42, 0.0, 1.6), vec3f(0.42, 0.0, 2.5), 0.07)), 2.0));
+  r = U2(r, vec2f(sdRB(h - vec3f(0.0, 0.12, 0.62), vec3f(0.22, 0.08, 0.06), 0.03), 1.0));
+  return r;
+}
+fn robots(p: vec3f) -> vec2f {
+  var r = vec2f(1e5, 0.0);
+  let n = i32(u.nl.y);
+  for (var i = 0; i < n; i++) {
+    let a = u.R[i * 2];
+    let o = u.R[i * 2 + 1];
+    if (o.z <= 0.0) { continue; }
+    let ty = i32(a.w + 0.5);
+    let bnd = select(select(2.6, 5.4, ty == 3), 2.8, ty >= 4);
+    let v = p - a.xyz;
+    let bd = length(v) - bnd * o.z;
+    if (bd > max(r.x, 0.6)) { continue; }
+    var q: vec2f;
+    if (ty >= 4) {
+      var w = v;
+      if (ty == 5) { w = vec3f(w.x, -w.y, w.z); }
+      q = rTur(w / o.z, o.x, o.y);
+    } else {
+      let l = rx(ry(v, o.x), o.y) / o.z;
+      if (ty == 0) { q = rHulk(l); }
+      else if (ty == 1) { q = rDrone(l); }
+      else if (ty == 2) { q = rSph(l); }
+      else { q = rBoss(l, u.tm.x); }
+    }
+    q.x *= o.z;
+    q.y = 100.0 + f32(i) * 10.0 + q.y;
+    r = U2(r, q);
+  }
+  return r;
+}
+fn shipL(p: vec3f) -> vec2f {
+  let q = vec3f(abs(p.x), p.y, p.z);
+  var d = sdRB(p - vec3f(0.0, 0.0, -0.2), vec3f(0.78, 0.34, 1.45), 0.24);
+  d = smin(d, sdEll(p - vec3f(0.0, -0.02, 1.15), vec3f(0.62, 0.28, 1.05)), 0.25);
+  d = smin(d, sdRB(q - vec3f(0.95, -0.05, -0.45), vec3f(0.45, 0.07, 0.8), 0.05), 0.12);
+  var r = vec2f(d, 80.0);
+  var pd = sdRB(q - vec3f(1.38, -0.05, -0.15), vec3f(0.36, 0.3, 1.35), 0.14);
+  pd = smin(pd, sdEll(q - vec3f(1.38, -0.05, 1.1), vec3f(0.3, 0.26, 0.6)), 0.15);
+  r = U2(r, vec2f(pd, 83.0));
+  r = U2(r, vec2f(max(sdCap(q, vec3f(1.38, -0.12, 1.2), vec3f(1.38, -0.12, 2.25), 0.09), -sdCap(q, vec3f(1.38, -0.12, 2.0), vec3f(1.38, -0.12, 3.0), 0.05)), 83.0));
+  r = U2(r, vec2f(sdEll(p - vec3f(0.0, 0.3, 0.45), vec3f(0.38, 0.22, 0.75)), 81.0));
+  r = U2(r, vec2f(sdCylY(rx(q - vec3f(0.38, 0.0, -1.62), 1.5708), 0.22, 0.12, 0.05), 82.0));
+  r = U2(r, vec2f(sdCylY(rx(q - vec3f(1.38, -0.05, -1.5), 1.5708), 0.2, 0.08, 0.04), 82.0));
+  r = U2(r, vec2f(sdRB(p - vec3f(0.0, 0.42, -0.95), vec3f(0.05, 0.22, 0.5), 0.04), 83.0));
+  return r;
+}
+fn shipW(p: vec3f) -> vec2f {
+  if (u.ship.w <= 0.0) { return vec2f(1e5, 0.0); }
+  let v = p - u.ship.xyz;
+  let bd = length(v) - 3.2;
+  if (bd > 0.8) { return vec2f(bd, 80.0); }
+  let f = u.shf.xyz;
+  let up = u.shu.xyz;
+  let rt = cross(up, f);
+  return shipL(vec3f(dot(v, rt), dot(v, up), dot(v, f)));
+}
+fn debris(p: vec3f) -> vec2f {
+  var r = vec2f(1e5, 0.0);
+  let n = i32(u.nd.x);
+  for (var i = 0; i < n; i++) {
+    let a = u.D[i * 3];
+    let b = u.D[i * 3 + 1];
+    let c = u.D[i * 3 + 2];
+    let v = p - a.xyz;
+    let bd = length(v) - a.w * 1.8;
+    if (bd > max(r.x, 0.5)) { continue; }
+    let l = raxis(v, b.xyz, -b.w);
+    var d: f32;
+    if (c.y < 0.5) { d = sdRB(l, vec3f(a.w, a.w * 0.45, a.w * 0.7), a.w * 0.18); }
+    else if (c.y < 1.5) { d = sdRB(l, vec3f(a.w * 0.3, a.w * 0.3, a.w * 1.4), a.w * 0.1); }
+    else { d = max(sdRB(l, vec3f(a.w * 1.6, a.w * 0.12, a.w * 1.0), a.w * 0.06), -sdRB(l - vec3f(a.w * 0.9, 0.0, 0.0), vec3f(a.w * 0.4, a.w, a.w * 0.3), 0.05)); }
+    r = U2(r, vec2f(d, 90.0 + f32(i)));
+  }
+  return r;
+}
+</script>
+<script type="text/plain" id="w-scene">
+const RS = 11.0;
+fn tS1(p: vec3f) -> vec4f {
+  let yv = clamp(p.y, -100.0, 260.0);
+  var r = vec4f(length(vec3f(p.x, p.y - yv, p.z)), -p.y, atan2(p.z, p.x), 0.0);
+  let ez = p.z + 40.0;
+  let ey = p.y + 100.0;
+  if (ez > 0.0 && ey < 0.0) {
+    let rr = length(vec2f(ez, ey));
+    let de = length(vec2f(p.x, rr - 40.0));
+    if (de < r.x) { r = vec4f(de, 100.0 + 40.0 * atan2(-ey, ez), atan2(rr - 40.0, p.x), 1.0); }
+  }
+  let zc = clamp(p.z, -3000.0, -40.0);
+  let dh = length(vec3f(p.x, p.y + 140.0, p.z - zc));
+  if (dh < r.x) { r = vec4f(dh, 162.832 + (-40.0 - p.z), atan2(-(p.y + 140.0), p.x), 2.0); }
+  return r;
+}
+fn terr(x: vec2f) -> f32 {
+  let r = length(x);
+  var h = 6.0 * sin(x.x * 0.011 + 1.0) * sin(x.y * 0.013) + 3.0 * sin(x.x * 0.037 - x.y * 0.029) + 1.4 * sin(x.x * 0.09 + x.y * 0.07);
+  h = mix(-0.4, h, smoothstep(24.0, 75.0, r));
+  let a = atan2(x.y, x.x);
+  h += smoothstep(260.0, 760.0, r) * (70.0 + 38.0 * sin(a * 5.0 + 1.0) + 22.0 * sin(a * 13.0));
+  return h;
+}
+fn m1(p: vec3f) -> vec2f {
+  let tb = tS1(p);
+  let gd = (p.y - terr(p.xz) - (nl(p, 0.022).x - 0.5) * 6.0 - (nl(p, 0.09).y - 0.5) * 0.55) * 0.6;
+  var d = max(gd, RS - tb.x);
+  var r = vec2f(d, select(13.0, 1.0, tb.x < RS + 1.5 && p.y < 1.5));
+  if (tb.y > 3.0) {
+    let m = (fract(tb.y / 8.0 + 0.5) - 0.5) * 8.0;
+    let rib = sdB2(vec2f(tb.x - (RS - 0.2), m), vec2f(0.45, 0.32)) - 0.07;
+    r = U2(r, vec2f(rib, 2.0));
+    var lp = 1e5;
+    var lp2 = 1e5;
+    if (tb.w < 1.5) {
+      let ml = (fract((tb.y - 4.0) / 24.0 + 0.5) - 0.5) * 24.0;
+      let sec = TAU / 6.0;
+      let th = tb.z - round(tb.z / sec) * sec;
+      let lq = vec3f(tb.x - (RS - 0.25), th * RS, ml);
+      lp = sdRB(lq, vec3f(0.3, 0.55, 0.42), 0.1);
+      lp2 = sdRB(lq + vec3f(0.22, 0.0, 0.0), vec3f(0.16, 0.42, 0.3), 0.06);
+    } else {
+      let ml = (fract((tb.y - 166.0) / 16.0 + 0.5) - 0.5) * 16.0;
+      let th = tb.z + PI * 0.5;
+      let lq = vec3f(tb.x - (RS - 0.25), th * RS, ml);
+      lp = sdRB(lq, vec3f(0.3, 0.6, 2.2), 0.12);
+      lp2 = sdRB(lq + vec3f(0.22, 0.0, 0.0), vec3f(0.16, 0.38, 1.9), 0.08);
+      let pz = vec2f(p.x, p.y + 140.0);
+      let pq = vec2f(abs(pz.x), pz.y);
+      let pipe = length(pq - vec2f(8.9, -6.1)) - 0.5;
+      r = U2(r, vec2f(pipe, 14.0));
+    }
+    r = U2(r, vec2f(lp, 2.0));
+    r = U2(r, vec2f(lp2, 5.0));
+  }
+  let rr = length(p.xz);
+  r = U2(r, vec2f(sdB2(vec2f(rr - 15.5, p.y - 0.7), vec2f(4.5, 1.5)) - 0.25, 8.0));
+  let ang = atan2(p.z, p.x);
+  let s = round((ang - 0.7854) / 1.5708) * 1.5708 + 0.7854;
+  let q = r2(-s) * p.xz;
+  var tw = sdRB(vec3f(q.x - 25.0, p.y - 11.0, q.y), vec3f(1.4, 12.0, 1.4), 0.3);
+  tw = min(tw, sdRB(vec3f(q.x - 21.0, p.y - 19.0, q.y), vec3f(4.6, 0.55, 0.55), 0.15));
+  tw = min(tw, sdRB(vec3f(q.x - 25.0, p.y - 3.0, q.y), vec3f(2.2, 3.0, 2.2), 0.4));
+  r = U2(r, vec2f(tw, 2.0));
+  r = U2(r, vec2f(length(vec3f(q.x - 25.0, p.y - 23.6, q.y)) - 0.55, 7.0));
+  r = U2(r, vec2f(sdRB(vec3f(q.x - 17.2, p.y - 18.2, q.y), vec3f(0.5, 0.35, 0.8), 0.1), 6.0));
+  let s1 = sdCylY(p - vec3f(78.0, 8.0, -70.0), 7.0, 17.0, 1.5);
+  let s2 = sdCylY(p - vec3f(96.0, 6.0, -48.0), 5.0, 14.0, 1.2);
+  let s3 = sdCylY(p - vec3f(-88.0, 10.0, -30.0), 8.0, 20.0, 1.8);
+  r = U2(r, vec2f(min(min(s1, s2), s3), 2.0));
+  let bq = p - vec3f(-70.0, 4.0, -110.0);
+  r = U2(r, vec2f(sdRB(bq, vec3f(34.0, 9.0, 11.0), 0.8), 12.0));
+  r = U2(r, vec2f(sdRB(p - vec3f(-70.0, 14.0, -104.0), vec3f(6.0, 3.0, 6.0), 0.5), 2.0));
+  return r;
+}
+fn m2(p: vec3f) -> vec2f {
+  let rl = length(p);
+  let de = length(vec3f(p.x, p.y, p.z - clamp(p.z, 28.0, 400.0)));
+  let dx = length(vec3f(p.x - clamp(p.x, -400.0, -28.0), p.y - 6.0, p.z));
+  var d = max(max(40.0 - rl, 7.0 - de), 6.5 - dx);
+  var r = vec2f(d, 1.0);
+  let ph = atan2(p.z, p.x);
+  let th = acos(clamp(p.y / max(rl, 1e-3), -1.0, 1.0));
+  let sp = TAU / 16.0;
+  let mm = abs(ph - round(ph / sp) * sp) * rl * sin(th);
+  let la = abs(th - round(th / (PI / 10.0)) * (PI / 10.0)) * rl;
+  var rib = max((40.0 - 0.55) - rl, min(mm, la) - 0.32);
+  rib = max(rib, 8.0 - de);
+  rib = max(rib, 7.5 - dx);
+  r = U2(r, vec2f(rib, 2.0));
+  r = U2(r, vec2f(sdB2(vec2f(length(p.xz) - 31.0, p.y + 10.0), vec2f(9.5, 0.55)) - 0.1, 9.0));
+  let cr = length(p.xz);
+  var pil = cr - 3.6 + 2.2 * smoothstep(26.0, 40.0, abs(p.y));
+  r = U2(r, vec2f(pil, 2.0));
+  r = U2(r, vec2f(sdB2(vec2f(cr - 3.75, abs(p.y) - 15.0), vec2f(0.25, 0.6)) - 0.05, 15.0));
+  r = U2(r, vec2f(sdB2(vec2f(cr - 4.2, abs(p.y + 10.0)), vec2f(1.4, 1.2)) - 0.2, 8.0));
+  let s = round(ph / 1.5708 - 0.5) * 1.5708 + 0.7854;
+  let q = r2(-s) * p.xz;
+  let bm = sdRB(vec3f(q.x - 21.0, p.y - 14.0, q.y), vec3f(18.0, 0.75, 0.75), 0.15);
+  r = U2(r, vec2f(bm, 8.0));
+  let i8 = round(ph / (TAU / 8.0));
+  let q8 = r2(-i8 * (TAU / 8.0)) * p.xz;
+  var lm = length(vec3f(q8.x - 38.6, p.y - 3.0, q8.y)) - 1.4;
+  if (abs(i8 - 2.0) < 0.5 || abs(abs(i8) - 4.0) < 0.5) { lm = 1e5; }
+  r = U2(r, vec2f(max(lm, 37.9 - q8.x), 6.0));
+  r = U2(r, vec2f(sdCylY(vec3f(p.x, abs(p.y) - 39.0, p.z), 7.0, 1.8, 0.6), 2.0));
+  r = U2(r, vec2f(sdTor(vec3f(p.x, abs(p.y) - 37.15, p.z), 4.6, 0.28), 5.0));
+  return r;
+}
+fn c3(z: f32) -> vec2f { return vec2f(14.0 * sin(z * 0.018) + 4.0 * sin(z * 0.043 + 2.0), 4.0 * sin(z * 0.031 + 1.3)); }
+fn m3(p: vec3f) -> vec2f {
+  let c = c3(p.z);
+  let q = p.xy - c;
+  let k = length(q / vec2f(19.0, 11.0));
+  var dw = (1.0 - k) * 9.5;
+  dw += (nl(p, 0.045).x - 0.5) * 6.0 + (nl(p, 0.17).y - 0.5) * 1.6;
+  let ly = c.y - 6.5;
+  var r = vec2f(dw * 0.7, 3.0);
+  let zc = round(p.z / 55.0);
+  let side = select(-1.0, 1.0, fract(zc * 0.5) > 0.25);
+  let cc = c3(zc * 55.0);
+  let px = cc.x + side * 8.5;
+  var col = length(vec2f(p.x - px, p.z - zc * 55.0)) - (2.4 + 0.9 * sin(p.y * 0.35 + zc) + 1.2 * smoothstep(3.0, 9.0, abs(p.y - cc.y)));
+  col += (nl(p, 0.2).z - 0.5) * 1.4;
+  r.x = smin(r.x, col * 0.8, 3.0);
+  let bz = round((p.z + 40.0) / 140.0) * 140.0 - 40.0;
+  let bi = round((p.z + 40.0) / 140.0);
+  let yo = select(-3.6, 3.8, fract(bi * 0.5) > 0.25);
+  let bc = c3(bz);
+  let bq = vec3f(p.x - bc.x, p.y - bc.y - yo, p.z - bz);
+  var br = sdRB(bq, vec3f(24.0, 0.28, 1.3), 0.08);
+  br = min(br, sdRB(vec3f(bq.x, bq.y + 0.55, abs(bq.z) - 1.15), vec3f(24.0, 0.3, 0.12), 0.05));
+  br = min(br, sdRB(vec3f(bq.x, bq.y - 0.9, abs(bq.z) - 1.25), vec3f(24.0, 0.05, 0.05), 0.04));
+  let pst = vec3f(bq.x - round(bq.x / 2.5) * 2.5, bq.y - 0.45, abs(bq.z) - 1.25);
+  br = min(br, sdRB(pst, vec3f(0.05, 0.45, 0.05), 0.03));
+  r = U2(r, vec2f(br, 8.0));
+  r = U2(r, vec2f(p.y - ly, 4.0));
+  return r;
+}
+fn m4(p: vec3f) -> vec2f {
+  let de = length(vec3f(p.x, p.y + 4.0, p.z - clamp(p.z, -2.0, 300.0)));
+  let dx = length(vec3f(p.x, p.y, p.z - clamp(p.z, -400.0, -158.0)));
+  var d = max(max(-sdRB(p - vec3f(0.0, 0.0, -80.0), vec3f(34.0, 15.0, 80.0), 3.0), 6.5 - de), 7.0 - dx);
+  var r = vec2f(d, 1.0);
+  let zz = p.z + 10.0;
+  let cl = clamp(round(zz / 20.0), -7.0, 0.0);
+  let mz = zz - cl * 20.0;
+  let ax = abs(p.x);
+  var pl = sdRB(vec3f(ax - 27.0, p.y, mz), vec3f(1.8, 15.0, 1.8), 0.35);
+  pl = smin(pl, sdRB(vec3f(ax - 27.0, abs(p.y) - 13.6, mz), vec3f(2.6, 1.6, 2.6), 0.45), 0.6);
+  r = U2(r, vec2f(pl, 2.0));
+  r = U2(r, vec2f(sdRB(vec3f(ax - 25.15, p.y - 4.0, mz), vec3f(0.08, 0.35, 0.35), 0.06), 7.0));
+  var cw = sdRB(vec3f(ax - 30.0, p.y + 3.0, p.z + 80.0), vec3f(4.2, 0.22, 79.0), 0.08);
+  cw = min(cw, length(vec2f(ax - 25.95, p.y + 1.95)) - 0.07);
+  let rz2 = p.z - round(p.z / 2.5) * 2.5;
+  cw = min(cw, sdRB(vec3f(ax - 25.95, p.y + 2.45, rz2), vec3f(0.05, 0.5, 0.05), 0.03));
+  r = U2(r, vec2f(cw, 9.0));
+  let mt = p.z - clamp(round(p.z / 20.0), -7.0, 0.0) * 20.0;
+  var tr = sdRB(vec3f(p.x, p.y - 12.4, mt), vec3f(34.0, 0.8, 0.45), 0.12);
+  tr = min(tr, sdRB(vec3f(ax - 10.0, p.y - 13.4, p.z + 80.0), vec3f(0.55, 0.55, 80.0), 0.12));
+  r = U2(r, vec2f(tr, 8.0));
+  r = U2(r, vec2f(sdRB(vec3f(abs(p.x) - 13.0, p.y - 11.55, mt), vec3f(7.0, 0.1, 0.22), 0.05), 5.0));
+  let wl = sdRB(vec3f(ax - 33.85, p.y - 7.5, mz - 10.0), vec3f(0.3, 0.22, 5.5), 0.1);
+  r = U2(r, vec2f(wl, 6.0));
+  var cr = sdRB(p - vec3f(13.0, -12.6, -52.0), vec3f(3.2, 2.4, 2.6), 0.25);
+  cr = min(cr, sdRB(p - vec3f(16.5, -13.6, -47.5), vec3f(1.6, 1.4, 1.6), 0.2));
+  cr = min(cr, sdRB(p - vec3f(-12.0, -12.0, -96.0), vec3f(2.8, 3.0, 5.0), 0.25));
+  cr = min(cr, sdRB(p - vec3f(-15.5, -13.6, -88.0), vec3f(1.5, 1.4, 1.5), 0.2));
+  cr = min(cr, sdRB(p - vec3f(9.0, -12.4, -128.0), vec3f(4.0, 2.6, 3.0), 0.3));
+  r = U2(r, vec2f(cr, 16.0));
+  r = U2(r, vec2f(sdRB(vec3f(p.x, p.y + 14.95, p.z + 80.0), vec3f(1.2, 0.08, 76.0), 0.04), 15.0));
+  let ez = p.z + 164.0 - clamp(round((p.z + 164.0) / 16.0), -10.0, 0.0) * 16.0;
+  r = U2(r, vec2f(max(sdRB(vec3f(p.x, p.y - 6.8, ez), vec3f(1.1, 0.25, 0.3), 0.08), p.z + 160.0), 5.0));
+  return r;
+}
+fn m5(p: vec3f) -> vec2f {
+  let de = length(vec3f(p.x, p.y, p.z - clamp(p.z, 26.0, 300.0)));
+  let dx = length(vec3f(p.x, p.y + 2.0, p.z - clamp(p.z, -400.0, -26.0)));
+  var d = max(max(-sdCylY(p, 30.0, 20.0, 5.0), 6.0 - de), 6.0 - dx);
+  var r = vec2f(d, 1.0);
+  let ph = atan2(p.z, p.x);
+  let sp = TAU / 20.0;
+  let s = round(ph / sp) * sp;
+  let q = r2(-s) * p.xz;
+  var rb = sdRB(vec3f(q.x - 29.7, p.y, q.y), vec3f(0.9, 17.0, 0.4), 0.12);
+  rb = max(rb, 7.2 - de);
+  rb = max(rb, 7.2 - dx);
+  r = U2(r, vec2f(rb, 2.0));
+  r = U2(r, vec2f(sdB2(vec2f(length(p.xz) - 26.5, p.y + 9.0), vec2f(3.6, 0.25)) - 0.06, 9.0));
+  r = U2(r, vec2f(length(vec2f(length(p.xz) - 22.95, p.y + 7.9)) - 0.07, 9.0));
+  r = U2(r, vec2f(sdTor(p - vec3f(0.0, 19.0, 0.0), 17.0, 0.4), 5.0));
+  r = U2(r, vec2f(sdCylY(p - vec3f(0.0, -19.0, 0.0), 8.0, 2.4, 0.8), 2.0));
+  r = U2(r, vec2f(sdTor(p - vec3f(0.0, -16.6, 0.0), 6.0, 0.3), 15.0));
+  return r;
+}
+fn c6(z: f32) -> vec2f { return vec2f(9.0 * sin(z * 0.021) + 4.0 * sin(z * 0.047 + 1.0), 6.0 * sin(z * 0.017 + 1.0) + 3.0 * sin(z * 0.053)); }
+fn m6(p: vec3f) -> vec2f {
+  let c = c6(p.z);
+  let q = r2(p.z * 0.012) * (p.xy - c);
+  let R = 4.6;
+  var r = vec2f(-sdOct(q, R) * 0.86, 1.0);
+  let m = p.z - round(p.z / 12.0) * 12.0;
+  let ring = max(-sdOct(q, R - 0.42) * 0.86, abs(m) - 0.28);
+  r = U2(r, vec2f(ring, 2.0));
+  let lz = max(-sdOct(q, R - 0.48) * 0.86, abs(m) - 0.12);
+  r = U2(r, vec2f(max(lz, abs(q.y) - R * 0.6), 5.0));
+  let mb = p.z - round((p.z - 30.0) / 96.0) * 96.0 - 30.0;
+  r = U2(r, vec2f(max(-sdOct(q, R - 1.05) * 0.86, abs(mb) - 1.0), 8.0));
+  let pq = vec2f(abs(q.x), q.y);
+  r = U2(r, vec2f(length(pq - vec2f(R * 0.7, -R * 0.55)) * 0.9 - 0.32, 14.0));
+  r = U2(r, vec2f(length(pq - vec2f(R * 0.35, R * 0.86)) * 0.9 - 0.18, 14.0));
+  return r;
+}
+fn m7(p: vec3f) -> vec2f {
+  let de = length(vec3f(p.x, p.y + 6.0, p.z - clamp(p.z, 40.0, 300.0)));
+  var d = max(-sdCylY(p, 44.0, 32.0, 6.0), 6.0 - de);
+  var r = vec2f(d, 1.0);
+  let ph = atan2(p.z, p.x);
+  let sp = TAU / 24.0;
+  let s = round(ph / sp) * sp;
+  let q = r2(-s) * p.xz;
+  r = U2(r, vec2f(max(sdRB(vec3f(q.x - 43.6, p.y, q.y), vec3f(1.0, 30.0, 0.45), 0.15), 7.5 - de), 2.0));
+  r = U2(r, vec2f(sdB2(vec2f(length(p.xz) - 39.0, p.y + 14.0), vec2f(5.0, 0.3)) - 0.06, 9.0));
+  r = U2(r, vec2f(length(vec2f(length(p.xz) - 34.1, p.y + 12.9)) - 0.08, 9.0));
+  r = U2(r, vec2f(length(p) - 6.4, 10.0));
+  var cg = 1e5;
+  for (var i = 0; i < 3; i++) {
+    let a = u.P[i];
+    let w = rx(rz(p, a.x), a.y);
+    cg = min(cg, sdTor(w, 9.0 + f32(i) * 1.3, 0.32));
+  }
+  r = U2(r, vec2f(cg, 8.0));
+  let s6 = round(ph / (TAU / 6.0)) * (TAU / 6.0) ;
+  let q6 = r2(-s6 - 0.2618) * p.xz;
+  let a6 = atan2(q6.y, q6.x);
+  let q7 = r2(-round(a6 / (TAU / 6.0)) * (TAU / 6.0)) * q6;
+  let py = vec3f(q7.x - 20.0, p.y, q7.y);
+  r = U2(r, vec2f(sdCylY(py, 1.3, 32.0, 0.3), 2.0));
+  let cy = py.y - round(py.y / 3.0) * 3.0;
+  r = U2(r, vec2f(max(sdTor(vec3f(py.x, cy, py.z), 1.55, 0.26), abs(p.y) - 22.0), 11.0));
+  r = U2(r, vec2f(sdCap(vec3f(q7.x, abs(p.y) - 3.0, q7.y), vec3f(19.0, 0.0, 0.0), vec3f(6.5, 1.0, 0.0), 0.55), 14.0));
+  let cp = vec3f(p.x, abs(p.y) - 27.0, p.z);
+  r = U2(r, vec2f(sdCylY(cp, 10.0, 4.5, 1.6), 2.0));
+  r = U2(r, vec2f(sdTor(vec3f(p.x, abs(p.y) - 22.2, p.z), 7.5, 0.45), 15.0));
+  r = U2(r, vec2f(sdCylY(vec3f(p.x, abs(p.y) - 21.2, p.z), 3.0, 1.5, 0.6), 2.0));
+  return r;
+}
+fn mapS(p: vec3f) -> vec2f {
+  let sc = i32(u.tm.z + 0.5);
+  if (sc == 0 || sc == 7) { return m1(p); }
+  if (sc == 1) { return m2(p); }
+  if (sc == 2) { return m3(p); }
+  if (sc == 3) { return m4(p); }
+  if (sc == 4) { return m5(p); }
+  if (sc == 5) { return m6(p); }
+  return m7(p);
+}
+fn map(p: vec3f) -> vec2f {
+  var r = mapS(p);
+  r = U2(r, robots(p));
+  r = U2(r, shipW(p));
+  r = U2(r, debris(p));
+  return r;
+}
+</script>
+<script type="text/plain" id="w-shade">
+struct Mt { a: vec3f, r: f32, m: f32, e: vec3f }
+fn panel(uv: vec2f, mu: vec2f) -> vec4f {
+  let f = fract(uv);
+  let c = floor(uv);
+  let fu = FP / mu.x;
+  let fv = FP / mu.y;
+  let ex = min(f.x, 1.0 - f.x) * mu.x;
+  let ey = min(f.y, 1.0 - f.y) * mu.y;
+  let e = min(ex, ey);
+  let g = line(e, 0.022);
+  let rv = length(vec2f(ex, ey) - vec2f(0.13));
+  let rvt = line(rv, 0.035);
+  let seam = line(abs(f.x - 0.5) * mu.x, 0.012) * step(0.6, h21(c + 7.0));
+  return vec4f(g, rvt, h21(c), seam);
+}
+fn pcoord(p: vec3f, n: vec3f, sc: i32) -> vec4f {
+  if (sc == 0 || sc == 7) {
+    let tb = tS1(p);
+    return vec4f(tb.z / TAU * 24.0, tb.y / 2.2, 2.88, 2.2);
+  }
+  if (sc == 1) {
+    let rl = length(p);
+    let th = acos(clamp(p.y / max(rl, 1e-3), -1.0, 1.0));
+    let st = max(sin(th), 0.2);
+    return vec4f(atan2(p.z, p.x) / TAU * 48.0, th / PI * 30.0, TAU * 40.0 * st / 48.0, 4.19);
+  }
+  if (sc == 5) {
+    let q = r2(p.z * 0.012) * (p.xy - c6(p.z));
+    return vec4f(atan2(q.y, q.x) / TAU * 16.0, p.z / 2.0, 1.8, 2.0);
+  }
+  if ((sc == 4 || sc == 6) && abs(n.y) < 0.6) {
+    let k = select(72.0, 104.0, sc == 6);
+    let rr = select(30.0, 44.0, sc == 6);
+    return vec4f(atan2(p.z, p.x) / TAU * k, p.y / 1.8, TAU * rr / k, 1.8);
+  }
+  let an = abs(n);
+  var q = p.xz;
+  if (an.x > an.y && an.x > an.z) { q = p.zy; } else if (an.z > an.y) { q = p.xy; }
+  return vec4f(q.x / 2.6, q.y / 1.7, 2.6, 1.7);
+}
+fn hotc(t: f32) -> vec3f {
+  let x = sat(t);
+  return vec3f(1.0, 0.22, 0.04) * smoothstep(0.0, 0.35, x) + vec3f(0.0, 0.55, 0.2) * smoothstep(0.3, 0.7, x) + vec3f(0.0, 0.25, 0.8) * smoothstep(0.65, 1.0, x);
+}
+fn material(p: vec3f, n: vec3f, mid: f32, sc: i32) -> Mt {
+  var o = Mt(vec3f(0.3), 0.5, 0.0, vec3f(0.0));
+  let m = i32(mid + 0.5);
+  let tt = u.tm.x;
+  if (m >= 100) {
+    let ri = (m - 100) / 10;
+    let part = m - 100 - ri * 10;
+    let ty = i32(u.R[ri * 2].w + 0.5);
+    let gl = u.R[ri * 2 + 1].w;
+    var hull = vec3f(0.3);
+    if (ty == 0) { hull = vec3f(0.36, 0.3, 0.21); }
+    else if (ty == 1) { hull = vec3f(0.2, 0.24, 0.3); }
+    else if (ty == 2) { hull = vec3f(0.5, 0.5, 0.52); }
+    else if (ty == 3) { hull = vec3f(0.34, 0.1, 0.08); }
+    else { hull = vec3f(0.28, 0.29, 0.31); }
+    let gr = nl(p, 0.7).x;
+    if (part == 0) { o = Mt(hull * (0.85 + 0.3 * gr), 0.32 + 0.15 * gr, 0.75, vec3f(0.0)); }
+    else if (part == 1) { o = Mt(vec3f(0.05), 0.1, 0.0, vec3f(3.2, 0.2, 0.08) * (0.8 + 0.2 * sin(tt * 6.0 + f32(ri)))); }
+    else if (part == 2) { o = Mt(vec3f(0.07, 0.07, 0.075), 0.3, 0.9, vec3f(0.0)); }
+    else { o = Mt(vec3f(0.6, 0.42, 0.08), 0.45, 0.3, vec3f(0.0)); }
+    o.e += vec3f(1.8, 0.55, 0.12) * gl * smoothstep(0.35, 0.8, gr);
+    return o;
+  }
+  if (m >= 90) {
+    let c = u.D[(m - 90) * 3 + 2];
+    let k = nl(p, 1.3).x;
+    o = Mt(vec3f(0.1, 0.095, 0.09) * (0.7 + 0.6 * k), 0.45, 0.8, hotc(c.x * (0.5 + 0.5 * k)) * c.x * c.x * 2.2);
+    return o;
+  }
+  if (m >= 80) {
+    if (m == 80) {
+      o = Mt(vec3f(0.66, 0.67, 0.7), 0.3, 0.6, vec3f(0.0));
+      let l = vec3f(dot(p - u.ship.xyz, cross(u.shu.xyz, u.shf.xyz)), dot(p - u.ship.xyz, u.shu.xyz), dot(p - u.ship.xyz, u.shf.xyz));
+      let st = line(abs(l.z - 0.55), 0.09) * step(0.25, l.y);
+      o.a = mix(o.a, vec3f(0.55, 0.06, 0.04), st);
+      o.r = mix(o.r, 0.4, st);
+    } else if (m == 81) { o = Mt(vec3f(0.015, 0.02, 0.03), 0.06, 0.2, vec3f(0.02, 0.05, 0.08)); }
+    else if (m == 82) { o = Mt(vec3f(0.05), 0.3, 0.0, vec3f(0.35, 0.7, 1.8) * (0.4 + u.shu.w)); }
+    else { o = Mt(vec3f(0.09, 0.09, 0.1), 0.35, 0.9, vec3f(0.0)); }
+    return o;
+  }
+  if (m == 1 || m == 9 || m == 16) {
+    let pc = pcoord(p, n, sc);
+    let pn = panel(pc.xy, pc.zw);
+    let gr = nl(p, 0.09).x;
+    let gr2 = nl(p, 0.5).y;
+    var base = vec3f(0.3, 0.315, 0.34);
+    if (sc == 1) { base = vec3f(0.26, 0.29, 0.33); }
+    if (sc == 3) { base = vec3f(0.28, 0.3, 0.29); }
+    if (sc == 6) { base = vec3f(0.2, 0.21, 0.23); }
+    if (sc == 2) { base = vec3f(0.24, 0.2, 0.17); }
+    if (m == 16) { base = vec3f(0.17, 0.2, 0.12); }
+    var a = base * (0.86 + 0.28 * (pn.z - 0.5) * aaf(0.6)) * (0.84 + 0.32 * gr);
+    a *= 1.0 - 0.55 * pn.x - 0.3 * pn.w;
+    a = mix(a, vec3f(0.42, 0.43, 0.45), pn.y * 0.7);
+    var rough = 0.42 + 0.14 * gr2 + 0.25 * pn.x - 0.12 * pn.y;
+    if (m == 9) {
+      let gl = line(abs(fract(pc.x * 6.0) - 0.5) * pc.z / 6.0, 0.03);
+      a = vec3f(0.11, 0.115, 0.12) * (1.0 - 0.6 * gl) * (0.8 + 0.4 * gr);
+      rough = 0.45;
+    }
+    o = Mt(a, rough, 0.35, vec3f(0.0));
+    return o;
+  }
+  if (m == 2) {
+    let gr = nl(p, 0.3).x;
+    o = Mt(vec3f(0.17, 0.175, 0.19) * (0.8 + 0.4 * gr), 0.34 + 0.2 * gr, 0.7, vec3f(0.0));
+    return o;
+  }
+  if (m == 8) {
+    let an = abs(n);
+    var q = p.xz;
+    if (an.x > an.y && an.x > an.z) { q = p.zy; } else if (an.z > an.y) { q = p.xy; }
+    let s = stripe((q.x + q.y) / 1.1, 1.0 / 1.1);
+    let gr = nl(p, 0.4).x;
+    o = Mt(mix(vec3f(0.03, 0.028, 0.025), vec3f(0.62, 0.42, 0.04), s) * (0.7 + 0.5 * gr), 0.5, 0.25, vec3f(0.0));
+    return o;
+  }
+  if (m == 3) {
+    let c = c3(p.z);
+    let ly = c.y - 6.5;
+    let k = nl(p, 0.12);
+    let k2 = nl(p, 0.6).x;
+    let hy = max(p.y - ly, 0.0);
+    var a = vec3f(0.075, 0.064, 0.058) * (0.85 + 0.3 * smoothstep(0.2, 0.8, k.x));
+    o = Mt(a, 0.82, 0.0, vec3f(0.0));
+    return o;
+  }
+  if (m == 4) {
+    let fl = vec3f(p.x * 0.06, p.z * 0.06 - tt * 0.06, tt * 0.015);
+    let k = textureSampleLevel(nt, sr, fl, clamp(log2(max(FP * 0.06 * 64.0, 1.0)), 0.0, 6.0));
+    let k2 = nl(vec3f(p.x, p.z - tt * 1.6, tt * 0.5), 0.22).y;
+    let f = k.x * 0.7 + k2 * 0.3;
+    let fw = clamp(FP * 0.08, 0.004, 0.2);
+    let vein = 1.0 - smoothstep(0.0, 0.035 + fw, abs(f - 0.47));
+    let pool = smoothstep(0.22 + fw, 0.17 - fw, f);
+    let hv = max(vein, pool);
+    let hot = vec3f(1.5, 0.27, 0.03) * hv + vec3f(0.12, 0.02, 0.003) * (1.0 - hv);
+    o = Mt(vec3f(0.04, 0.03, 0.028), mix(0.8, 0.3, hv), 0.0, hot * (0.85 + 0.3 * k.z));
+    return o;
+  }
+  if (m == 5) { return Mt(vec3f(0.8), 0.2, 0.0, vec3f(1.5, 1.75, 2.1) * u.P[7].x); }
+  if (m == 6) { return Mt(vec3f(0.8), 0.2, 0.0, vec3f(2.2, 1.2, 0.42) * u.P[7].y); }
+  if (m == 7) { return Mt(vec3f(0.3), 0.2, 0.0, vec3f(4.0, 0.25, 0.1) * u.P[7].z); }
+  if (m == 15) { return Mt(vec3f(0.3), 0.2, 0.0, vec3f(0.18, 0.9, 1.3) * u.P[7].w); }
+  if (m == 10) {
+    let k = nl(p * 0.3 + vec3f(0.0, tt * 0.4, 0.0), 1.0).x;
+    let k2 = nl(p * 0.9 - vec3f(tt * 0.3, 0.0, tt * 0.2), 1.0).y;
+    let en = u.fx.z;
+    let pl = smoothstep(0.35, 0.75, k * 0.6 + k2 * 0.4);
+    let cA = mix(vec3f(0.5, 1.8, 3.0), vec3f(4.0, 1.5, 0.6), en);
+    o = Mt(vec3f(0.05), 0.3, 0.0, cA * (0.25 + 0.7 * pl) * (1.0 + 1.6 * en));
+    return o;
+  }
+  if (m == 11) { return Mt(vec3f(0.2), 0.3, 0.5, vec3f(0.15, 0.5, 1.3) * (0.6 + 1.6 * u.fx.z)); }
+  if (m == 12) {
+    let wy = fract(p.y / 3.0);
+    let wx = fract((p.x + p.z) / 4.0);
+    let win = line(abs(wy - 0.5) * 3.0, 0.45) * line(abs(wx - 0.5) * 4.0, 1.1) * step(abs(n.y), 0.5);
+    let on = step(0.45, h21(floor(vec2f((p.x + p.z) / 4.0, p.y / 3.0))));
+    return Mt(vec3f(0.07, 0.07, 0.075), 0.6, 0.2, vec3f(3.0, 2.0, 0.9) * win * on * 0.8);
+  }
+  if (m == 13) {
+    let k = nl(p, 0.08).x;
+    let k2 = nl(p, 0.45).y;
+    let a = vec3f(0.15, 0.14, 0.13) * (0.7 + 0.45 * k) * (0.92 + 0.16 * k2) * (0.8 + 0.3 * sat(n.y));
+    return Mt(a, 0.88, 0.0, vec3f(0.0));
+  }
+  if (m == 14) {
+    let gr = nl(p, 0.6).x;
+    return Mt(vec3f(0.55, 0.3, 0.17) * (0.8 + 0.3 * gr), 0.32, 1.0, vec3f(0.0));
+  }
+  return o;
+}
+fn nrm(p: vec3f, e: f32) -> vec3f {
+  let k = vec2f(1.0, -1.0);
+  return normalize(k.xyy * map(p + k.xyy * e).x + k.yyx * map(p + k.yyx * e).x + k.yxy * map(p + k.yxy * e).x + k.xxx * map(p + k.xxx * e).x);
+}
+fn aoc(p: vec3f, n: vec3f) -> f32 {
+  var o = 0.0;
+  var w = 1.0;
+  for (var i = 1; i <= 5; i++) {
+    let h = 0.08 + 0.32 * f32(i * i) / 5.0;
+    o += (h - mapS(p + n * h).x) * w;
+    w *= 0.62;
+  }
+  return sat(1.0 - o * 0.9);
+}
+fn shad(ro: vec3f, rd: vec3f, mx: f32, k: f32) -> f32 {
+  var s = 1.0;
+  var t = 0.12;
+  for (var i = 0; i < 22; i++) {
+    let h = map(ro + rd * t).x;
+    s = min(s, k * h / t);
+    t += clamp(h, 0.15, mx / 10.0);
+    if (s < 0.02 || t > mx) { break; }
+  }
+  return smoothstep(0.0, 1.0, s);
+}
+fn ggx(n: vec3f, v: vec3f, l: vec3f, r: f32, f0: vec3f) -> vec3f {
+  let h = normalize(v + l);
+  let nh = sat(dot(n, h));
+  let nv = max(dot(n, v), 1e-3);
+  let nlv = max(dot(n, l), 1e-3);
+  let a = r * r;
+  let a2 = a * a;
+  let dd = nh * nh * (a2 - 1.0) + 1.0;
+  let D = a2 / (PI * dd * dd);
+  let kk = (r + 1.0) * (r + 1.0) / 8.0;
+  let G = nv / (nv * (1.0 - kk) + kk) * nlv / (nlv * (1.0 - kk) + kk);
+  let F = f0 + (1.0 - f0) * pow(1.0 - sat(dot(h, v)), 5.0);
+  return D * G * F / (4.0 * nv * nlv);
+}
+fn sky(rd: vec3f) -> vec3f {
+  let sd = normalize(u.sun.xyz);
+  let up = sat(rd.y);
+  var c = mix(vec3f(0.028, 0.03, 0.045), vec3f(0.003, 0.004, 0.01), pow(up, 0.5));
+  let sh = max(dot(normalize(vec3f(rd.x, 0.0, rd.z) + 1e-4), normalize(vec3f(sd.x, 0.0, sd.z))), 0.0);
+  c += vec3f(0.16, 0.07, 0.035) * pow(sh, 6.0) * exp(-max(rd.y, 0.0) * 9.0);
+  c += vec3f(4.0, 2.6, 1.6) * smoothstep(0.9993, 0.99965, dot(rd, sd)) + vec3f(0.5, 0.28, 0.14) * pow(max(dot(rd, sd), 0.0), 220.0);
+  let g = rd * 160.0;
+  let ce = floor(g);
+  let hs = h31(ce);
+  if (hs > 0.72) {
+    let sp = ce + 0.25 + 0.5 * vec3f(h31(ce + 1.3), h31(ce + 2.7), h31(ce + 4.1));
+    let dd = length(g - sp);
+    let rr = max(0.05, PA * 160.0 * 0.75);
+    let br = pow((hs - 0.72) / 0.28, 3.0) * 1.6 * (0.05 / rr) * (0.05 / rr);
+    c += vec3f(0.85 + 0.3 * h31(ce + 9.0), 0.9, 1.05) * br * exp(-dd * dd / (rr * rr));
+  }
+  let C = normalize(vec3f(-0.3, 0.16, -1.0)) * 3000.0;
+  let Rp = 640.0;
+  let b = dot(rd, C);
+  let h = b * b - dot(C, C) + Rp * Rp;
+  let Nr = normalize(vec3f(0.3, 1.0, 0.45));
+  let tr = dot(C, Nr) / dot(rd, Nr);
+  var tp = 1e9;
+  if (h > 0.0) {
+    tp = b - sqrt(h);
+    let P = rd * tp;
+    let N = normalize(P - C);
+    let lat = dot(N, Nr);
+    let bnd = 0.5 + 0.5 * sin(lat * 26.0 + sin(lat * 7.0) * 2.0);
+    let al = mix(vec3f(0.42, 0.3, 0.22), vec3f(0.62, 0.52, 0.42), bnd);
+    let ndl = max(dot(N, sd), 0.0);
+    let ring = smoothstep(0.0, 0.1, dot(N, sd) + 0.05);
+    var pc = al * ndl * vec3f(1.3, 1.1, 0.95) + al * 0.012;
+    let lim = pow(1.0 - max(dot(N, -rd), 0.0), 3.0);
+    pc += vec3f(0.3, 0.22, 0.2) * lim * ndl;
+    c = mix(c, pc * ring + pc * (1.0 - ring) * 0.15, sat(sqrt(h) / max(PA * 3000.0 * 6.0, 1.0)));
+  }
+  if (tr > 0.0) {
+    let P = rd * tr;
+    let rd2 = length(P - C);
+    if (rd2 > 900.0 && rd2 < 1450.0 && tr < tp) {
+      let rg = 0.5 + 0.5 * sin(rd2 * 0.045) * sin(rd2 * 0.013);
+      let fw = max(PA * tr * 0.045, 0.01);
+      let rg2 = mix(rg, 0.5, sat(fw));
+      let edge = smoothstep(900.0, 960.0, rd2) * smoothstep(1450.0, 1380.0, rd2);
+      var sh2 = 1.0;
+      let ps = P - sd * dot(P - C, sd);
+      if (length(ps - C) < Rp && dot(P - C, sd) < 0.0) { sh2 = 0.08; }
+      c += vec3f(0.36, 0.3, 0.24) * rg2 * edge * 0.75 * sh2;
+    }
+  }
+  return c;
+}
+fn bolt(ro: vec3f, rd: vec3f, tmax: f32, A: vec3f, B: vec3f, w: f32) -> vec2f {
+  let ba = B - A;
+  let oa = ro - A;
+  let bb = dot(ba, ba);
+  let rb = dot(rd, ba);
+  let den = bb - rb * rb;
+  var s = 0.0;
+  if (den > 1e-5) { s = sat((dot(oa, ba) - rb * dot(oa, rd)) / den); }
+  let pt = A + ba * s;
+  let t = max(dot(pt - ro, rd), 0.0);
+  let d = length(ro + rd * t - pt);
+  let ww = max(w, t * PA * 0.9);
+  let k = w / ww;
+  let core = exp(-d * d / (ww * ww)) * k * k;
+  let halo = (0.06 * w) / (d * d + 0.05 * w) ;
+  let vis = select(0.0, 1.0, t < tmax) * smoothstep(0.0, 0.6, t);
+  return vec2f(core * 3.0, halo * 0.3) * vis;
+}
+fn bcol(i: i32) -> vec3f {
+  if (i == 0) { return vec3f(4.0, 0.9, 0.35); }
+  if (i == 1) { return vec3f(0.6, 4.0, 0.9); }
+  if (i == 2) { return vec3f(4.0, 2.6, 0.5); }
+  if (i == 3) { return vec3f(1.6, 2.6, 6.0); }
+  if (i == 4) { return vec3f(4.0, 0.6, 3.2); }
+  return vec3f(4.0, 1.6, 0.4);
+}
+fn expl(ro: vec3f, rd: vec3f, tmax: f32, col: vec3f, jt: f32) -> vec3f {
+  var c = col;
+  let n = i32(u.nl.w);
+  for (var i = 0; i < n; i++) {
+    let a = u.X[i * 2];
+    let b = u.X[i * 2 + 1];
+    let oc = ro - a.xyz;
+    let bb = dot(oc, rd);
+    let cc = dot(oc, oc) - a.w * a.w;
+    let hh = bb * bb - cc;
+    if (hh <= 0.0) { continue; }
+    let sq = sqrt(hh);
+    let t0 = max(-bb - sq, 0.0);
+    let t1 = min(-bb + sq, tmax);
+    if (t1 <= t0) { continue; }
+    let kind = i32(b.w + 0.5);
+    let ag = b.x;
+    if (kind == 2) {
+      let tc = -bb;
+      let dm = length(oc + rd * tc);
+      let sw = a.w * 0.05 + 0.25;
+      let rim = exp(-pow((dm - a.w * 0.97) / sw, 2.0));
+      c += vec3f(1.4, 1.8, 2.6) * rim * b.y * (1.0 - ag) * (1.0 - ag) * select(0.35, 1.0, tc < tmax);
+      continue;
+    }
+    let ns = 16;
+    let dt = (t1 - t0) / f32(ns);
+    var tr = 1.0;
+    var acc = vec3f(0.0);
+    let fade = 1.0 - smoothstep(0.6, 1.0, ag);
+    let grow = 0.85 - 0.25 * ag;
+    for (var k = 0; k < ns; k++) {
+      let t = t0 + dt * (f32(k) + jt);
+      let p = ro + rd * t;
+      let q = (p - a.xyz) / a.w;
+      let r = length(q);
+      let w = textureSampleLevel(nt, sr, q * 0.42 * grow + vec3f(b.z, b.z * 1.7, ag * 0.22), 1.5);
+      let w2 = textureSampleLevel(nt, sr, q * 0.95 * grow + vec3f(b.z * 2.3, ag * 0.4, 0.3), 1.0);
+      let sh = 1.0 - r + (w.x - 0.5) * 1.1 + (w2.y - 0.5) * 0.5;
+      let den = smoothstep(0.0, 0.35, sh) * 2.2 / a.w * fade;
+      if (den <= 0.0) { continue; }
+      let temp = smoothstep(0.15, 1.0, sh) * pow(max(1.0 - ag, 0.0), 1.3);
+      var e: vec3f;
+      if (kind == 1) { e = mix(vec3f(0.2, 0.6, 2.0), vec3f(2.4, 3.0, 4.0), temp) * temp * 2.6; } else { e = hotc(temp) * temp * temp * 5.0; }
+      let smoke = vec3f(0.02, 0.017, 0.015) * (0.4 + ag);
+      let st = den * dt;
+      acc += tr * (e * b.y + smoke) * st;
+      tr *= exp(-st * (0.4 + ag * 0.5));
+      if (tr < 0.02) { break; }
+    }
+    c = c * tr + acc;
+  }
+  return c;
+}
+struct FO { @location(0) c: vec4f, @location(1) d: f32 }
+@fragment fn fs(@builtin(position) fc: vec4f) -> FO {
+  let rs = u.res.xy;
+  let px = fc.xy + u.jit.xy;
+  let asp = rs.x / rs.y;
+  let tf = u.cam.w;
+  let nd = vec2f(px.x / rs.x * 2.0 - 1.0, 1.0 - px.y / rs.y * 2.0);
+  var rd = normalize(u.cz.xyz + u.cx.xyz * (nd.x * asp * tf) + u.cy.xyz * (nd.y * tf));
+  let sc = i32(u.tm.z + 0.5);
+  if (u.fx.y > 0.0) {
+    let w = textureSampleLevel(nt, sr, vec3f(nd * vec2f(asp, 1.0) * 0.6, u.tm.x * 0.25), 0.0).xy - 0.5;
+    let k = u.fx.y * smoothstep(0.4, -1.0, nd.y);
+    rd = normalize(rd + (u.cx.xyz * w.x + u.cy.xyz * w.y) * 0.006 * k);
+  }
+  PA = 2.0 * tf / rs.y;
+  let ro = u.cam.xyz;
+  var t = 0.06;
+  var hit = false;
+  var mid = 0.0;
+  let tmax = select(420.0, 1500.0, sc == 0 || sc == 7);
+  for (var i = 0; i < 200; i++) {
+    let h = map(ro + rd * t);
+    let eps = max(0.0015, t * PA * 0.35);
+    if (h.x < eps) { hit = true; mid = h.y; break; }
+    t += h.x * 0.92;
+    if (t > tmax) { break; }
+  }
+  var col = vec3f(0.0);
+  var dep = 1e4;
+  if (hit) {
+    dep = t;
+    let p = ro + rd * t;
+    FP = t * PA;
+    let n = nrm(p, max(0.002, t * PA * 0.7));
+    let mt = material(p, n, mid, sc);
+    let v = -rd;
+    let ao = aoc(p, n);
+    let f0 = mix(vec3f(0.04), mt.a, mt.m);
+    let dif = mt.a * (1.0 - mt.m);
+    var acc = vec3f(0.0);
+    let nL = i32(u.nl.x);
+    for (var i = 0; i < nL; i++) {
+      let A = u.L[i * 2];
+      let C = u.L[i * 2 + 1];
+      let dv = A.xyz - p;
+      let d2 = dot(dv, dv);
+      if (d2 > A.w * A.w) { continue; }
+      let dl = sqrt(d2);
+      let l = dv / dl;
+      let ndl = dot(n, l);
+      if (ndl <= 0.0) { continue; }
+      var w = 1.0 - d2 / (A.w * A.w);
+      w = w * w / (d2 + 1.0);
+      if (i == 0 && u.nd.y > 0.5) { w *= shad(p + n * 0.02, l, dl - 0.3, 10.0); }
+      acc += (dif / PI + ggx(n, v, l, max(mt.r, 0.06), f0)) * C.rgb * (w * ndl * 6.0);
+    }
+    if (u.sunc.w > 0.0) {
+      let l = normalize(u.sun.xyz);
+      let ndl = dot(n, l);
+      if (ndl > 0.0) {
+        var s = 1.0;
+        if (p.y > -30.0) { s = shad(p + n * 0.05, l, 80.0, 12.0); } else { s = 0.0; }
+        acc += (dif / PI + ggx(n, v, l, max(mt.r, 0.08), f0)) * u.sunc.rgb * ndl * s;
+      }
+    }
+    let hem = mix(u.amb.rgb * 0.45, u.amb.rgb, n.y * 0.5 + 0.5);
+    acc += (dif + f0 * 0.4 * (1.0 - mt.r)) * hem * ao;
+    col = acc + mt.e;
+  } else if (sc == 0 || sc == 7) {
+    col = sky(rd);
+    dep = 1e4;
+  }
+  let fd = min(dep, 2000.0);
+  let fa = 1.0 - exp(-fd * u.fog.w);
+  col = mix(col, u.fog.rgb, fa * select(1.0, 0.6, !hit));
+  if (sc == 2) {
+    let ly = c3(ro.z).y - 6.5;
+    let k = 0.34;
+    let y0 = ro.y - ly;
+    let dy = rd.y;
+    var I = 0.0;
+    if (abs(dy) > 1e-4) { I = (exp(-k * y0) - exp(-k * (y0 + dy * fd))) / (k * dy); } else { I = exp(-k * y0) * fd; }
+    col += vec3f(1.0, 0.25, 0.04) * 0.009 * I;
+  }
+  let nb = i32(u.nl.z);
+  for (var i = 0; i < nb; i++) {
+    let A = u.B[i * 2];
+    let B = u.B[i * 2 + 1];
+    let g = bolt(ro, rd, dep, A.xyz, B.xyz, A.w);
+    col += bcol(i32(B.w)) * (g.x + g.y);
+  }
+  col = expl(ro, rd, dep, col, fract(52.9829189 * fract(dot(fc.xy, vec2f(0.06711056, 0.00583715))) + u.tm.x * 7.31));
+  return FO(vec4f(col, dep), dep);
+}
+@vertex fn vq(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  let x = f32(i32(i & 1u) * 4 - 1);
+  let y = f32(i32(i >> 1u) * 4 - 1);
+  return vec4f(x, y, 0.0, 1.0);
+}
+</script>
+<script type="text/plain" id="w-post">
+@group(0) @binding(1) var cur: texture_2d<f32>;
+@group(0) @binding(2) var hist: texture_2d<f32>;
+@group(0) @binding(3) var sl: sampler;
+fn rdir(px: vec2f, rs: vec2f) -> vec3f {
+  let asp = rs.x / rs.y;
+  let nd = vec2f(px.x / rs.x * 2.0 - 1.0, 1.0 - px.y / rs.y * 2.0);
+  return normalize(u.cz.xyz + u.cx.xyz * (nd.x * asp * u.cam.w) + u.cy.xyz * (nd.y * u.cam.w));
+}
+fn pproj(w: vec3f, rs: vec2f) -> vec3f {
+  let v = w - u.pcam.xyz;
+  let z = dot(v, u.pcz.xyz);
+  let asp = rs.x / rs.y;
+  let x = dot(v, u.pcx.xyz) / (max(z, 1e-3) * u.cam.w * asp);
+  let y = dot(v, u.pcy.xyz) / (max(z, 1e-3) * u.cam.w);
+  return vec3f((x * 0.5 + 0.5) * rs.x, (0.5 - y * 0.5) * rs.y, z);
+}
+fn ycc(c: vec3f) -> vec3f { return vec3f(dot(c, vec3f(0.25, 0.5, 0.25)), dot(c, vec3f(0.5, 0.0, -0.5)), dot(c, vec3f(-0.25, 0.5, -0.25))); }
+fn rgb(c: vec3f) -> vec3f { return vec3f(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z); }
+fn tmw(c: vec3f) -> vec3f { return c / (1.0 + max(c.r, max(c.g, c.b))); }
+fn itm(c: vec3f) -> vec3f { return c / max(1.0 - max(c.r, max(c.g, c.b)), 1e-3); }
+@vertex fn vq(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  let x = f32(i32(i & 1u) * 4 - 1);
+  let y = f32(i32(i >> 1u) * 4 - 1);
+  return vec4f(x, y, 0.0, 1.0);
+}
+@fragment fn taa(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  let rs = u.res.xy;
+  let ip = vec2i(fc.xy);
+  let mx = vec2i(rs) - 1;
+  let c0 = textureLoad(cur, ip, 0);
+  var m1 = vec3f(0.0);
+  var m2 = vec3f(0.0);
+  var mn = vec3f(1e9);
+  var mxc = vec3f(-1e9);
+  for (var k = 0; k < 9; k++) {
+    let o = vec2i(k % 3 - 1, k / 3 - 1);
+    let s = ycc(tmw(textureLoad(cur, clamp(ip + o, vec2i(0), mx), 0).rgb));
+    m1 += s;
+    m2 += s * s;
+    mn = min(mn, s);
+    mxc = max(mxc, s);
+  }
+  m1 /= 9.0;
+  let sg = sqrt(max(m2 / 9.0 - m1 * m1, vec3f(0.0)));
+  let lo = max(m1 - sg * 1.25, mn);
+  let hi = min(m1 + sg * 1.25, mxc);
+  let t = c0.a;
+  let w = u.cam.xyz + rdir(fc.xy, rs) * min(t, 5000.0);
+  let pp = pproj(w, u.jit.zw);
+  let puv = pp.xy / u.res.zw;
+  let ok = pp.z > 0.0 && all(pp.xy >= vec2f(0.5)) && all(pp.xy <= u.jit.zw - 0.5) && u.nd.z < 0.5;
+  var h = ycc(tmw(textureSampleLevel(hist, sl, puv, 0.0).rgb));
+  h = clamp(h, lo, hi);
+  let cc = ycc(tmw(c0.rgb));
+  let mv = length(pp.xy - fc.xy);
+  let al = select(1.0, mix(0.085, 0.25, smoothstep(1.0, 30.0, mv)), ok);
+  let r = itm(rgb(mix(h, cc, al)));
+  return vec4f(max(r, vec3f(0.0)), t);
+}
+@group(0) @binding(4) var blm: texture_2d<f32>;
+fn agxc(x: vec3f) -> vec3f { let x2 = x * x; let x4 = x2 * x2; return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232; }
+fn agx(c: vec3f) -> vec3f {
+  let m = mat3x3f(vec3f(0.842479062253094, 0.0423282422610123, 0.0423756549057051), vec3f(0.0784335999999992, 0.878468636469772, 0.0784336), vec3f(0.0792237451477643, 0.0791661274605434, 0.879142973793104));
+  let mi = mat3x3f(vec3f(1.19687900512017, -0.0528968517574562, -0.0529716355144438), vec3f(-0.0980208811401368, 1.15190312990417, -0.0980434501171241), vec3f(-0.0990297440797205, -0.0989611768448433, 1.15107367264116));
+  var x = m * c;
+  x = clamp(log2(max(x, vec3f(1e-10))), vec3f(-12.47393), vec3f(4.026069));
+  x = (x + 12.47393) / 16.49999;
+  x = agxc(x);
+  let lw = vec3f(0.2126, 0.7152, 0.0722);
+  x = pow(max(x, vec3f(0.0)), vec3f(1.12));
+  let l = dot(x, lw);
+  x = l + (x - l) * 1.18;
+  return clamp(mi * x, vec3f(0.0), vec3f(1.0));
+}
+fn hq(p: vec2f) -> f32 { var p3 = fract(vec3f(p.x, p.y, p.x) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+@fragment fn comp(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  let cs = u.P[6].xy;
+  let uv = fc.xy / cs;
+  let rs = u.res.xy;
+  let sc = rs / u.res.zw;
+  let lim = sc - 0.5 / u.res.zw;
+  let iuv = min(uv * sc, lim);
+  let c0 = textureSampleLevel(cur, sl, iuv, 0.0);
+  var col = c0.rgb;
+  let px = uv * rs;
+  let w = u.cam.xyz + rdir(px, rs) * min(c0.a, 5000.0);
+  let pp = pproj(w, rs);
+  var vel = (px - pp.xy) * u.P[6].z;
+  let vl = length(vel);
+  let vmax = rs.y * 0.06;
+  if (vl > vmax) { vel *= vmax / vl; }
+  if (length(vel) > 1.2 && pp.z > 0.0) {
+    var acc = vec3f(0.0);
+    for (var i = 0; i < 12; i++) {
+      let f = (f32(i) + 0.5) / 12.0 - 0.5;
+      acc += textureSampleLevel(cur, sl, clamp((px + vel * f) / u.res.zw, vec2f(0.0), lim), 0.0).rgb;
+    }
+    col = acc / 12.0;
+  }
+  let ts = 1.0 / u.res.zw;
+  let nb = textureSampleLevel(cur, sl, min(iuv + vec2f(ts.x, 0.0), lim), 0.0).rgb + textureSampleLevel(cur, sl, max(iuv - vec2f(ts.x, 0.0), vec2f(0.0)), 0.0).rgb + textureSampleLevel(cur, sl, min(iuv + vec2f(0.0, ts.y), lim), 0.0).rgb + textureSampleLevel(cur, sl, max(iuv - vec2f(0.0, ts.y), vec2f(0.0)), 0.0).rgb;
+  let shp = u.P[6].w;
+  col = max(col + (col - nb * 0.25) * shp, col * 0.5);
+  let asp = cs.x / cs.y;
+  let ca = (uv - 0.5) * vec2f(asp, 1.0);
+  let bl = textureSampleLevel(blm, sl, uv, 0.0).rgb;
+  col += bl * u.P[5].x;
+  col += u.fx.x * vec3f(1.0, 0.92, 0.85) * 6.0;
+  col *= u.P[5].y;
+  var c = agx(col);
+  c *= 1.0 - u.P[5].z * smoothstep(0.35, 1.15, length(ca));
+  c *= u.P[5].w;
+  c += (hq(fc.xy) - 0.5) / 255.0;
+  return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)), 1.0);
+}
+</script>
+<script type="text/plain" id="w-part">
+struct PU { a: vec4f, E: array<vec4f, 120> }
+struct Pt { p: vec4f, c: vec4f, v: vec4f }
+@group(0) @binding(1) var<uniform> pu: PU;
+@group(0) @binding(2) var<storage, read_write> ps: array<Pt>;
+fn ph(n: u32) -> f32 { var x = n * 747796405u + 2891336453u; x = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u; x = (x >> 22u) ^ x; return f32(x & 0xffffffu) / 16777215.0; }
+@compute @workgroup_size(64) fn sim(@builtin(global_invocation_id) g: vec3u) {
+  let i = g.x;
+  if (i >= arrayLength(&ps)) { return; }
+  let e = i % 24u;
+  let k = i / 24u;
+  var o = Pt(vec4f(0.0), vec4f(0.0), vec4f(0.0));
+  if (e >= u32(pu.a.y)) { ps[i] = o; return; }
+  let A = pu.E[e * 5u];
+  let B = pu.E[e * 5u + 1u];
+  let C = pu.E[e * 5u + 2u];
+  let D = pu.E[e * 5u + 3u];
+  let N = pu.E[e * 5u + 4u];
+  if (C.y <= 0.0 || f32(k) / 1024.0 >= N.x) { ps[i] = o; return; }
+  let sd = k * 7919u + u32(A.w * 97.0) * 131u + e * 17u;
+  let r0 = ph(sd);
+  let r1 = ph(sd + 1u);
+  let r2v = ph(sd + 2u);
+  let r3 = ph(sd + 3u);
+  let r4 = ph(sd + 4u);
+  let r5 = ph(sd + 5u);
+  let birth = A.w + r0 * C.w;
+  let life = C.y * (0.45 + 0.9 * r1);
+  let age = pu.a.x - birth;
+  if (age < 0.0 || age > life) { ps[i] = o; return; }
+  let z = r2v * 2.0 - 1.0;
+  let ang = r3 * 6.2831853;
+  let sp = vec3f(sqrt(1.0 - z * z) * cos(ang), z, sqrt(1.0 - z * z) * sin(ang));
+  let dir = normalize(B.xyz + sp * B.w + vec3f(1e-4));
+  let ty = i32(C.z + 0.5);
+  let v0 = dir * C.x * (0.25 + 0.95 * r4);
+  let dg = D.z;
+  let ed = exp(-dg * age);
+  var pos = A.xyz + sp * D.w * pow(r5, 0.33) + v0 * (1.0 - ed) / max(dg, 1e-3);
+  var vel = v0 * ed;
+  let x = age / life;
+  var col = vec3f(0.0);
+  var sz = D.y * (0.6 + 0.8 * r5);
+  if (ty == 0) {
+    col = mix(vec3f(5.0, 3.6, 1.8), vec3f(2.4, 0.45, 0.08), smoothstep(0.0, 0.6, x)) * (1.0 - x * x);
+  } else if (ty == 1) {
+    pos += vec3f(sin(age * 1.3 + r0 * 6.0) * 0.4, age * (0.8 + r1), cos(age * 1.1 + r3 * 6.0) * 0.4);
+    vel = vec3f(0.0, 0.8 + r1, 0.0);
+    col = vec3f(3.0, 0.8, 0.12) * smoothstep(0.0, 0.15, x) * (1.0 - x) * (0.5 + r4);
+  } else if (ty == 2) {
+    col = mix(vec3f(2.0, 3.4, 6.0), vec3f(0.3, 0.8, 3.0), x) * (1.0 - x);
+  } else {
+    col = mix(vec3f(4.0, 1.6, 0.4), vec3f(0.6, 0.12, 0.03), x) * (1.0 - x) ;
+    sz *= 1.0 + x * 2.5;
+  }
+  o.p = vec4f(pos, sz);
+  o.c = vec4f(col * D.x, f32(ty));
+  o.v = vec4f(vel, 0.0);
+  ps[i] = o;
+}
+@group(0) @binding(3) var<storage, read> pr: array<Pt>;
+@group(0) @binding(4) var dtex: texture_2d<f32>;
+struct PO { @builtin(position) p: vec4f, @location(0) q: vec2f, @location(1) c: vec3f, @location(2) z: f32, @location(3) ln: f32 }
+@vertex fn pv(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> PO {
+  var o: PO;
+  o.p = vec4f(2.0, 2.0, 2.0, 1.0);
+  let P = pr[ii];
+  if (P.p.w <= 0.0) { return o; }
+  let rs = u.res.xy;
+  let asp = rs.x / rs.y;
+  let v = P.p.xyz - u.cam.xyz;
+  let z = dot(v, u.cz.xyz);
+  if (z < 0.35) { return o; }
+  let tf = u.cam.w;
+  let s0 = vec2f(dot(v, u.cx.xyz) / (z * tf * asp), dot(v, u.cy.xyz) / (z * tf));
+  let tail = v - P.v.xyz * select(0.035, 0.0, P.c.w > 0.5);
+  let z1 = max(dot(tail, u.cz.xyz), 0.35);
+  let s1 = vec2f(dot(tail, u.cx.xyz) / (z1 * tf * asp), dot(tail, u.cy.xyz) / (z1 * tf));
+  let p0 = vec2f(s0.x * 0.5 + 0.5, 0.5 - s0.y * 0.5) * rs - u.jit.xy;
+  var p1 = vec2f(s1.x * 0.5 + 0.5, 0.5 - s1.y * 0.5) * rs - u.jit.xy;
+  var rad = P.p.w / (z * tf) * rs.y * 0.5;
+  var k = 1.0;
+  if (rad < 1.0) { k = rad * rad; rad = 1.0; }
+  var ax = p0 - p1;
+  var L = length(ax);
+  if (L > rs.y * 0.25) { ax *= rs.y * 0.25 / L; L = rs.y * 0.25; p1 = p0 - ax; }
+  var dir = vec2f(1.0, 0.0);
+  if (L > 1e-3) { dir = ax / L; }
+  let nrm = vec2f(-dir.y, dir.x);
+  let cx = f32(vi % 2u);
+  let cy = f32((vi / 2u) % 2u);
+  let crn = array<vec2f, 6>(vec2f(0.0, 0.0), vec2f(1.0, 0.0), vec2f(0.0, 1.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0), vec2f(0.0, 1.0));
+  let c = crn[vi];
+  let along = mix(-rad, L + rad, c.x);
+  let side = mix(-rad, rad, c.y);
+  let sp = p1 + dir * along + nrm * side;
+  o.p = vec4f(sp.x / rs.x * 2.0 - 1.0, 1.0 - sp.y / rs.y * 2.0, 0.5, 1.0);
+  o.q = vec2f(along, side) / rad;
+  o.ln = L / rad;
+  let seg = L / rad + 1.0;
+  o.c = P.c.rgb * k / max(seg * 0.6, 1.0);
+  o.z = length(v);
+  return o;
+}
+@fragment fn pf(o: PO) -> @location(0) vec4f {
+  let ax = clamp(o.q.x, 0.0, o.ln);
+  let d = length(vec2f(o.q.x - ax, o.q.y));
+  let f = exp(-d * d * 2.6) * smoothstep(1.0, 0.7, d);
+  let sd = textureLoad(dtex, vec2i(o.p.xy), 0).r;
+  let fade = clamp((sd - o.z) / 0.6, 0.0, 1.0);
+  return vec4f(o.c * f * fade, 0.0);
+}
+</script>
+<script type="text/plain" id="w-bloom">
+struct BU { a: vec4f, b: vec4f }
+@group(0) @binding(0) var<uniform> bu: BU;
+@group(0) @binding(1) var src: texture_2d<f32>;
+@group(0) @binding(2) var sm: sampler;
+@vertex fn vq(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  let x = f32(i32(i & 1u) * 4 - 1);
+  let y = f32(i32(i >> 1u) * 4 - 1);
+  return vec4f(x, y, 0.0, 1.0);
+}
+fn S(uv: vec2f) -> vec3f { return textureSampleLevel(src, sm, clamp(uv, bu.b.zw * 0.5, bu.a.zw - bu.b.zw * 0.5), 0.0).rgb; }
+@fragment fn down(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  let uv = fc.xy / bu.b.xy * bu.a.zw;
+  let t = bu.b.zw;
+  let A = S(uv + t * vec2f(-2.0, -2.0));
+  let B = S(uv + t * vec2f(0.0, -2.0));
+  let C = S(uv + t * vec2f(2.0, -2.0));
+  let D = S(uv + t * vec2f(-1.0, -1.0));
+  let E = S(uv + t * vec2f(1.0, -1.0));
+  let F = S(uv + t * vec2f(-2.0, 0.0));
+  let G = S(uv);
+  let H = S(uv + t * vec2f(2.0, 0.0));
+  let I = S(uv + t * vec2f(-1.0, 1.0));
+  let J = S(uv + t * vec2f(1.0, 1.0));
+  let K = S(uv + t * vec2f(-2.0, 2.0));
+  let L = S(uv + t * vec2f(0.0, 2.0));
+  let M = S(uv + t * vec2f(2.0, 2.0));
+  var c = (D + E + I + J) * 0.125 + (A + B + F + G) * 0.03125 + (B + C + G + H) * 0.03125 + (F + G + K + L) * 0.03125 + (G + H + L + M) * 0.03125;
+  if (bu.a.x > 0.5) {
+    c = min(c, vec3f(80.0));
+    let br = max(c.r, max(c.g, c.b));
+    let k = smoothstep(bu.a.y, bu.a.y * 2.5, br);
+    c = c * k / (1.0 + br * 0.04);
+  }
+  return vec4f(c, 1.0);
+}
+@fragment fn up(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  let uv = fc.xy / bu.b.xy;
+  let t = bu.b.zw;
+  var c = S(uv) * 4.0;
+  c += (S(uv + vec2f(0.0, -t.y)) + S(uv + vec2f(-t.x, 0.0)) + S(uv + vec2f(t.x, 0.0)) + S(uv + vec2f(0.0, t.y))) * 2.0;
+  c += S(uv + vec2f(-t.x, -t.y)) + S(uv + vec2f(t.x, -t.y)) + S(uv + vec2f(-t.x, t.y)) + S(uv + vec2f(t.x, t.y));
+  return vec4f(c / 16.0 * bu.a.z, 1.0);
+}
+</script>
+<script type="text/plain" id="w-noise">
+@group(0) @binding(0) var dst: texture_storage_3d<rgba8unorm, write>;
+fn hh(p: vec3u) -> f32 { var x = (p.x * 73856093u) ^ (p.y * 19349663u) ^ (p.z * 83492791u); x = (x ^ (x >> 13u)) * 1274126177u; x = x ^ (x >> 16u); return f32(x & 0xffffffu) / 16777215.0; }
+fn vn(p: vec3f, per: u32, sd: u32) -> f32 {
+  let i = floor(p);
+  let f = p - i;
+  let w = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  var r = 0.0;
+  for (var k = 0u; k < 8u; k++) {
+    let o = vec3u(k & 1u, (k >> 1u) & 1u, (k >> 2u) & 1u);
+    let c = (vec3u(i) + o) % per;
+    let v = hh(c + vec3u(sd * 131u, sd * 71u, sd * 29u));
+    let ww = select(1.0 - w.x, w.x, o.x == 1u) * select(1.0 - w.y, w.y, o.y == 1u) * select(1.0 - w.z, w.z, o.z == 1u);
+    r += v * ww;
+  }
+  return r;
+}
+fn fb(p: vec3f, per: u32, sd: u32) -> f32 {
+  return vn(p * f32(per) / 64.0, per, sd) * 0.6 + vn(p * f32(per * 2u) / 64.0, per * 2u, sd + 7u) * 0.28 + vn(p * f32(per * 4u) / 64.0, per * 4u, sd + 13u) * 0.12;
+}
+@compute @workgroup_size(4, 4, 4) fn gen(@builtin(global_invocation_id) g: vec3u) {
+  let p = vec3f(g);
+  let v = vec4f(fb(p, 4u, 1u), fb(p, 8u, 2u), fb(p, 4u, 3u), fb(p, 8u, 4u));
+  textureStore(dst, g, clamp((v - 0.5) * 1.6 + 0.5, vec4f(0.0), vec4f(1.0)));
+}
+</script>
+<script type="text/plain" id="w-mip">
+@group(0) @binding(0) var srcm: texture_3d<f32>;
+@group(0) @binding(1) var dstm: texture_storage_3d<rgba8unorm, write>;
+@compute @workgroup_size(4, 4, 4) fn mip(@builtin(global_invocation_id) g: vec3u) {
+  let n = textureDimensions(dstm);
+  if (any(g >= n)) { return; }
+  var c = vec4f(0.0);
+  for (var k = 0u; k < 8u; k++) {
+    let o = vec3u(k & 1u, (k >> 1u) & 1u, (k >> 2u) & 1u);
+    c += textureLoad(srcm, g * 2u + o, 0);
+  }
+  textureStore(dstm, g, c / 8.0);
+}
+</script>
+<script type="text/plain" id="w-synth">
+class Synth {
+  constructor(sr, sfx) {
+    this.sr = sr; this.ev = sfx || [];
+    this.dl = new Float32Array(Math.ceil(sr * 0.8)); this.dr = new Float32Array(this.dl.length);
+    this.la = new Float32Array(64); this.lb = new Float32Array(64);
+    this.V = []; for (let i = 0; i < 28; i++) this.V.push({ on: 0, ty: 0, t: 0, g: 0, p: 0, ph: 0, ph2: 0, f1: [0, 0], f2: [0, 0], ns: 1 + i * 7919, len: 0 });
+    this.pad = []; for (let i = 0; i < 8; i++) this.pad.push({ ph: i * 0.137, f: 110, ft: 110 });
+    this.reset();
+  }
+  reset() {
+    this.n = 0; this.ei = 0; this.step = -1; this.rng = 22222;
+    for (const v of this.V) v.on = 0;
+    this.k = { on: 0, t: 0, ph: 0, g: 0 }; this.sn = { on: 0, t: 0, g: 0, f: [0, 0], ph: 0 }; this.hh = { on: 0, t: 0, g: 0, d: 50, f: [0, 0] }; this.tm = { on: 0, t: 0, ph: 0, g: 0, f: 100 };
+    this.bs = { f: 73.4, ft: 73.4, ph: 0, ph2: 0, env: 0, gate: 0, t: 0, fl: [0, 0], acc: 1 };
+    this.ar = { ph: 0, f: 440, t: 9, g: 0, fl: [0, 0] };
+    this.padf = [0, 0, 0, 0]; this.pl = [0, 0]; this.lv = { pad: 0, hum: 0, alarm: 0, rise: 0 };
+    this.hum = { a: 0, b: 0, f: [0, 0], nf: [0, 0] }; this.al = { ph: 0, f: [0, 0] }; this.ri = { f: [0, 0] };
+    this.dl.fill(0); this.dr.fill(0); this.di = 0; this.hp = [0, 0, 0, 0]; this.env = 0; this.gn = 1; this.li = 0; this.la.fill(0); this.lb.fill(0);
+    this.duck = 0;
+  }
+  nz() { let x = this.rng; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; this.rng = x >>> 0; return (this.rng / 4294967296) * 2 - 1; }
+  vnz(v) { let x = v.ns; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; v.ns = x >>> 0; return (v.ns / 4294967296) * 2 - 1; }
+  svf(s, x, fc, q, mode) {
+    const g = Math.tan(Math.PI * Math.min(Math.max(fc, 20), this.sr * 0.45) / this.sr), k = 1 / q;
+    const a1 = 1 / (1 + g * (g + k)), a2 = g * a1, a3 = g * a2;
+    const v3 = x - s[1], v1 = a1 * s[0] + a2 * v3, v2 = s[1] + a2 * s[0] + a3 * v3;
+    s[0] = 2 * v1 - s[0]; s[1] = 2 * v2 - s[1];
+    return mode === 0 ? v2 : mode === 1 ? v1 : x - k * v1 - v2;
+  }
+  blep(t, dt) { if (t < dt) { t /= dt; return t + t - t * t - 1; } if (t > 1 - dt) { t = (t - 1) / dt; return t * t + t + t + 1; } return 0; }
+  saw(ph, dt) { return 2 * ph - 1 - this.blep(ph, dt); }
+  mf(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+  sec(t) { const S = [0, 20, 42, 62, 82, 100, 120, 142, 166]; let i = 0; while (i < 7 && t >= S[i + 1]) i++; return i; }
+  chord(bar, sc, t) {
+    const P = [[38, 50, 53, 57, 62], [34, 46, 50, 53, 58], [41, 48, 53, 57, 60], [36, 48, 52, 55, 60]];
+    const L = [[38, 50, 53, 57, 62], [39, 51, 55, 58, 63]];
+    const E = [[34, 46, 50, 53, 58], [36, 48, 52, 55, 60], [38, 50, 54, 57, 62], [38, 50, 54, 57, 62]];
+    if (sc === 2) return L[bar % 2];
+    if (sc === 6 && t < 137) return bar % 2 ? [37, 49, 52, 56, 61] : P[0];
+    if (sc === 7 && t >= 154) return E[Math.min(3, Math.floor((t - 154) / 2))];
+    return P[bar % 4];
+  }
+  trig(st) {
+    const t = st * 0.125, sc = this.sec(t), bar = Math.floor(st / 16), s = st % 16, b4 = s % 4;
+    const ch = this.chord(bar, sc, t);
+    let kick = 0, sn = 0, hat = 0, bass = 0, arp = 0, tom = 0;
+    if (sc === 0) { kick = t >= 16 ? (b4 === 0 ? 1 : 0) : 0; hat = t >= 8 && s % 2 === 1 ? 0.25 : 0; bass = t >= 8 && s % 2 === 0 ? 0.6 : 0; if (t >= 19 && s >= 8 && s % 2 === 0) sn = 0.5; }
+    else if (sc === 1) { kick = b4 === 0 || (s === 14 && bar % 2) ? 1 : 0; sn = s === 4 || s === 12 ? 1 : 0; hat = s % 2 ? 0.45 : 0.25; bass = [1, 0, 0.7, 0.8, 0, 0.7, 1, 0, 0.8, 0, 0.7, 0.8, 0, 0.7, 1, 0.6][s]; }
+    else if (sc === 2) { kick = s === 0 || s === 6 || s === 10 ? 1 : 0; sn = s === 8 ? 1 : 0; hat = s % 4 === 2 ? 0.25 : 0; bass = s === 0 || s === 6 || s === 10 ? 1 : 0; tom = s === 14 || s === 15 ? 0.6 : 0; }
+    else if (sc === 3) { kick = b4 === 0 ? 1 : 0; sn = s === 4 || s === 12 ? 1 : 0; hat = s % 2 ? 0.5 : 0.3; bass = s % 2 === 0 ? (s % 4 === 0 ? 1 : 0.7) : 0.5; arp = 1; }
+    else if (sc === 4) { const brk = t >= 94.2; kick = brk ? (s === 0 && t > 96 ? 0.6 : 0) : b4 === 0 ? 1 : 0; sn = !brk && t > 90 && (s === 4 || s === 12) ? 1 : 0; hat = brk ? 0 : s % 2 ? 0.35 : 0.15; bass = brk ? 0 : 0.75 + (s % 4 === 0 ? 0.25 : 0); }
+    else if (sc === 5) { kick = b4 === 0 ? 1 : 0; sn = s === 4 || s === 12 ? 1 : 0; hat = 0.3 + (b4 === 2 ? 0.3 : 0); bass = b4 === 0 ? 0 : 0.85; arp = 1; }
+    else if (sc === 6) {
+      if (t < 128) { kick = s === 0 || s === 3 ? 0.8 : 0; bass = s === 0 ? 0.8 : 0; hat = s % 4 === 2 ? 0.15 : 0; }
+      else if (t < 136.9) { kick = b4 === 0 ? 1 : 0; const r = t < 132 ? 4 : t < 134.5 ? 2 : 1; sn = s % r === 0 ? 0.35 + 0.6 * (t - 128) / 9 : 0; bass = s % 2 === 0 ? 0.8 : 0; hat = s % 2 ? 0.35 : 0; }
+    }
+    else if (sc === 7) {
+      if (t < 158.4) { kick = b4 === 0 ? 1 : 0; sn = s === 4 || s === 12 || (s === 15 && bar % 2) ? 1 : 0; hat = s % 2 ? 0.5 : 0.3; bass = [1, 0.6, 0.8, 0.6][b4]; arp = t < 154 ? 1 : 0; }
+      else if (t > 160 && t < 163) { kick = s === 0 ? 0.5 : 0; }
+    }
+    if (kick) { this.k.on = 1; this.k.t = 0; this.k.g = kick; this.duck = 1; }
+    if (sn) { this.sn.on = 1; this.sn.t = 0; this.sn.g = sn; }
+    if (hat) { this.hh.on = 1; this.hh.t = 0; this.hh.g = hat; this.hh.d = (s % 4 === 2 && (sc === 5 || sc === 7)) ? 14 : 55; }
+    if (tom) { this.tm.on = 1; this.tm.t = 0; this.tm.g = tom; this.tm.f = s === 14 ? 110 : 82; }
+    if (bass) { const oc = sc === 1 && (s === 6 || s === 14) ? 12 : 0; this.bs.ft = this.mf(ch[0] + oc); this.bs.gate = sc === 2 ? 1.2 : 0.11; this.bs.t = 0; this.bs.acc = bass; }
+    if (arp) { const seq = [1, 2, 3, 4, 3, 2, 4, 1]; this.ar.f = this.mf(ch[seq[s % 8]] + 12 + (s >= 8 && sc === 5 ? 12 : 0)); this.ar.t = 0; this.ar.g = sc === 3 ? 0.45 : 0.6; }
+    for (let i = 0; i < 4; i++) this.pad[i].ft = this.mf(ch[i + 1]), this.pad[i + 4].ft = this.mf(ch[i + 1]) * 1.0035;
+    const lv = [[0.9, 0.6, 0, 0], [0.45, 0.35, 0, 0], [0.8, 0.5, 0, 0], [0.4, 0.4, 0.15, 0], [0.55, 0.45, 0, 0], [0.35, 0.5, 0, 0], [0.75, 0.45, 0, 0], [0.5, 0.5, 0.25, 0]][sc];
+    this.tl = { pad: (sc === 4 && t > 94.2 ? 0.9 : sc === 7 && t >= 154 ? 1.1 : sc === 6 && t >= 136.9 ? 1.0 : lv[0]) * (t > 163 ? Math.max(0, (166 - t) / 3) : 1), hum: lv[1] * (sc === 7 && t > 157 ? 0.2 : 1), alarm: sc === 6 && t > 133 && t < 136.9 ? 0.25 : sc === 7 && t < 155 ? lv[2] : sc === 3 ? lv[2] : 0, rise: sc === 6 && t > 128 && t < 136.9 ? (t - 128) / 9 : 0 };
+  }
+  sfxOn(e) {
+    let v = this.V.find(x => !x.on); if (!v) { v = this.V.reduce((a, b) => (a.t > b.t ? a : b)); }
+    v.on = 1; v.ty = e[1]; v.g = e[2]; v.p = e[3]; v.t = 0; v.ph = 0; v.ph2 = 0; v.f1[0] = v.f1[1] = v.f2[0] = v.f2[1] = 0;
+    v.len = [0.22, 0.4, 0.12, 1.8, 3.2, 6.5, 0.9, 0, 0, 0, 0, 0, 0.45][v.ty] || 0.5;
+  }
+  vox(v, dt) {
+    const t = v.t, ty = v.ty;
+    let x = 0;
+    const atk = Math.min(1, t / 0.002);
+    if (ty === 0) {
+      const f = 260 + 1600 * Math.exp(-t * 26);
+      v.ph = (v.ph + f / this.sr) % 1; v.ph2 = (v.ph2 + f * 0.5 / this.sr) % 1;
+      x = (this.saw(v.ph, f / this.sr) * 0.6 + (v.ph2 < 0.5 ? 0.4 : -0.4)) * Math.exp(-t * 17);
+      x = this.svf(v.f1, x, 900 + 6000 * Math.exp(-t * 20), 0.9, 0) * atk;
+    } else if (ty === 1) {
+      const f = (180 + 700 * Math.exp(-t * 12)) * (1 + 0.04 * Math.sin(t * 190));
+      v.ph = (v.ph + f / this.sr) % 1;
+      x = this.svf(v.f1, this.saw(v.ph, f / this.sr), 1800, 1.4, 0) * Math.exp(-t * 9) * atk * 0.8;
+    } else if (ty === 2) {
+      v.ph = (v.ph + 1340 / this.sr) % 1;
+      x = (this.svf(v.f1, this.vnz(v), 3200, 1.2, 1) * 1.2 + Math.sin(v.ph * 6.2832) * 0.4) * Math.exp(-t * 38) * Math.min(1, t / 0.0015);
+    } else if (ty === 3 || ty === 4 || ty === 5) {
+      const s = ty === 3 ? 1 : ty === 4 ? 0.55 : 0.32;
+      const fc = 90 + 3200 * Math.exp(-t * 3.6 * s);
+      const n = this.svf(v.f1, this.vnz(v), fc, 0.8, 0);
+      const sf = (ty === 5 ? 26 : 32) + 40 * Math.exp(-t * 7 * s);
+      v.ph = (v.ph + sf / this.sr) % 1;
+      const sub = Math.sin(v.ph * 6.2832) * Math.exp(-t * 3.2 * s) * (ty === 3 ? 0.7 : 0.95);
+      const rum = this.svf(v.f2, this.vnz(v), 70, 0.7, 0) * 3.5 * Math.exp(-t * 1.2 * s);
+      x = (n * 1.5 * Math.exp(-t * 3.4 * s) + sub + rum * (ty === 3 ? 0.3 : 1)) * Math.min(1, t / 0.004);
+      if (ty === 5) x += this.svf(v.f2, this.vnz(v), 40 + 400 * Math.exp(-t), 0.6, 0) * 0.5 * Math.sin(Math.PI * Math.min(1, t / 6.5));
+    } else if (ty === 6 || ty === 12) {
+      const L = ty === 6 ? 0.9 : 0.45, u = t / L;
+      const fc = ty === 6 ? 300 + 1600 * Math.sin(Math.PI * u) : 2400 - 1800 * u;
+      x = this.svf(v.f1, this.vnz(v), fc, 1.6, 1) * Math.sin(Math.PI * Math.min(1, u)) * (ty === 6 ? 1.2 : 0.9);
+    }
+    v.t += dt;
+    if (v.t > v.len) v.on = 0;
+    return x * v.g;
+  }
+  render(L, R, n) {
+    const sr = this.sr, dt = 1 / sr;
+    for (let i = 0; i < n; i++, this.n++) {
+      const t = this.n * dt;
+      const st = Math.floor(t / 0.125);
+      if (st !== this.step) { this.step = st; this.trig(st); }
+      while (this.ei < this.ev.length && this.ev[this.ei][0] <= t) { this.sfxOn(this.ev[this.ei]); this.ei++; }
+      const tl = this.tl, lv = this.lv;
+      lv.pad += (tl.pad - lv.pad) * 0.00008; lv.hum += (tl.hum - lv.hum) * 0.0001; lv.alarm += (tl.alarm - lv.alarm) * 0.0003; lv.rise += (tl.rise - lv.rise) * 0.001;
+      let m = 0, l = 0, r = 0, snd = 0;
+      const k = this.k;
+      if (k.on) { const f = 44 + 120 * Math.exp(-k.t * 30); k.ph = (k.ph + f * dt) % 1; m += (Math.sin(k.ph * 6.2832) * Math.exp(-k.t * 5.5) + this.nz() * 0.12 * Math.exp(-k.t * 400)) * Math.min(1, k.t / 0.0015) * k.g * 0.85; k.t += dt; if (k.t > 0.6) k.on = 0; }
+      const s = this.sn;
+      if (s.on) { s.ph = (s.ph + 188 * dt) % 1; m += (this.svf(s.f, this.nz(), 1900, 0.75, 1) * 1.1 * Math.exp(-s.t * 17) + Math.sin(s.ph * 6.2832) * 0.45 * Math.exp(-s.t * 32)) * Math.min(1, s.t / 0.001) * s.g * 0.5; s.t += dt; if (s.t > 0.35) s.on = 0; }
+      const hh = this.hh;
+      if (hh.on) { const x = this.svf(hh.f, this.nz(), 7600, 0.8, 2) * Math.exp(-hh.t * hh.d) * Math.min(1, hh.t / 0.0008) * hh.g * 0.22; l += x * 0.8; r += x * 1.1; hh.t += dt; if (hh.t > 0.4) hh.on = 0; }
+      const tm = this.tm;
+      if (tm.on) { tm.ph = (tm.ph + tm.f * (1 + Math.exp(-tm.t * 20) * 0.5) * dt) % 1; m += Math.sin(tm.ph * 6.2832) * Math.exp(-tm.t * 7) * tm.g * 0.6 * Math.min(1, tm.t / 0.002); tm.t += dt; if (tm.t > 0.6) tm.on = 0; }
+      const b = this.bs;
+      b.f += (b.ft - b.f) * 0.004;
+      b.t += dt;
+      const ge = b.t < b.gate ? 1 : Math.exp(-(b.t - b.gate) * 40);
+      b.env += ((ge * b.acc) - b.env) * (ge > b.env ? 0.02 : 0.004);
+      b.ph = (b.ph + b.f * dt) % 1; b.ph2 = (b.ph2 + b.f * 0.5 * dt) % 1;
+      let bx = this.saw(b.ph, b.f * dt) * 0.55 + Math.sin(b.ph2 * 6.2832) * 0.7;
+      bx = this.svf(b.fl, bx, 140 + 1500 * Math.exp(-b.t * 14) * b.acc, 1.1, 0);
+      const sc = this.sec(t);
+      if (sc === 2) bx = Math.tanh(bx * 2.2) * 0.7;
+      m += bx * b.env * 0.42 * (1 - this.duck * 0.4);
+      const a = this.ar;
+      if (a.g > 0) { a.ph = (a.ph + a.f * dt) % 1; let q = a.ph < 0.5 ? 1 : -1; q += this.blep(a.ph, a.f * dt) - this.blep((a.ph + 0.5) % 1, a.f * dt); const ax = this.svf(a.fl, q, 600 + 3200 * Math.exp(-a.t * 22), 1.2, 0) * Math.exp(-a.t * 9) * Math.min(1, a.t / 0.002) * a.g * 0.11; a.t += dt; l += ax; r += ax; snd += ax; }
+      let pl = 0, pr = 0;
+      for (let j = 0; j < 8; j++) { const p = this.pad[j]; p.f += (p.ft - p.f) * 0.0006; p.ph = (p.ph + p.f * dt) % 1; const x = this.saw(p.ph, p.f * dt); if (j < 4) pl += x; else pr += x; }
+      const sw = 760 + 300 * Math.sin(t * 0.21) + 200 * Math.sin(t * 0.53);
+      pl = this.svf(this.padf, pl, sw, 0.8, 0); pr = this.svf(this.pl, pr, sw * 1.05, 0.8, 0);
+      l += pl * lv.pad * 0.065 * (1 - this.duck * 0.35); r += pr * lv.pad * 0.065 * (1 - this.duck * 0.35);
+      const h = this.hum;
+      h.a = (h.a + 36.71 * dt) % 1; h.b = (h.b + 36.95 * dt) % 1;
+      const hx = this.svf(h.f, this.saw(h.a, 36.71 * dt) + this.saw(h.b, 36.95 * dt), 170, 0.9, 0) + this.svf(h.nf, this.nz(), 120, 0.7, 0) * 1.4;
+      m += hx * lv.hum * 0.16;
+      if (lv.alarm > 0.001) { const fa = (Math.floor(t * 2) % 2 ? 660 : 880); this.al.ph = (this.al.ph + fa * dt) % 1; const ax = this.svf(this.al.f, Math.sin(this.al.ph * 6.2832) + 0.3 * Math.sin(this.al.ph * 12.566), 1400, 0.7, 0) * lv.alarm * 0.06 * (0.6 + 0.4 * Math.sin(t * 12.566)); l += ax; r += ax * 0.8; }
+      if (lv.rise > 0.001) { const rx = this.svf(this.ri.f, this.nz(), 300 + 5000 * lv.rise * lv.rise, 2.0, 1) * lv.rise * 0.22; l += rx; r += rx; }
+      this.duck *= 0.9997;
+      for (const v of this.V) if (v.on) { const x = this.vox(v, dt); const p = v.p; l += x * (1 - p) * 0.5; r += x * (1 + p) * 0.5; }
+      l += m; r += m;
+      const di = this.di, dn = Math.floor(sr * 0.375), dlen = this.dl.length;
+      const rd = (di - dn + dlen) % dlen;
+      const el = this.dl[rd], er = this.dr[rd];
+      this.dl[di] = snd * 0.6 + er * 0.35 + pl * lv.pad * 0.02;
+      this.dr[di] = el * 0.35 + pr * lv.pad * 0.02 + snd * 0.15;
+      this.di = (di + 1) % dlen;
+      l += el * 0.5; r += er * 0.5;
+      this.hp[0] += (l - this.hp[0]) * 0.0033; this.hp[1] += (r - this.hp[1]) * 0.0033;
+      l -= this.hp[0]; r -= this.hp[1];
+      const pk = Math.max(Math.abs(l), Math.abs(r));
+      this.env = pk > this.env ? pk : this.env + (pk - this.env) * 0.00012;
+      const tg = this.env > 0.82 ? 0.82 / this.env : 1;
+      this.gn += (tg - this.gn) * (tg < this.gn ? 0.02 : 0.0002);
+      const li = this.li;
+      const ol = this.la[li], or = this.lb[li];
+      this.la[li] = l; this.lb[li] = r; this.li = (li + 1) & 63;
+      let yl = ol * this.gn, yr = or * this.gn;
+      yl = yl > 0.95 ? 0.95 + Math.tanh((yl - 0.95) * 8) / 8 * 0.4 : yl < -0.95 ? -0.95 - Math.tanh((-yl - 0.95) * 8) / 8 * 0.4 : yl;
+      yr = yr > 0.95 ? 0.95 + Math.tanh((yr - 0.95) * 8) / 8 * 0.4 : yr < -0.95 ? -0.95 - Math.tanh((-yr - 0.95) * 8) / 8 * 0.4 : yr;
+      L[i] = yl; R[i] = yr;
+    }
+  }
+}
+</script>
+<script type="text/plain" id="w-wk">
+class P extends AudioWorkletProcessor {
+  constructor(o) {
+    super();
+    this.s = new Synth(sampleRate, o.processorOptions.sfx);
+    this.on = false; this.sent = false;
+    this.port.onmessage = e => { if (e.data === "go") { this.s.reset(); this.on = true; this.sent = false; } else if (e.data === "stop") this.on = false; };
+  }
+  process(i, o) {
+    const out = o[0];
+    if (!this.on || !out || !out[0]) return true;
+    if (!this.sent) { this.sent = true; this.port.postMessage(currentFrame); }
+    this.s.render(out[0], out[1] || out[0], out[0].length);
+    return true;
+  }
+}
+registerProcessor("synth", P);
+</script>
+<script type="module">
+const TL = (() => {
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const len = a => Math.hypot(a[0], a[1], a[2]);
+  const norm = a => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const cl = (x, a, b) => Math.min(b, Math.max(a, x));
+  const ss = (a, b, x) => { const t = cl((x - a) / (b - a), 0, 1); return t * t * t * (t * (t * 6 - 15) + 10); };
+  const rot = (v, ax, a) => { const c = Math.cos(a), s = Math.sin(a); return add(add(mul(v, c), mul(cross(ax, v), s)), mul(ax, dot(ax, v) * (1 - c))); };
+  const hs = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  const sn = (t, k) => Math.sin(t * 1.7 + k) * 0.5 + Math.sin(t * 2.9 + k * 2.3) * 0.3 + Math.sin(t * 4.3 + k * 3.1) * 0.2;
+  class Path {
+    constructor(pts, up0, N) {
+      const P = [pts[0], pts[0], ...pts, pts[pts.length - 1], pts[pts.length - 1]];
+      const seg = P.length - 3;
+      N = N || seg * 60;
+      this.p = []; this.s = [0];
+      for (let i = 0; i <= N; i++) {
+        const u = i / N * seg, k = Math.min(Math.floor(u), seg - 1), t = u - k;
+        const a = P[k], b = P[k + 1], c = P[k + 2], d = P[k + 3];
+        const t2 = t * t, t3 = t2 * t;
+        const w0 = (1 - t) ** 3 / 6, w1 = (3 * t3 - 6 * t2 + 4) / 6, w2 = (-3 * t3 + 3 * t2 + 3 * t + 1) / 6, w3 = t3 / 6;
+        this.p.push([0, 1, 2].map(j => a[j] * w0 + b[j] * w1 + c[j] * w2 + d[j] * w3));
+        if (i) this.s.push(this.s[i - 1] + len(sub(this.p[i], this.p[i - 1])));
+      }
+      this.L = this.s[N];
+      this.T = this.p.map((q, i) => norm(sub(this.p[Math.min(i + 1, N)], this.p[Math.max(i - 1, 0)])));
+      let up = up0 || [0, 1, 0];
+      this.U = [];
+      for (let i = 0; i <= N; i++) {
+        const t = this.T[i];
+        up = norm(sub(up, mul(t, dot(up, t))));
+        this.U.push(up);
+      }
+    }
+    idx(s) { s = cl(s, 0, this.L); let lo = 0, hi = this.s.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (this.s[m] <= s) lo = m; else hi = m; } const f = (s - this.s[lo]) / Math.max(this.s[hi] - this.s[lo], 1e-6); return [lo, hi, f]; }
+    at(s) { const [a, b, f] = this.idx(s); const p = mix(this.p[a], this.p[b], f); if (s > this.L) return add(p, mul(this.T[this.T.length - 1], s - this.L)); if (s < 0) return add(p, mul(this.T[0], s)); return p; }
+    tan(s) { const [a, b, f] = this.idx(s); return norm(mix(this.T[a], this.T[b], f)); }
+    up(s) { const [a, b, f] = this.idx(s); return norm(mix(this.U[a], this.U[b], f)); }
+  }
+  const speed = (keys, t0, t1) => {
+    const dt = 1 / 240, n = Math.ceil((t1 - t0) / dt) + 2, tab = new Float64Array(n);
+    const v = t => { if (t <= keys[0][0]) return keys[0][1]; for (let i = 1; i < keys.length; i++) if (t < keys[i][0]) return keys[i - 1][1] + (keys[i][1] - keys[i - 1][1]) * ss(keys[i - 1][0], keys[i][0], t); return keys[keys.length - 1][1]; };
+    for (let i = 1; i < n; i++) { const ta = t0 + (i - 1) * dt; tab[i] = tab[i - 1] + (v(ta) + v(ta + dt)) * 0.5 * dt; }
+    return t => { const x = (cl(t, t0, t1 + 1) - t0) / dt, i = Math.min(Math.floor(x), n - 2), f = x - i; return tab[i] + (tab[i + 1] - tab[i]) * f; };
+  };
+  const SC = [
+    { t0: 0, t1: 20, n: "insertion" }, { t0: 20, t1: 42, n: "contact" }, { t0: 42, t1: 62, n: "molten" }, { t0: 62, t1: 82, n: "perimeter" },
+    { t0: 82, t1: 100, n: "takedown" }, { t0: 100, t1: 120, n: "velocity" }, { t0: 120, t1: 142, n: "core" }, { t0: 142, t1: 166, n: "egress" }
+  ];
+  const END = 166;
+  const sfx = [];
+  const S = [];
+  const elbow = [];
+  for (let k = 0; k <= 6; k++) { const a = k / 6 * Math.PI / 2; elbow.push([0, -100 - 40 * Math.sin(a), -40 + 40 * Math.cos(a)]); }
+  const lookRig = (pos, tgt, up) => ({ pos, fwd: norm(sub(tgt, pos)), up });
+  const fl = (p, f, u) => { const r = norm(cross(f, u)); return { r, u: norm(cross(r, f)) }; };
+  function combat(def) {
+    const R = def.robots.map((r, i) => Object.assign({ i, born: -1e9, dies: 1e9, hits: [] }, r));
+    const rpos = (r, t) => { const k = r.k || 0; return r.path ? r.path(t) : [r.c[0] + r.a[0] * sn(t * r.w, k), r.c[1] + r.a[1] * sn(t * r.w, k + 1.7), r.c[2] + r.a[2] * sn(t * r.w, k + 3.1)]; };
+    const shots = [], booms = [], emit = [], deb = [];
+    if (def.bind) def.bind({ R, rpos });
+    const cam = def.cam;
+    const guns = (t, sd) => { const c = cam(t); const f = fl(c.pos, c.fwd, c.up); return add(add(c.pos, mul(f.r, sd * 0.9)), add(mul(f.u, -0.55), mul(c.fwd, 0.6))); };
+    for (const s of def.fire || []) {
+      const r = R[s.r];
+      for (let k = 0; k < (s.n || 2); k++) {
+        const t = s.t + k * (s.dt || 0.16);
+        const A = guns(t, k % 2 ? 1 : -1);
+        let tt = t + 0.25, B = rpos(r, tt);
+        for (let it = 0; it < 3; it++) { tt = t + len(sub(B, A)) / 90; B = rpos(r, tt); }
+        if (s.off) B = add(B, s.off);
+        const hit = tt < r.dies + 0.05;
+        shots.push({ t, A, B, v: 90, c: 0, w: 0.11, tl: 3.2, hit, end: tt });
+        if (hit) { r.hits.push(tt); emit.push({ t: tt, p: B, d: norm(sub(A, B)), sp: 0.7, v: 9, life: 0.55, ty: 0, dur: 0.06, I: 0.5, sz: 0.035, dr: 2.0, rad: 0.2, n: 0.35 }); }
+        sfx.push([t, 0, 0.5, k % 2 ? 0.25 : -0.25]);
+        if (hit) sfx.push([tt, 2, 0.4, 0]);
+      }
+    }
+    for (const r of R) {
+      if (r.fireEvery) {
+        for (let t = Math.max(r.born + 0.8, def.t0 + (r.fireAt || 1)); t < Math.min(r.dies, def.t1 - 0.5); t += r.fireEvery) {
+          const A = add(rpos(r, t), mul(norm(sub(cam(t).pos, rpos(r, t))), r.ty === 3 ? 3.5 : 1.8));
+          const tc = t + len(sub(cam(t).pos, A)) / (r.bs || 38);
+          const c = cam(tc);
+          const f = fl(c.pos, c.fwd, c.up);
+          const mi = hs(t * 7.1 + r.i) * 6.28;
+          const miss = add(mul(f.r, Math.cos(mi) * (r.miss || 2.4)), mul(f.u, Math.sin(mi) * (r.miss || 2.4) * 0.7 + 0.6));
+          const B0 = add(c.pos, miss);
+          const dir = norm(sub(B0, A));
+          const B = add(B0, mul(dir, 24));
+          shots.push({ t, A, B, v: r.bs || 38, c: r.bc === undefined ? 1 : r.bc, w: r.bw || 0.22, tl: r.btl || 1.6, hit: false, end: t + len(sub(B, A)) / (r.bs || 38) });
+          sfx.push([t, 1, 0.3, 0]);
+          sfx.push([tc, 12, 0.35, Math.cos(mi) * 0.7]);
+        }
+      }
+      if (r.dies < 1e8) {
+        const p = rpos(r, r.dies);
+        const big = r.ty === 0 ? 1.25 : r.ty === 3 ? 3.0 : r.ty >= 4 ? 1.1 : 0.9;
+        booms.push({ t: r.dies, p, r: 3.4 * big, dur: 1.5 + 0.4 * big, I: 1.0, k: 0, seed: r.i * 3.7 + 1 });
+        emit.push({ t: r.dies, p, d: [0, 0, 0], sp: 4, v: 16 * big, life: 1.2, ty: 0, dur: 0.12, I: 0.7, sz: 0.05, dr: 1.4, rad: 0.5, n: 1 });
+        emit.push({ t: r.dies, p, d: [0, 0, 0], sp: 4, v: 5 * big, life: 1.3, ty: 3, dur: 0.25, I: 0.05, sz: 0.3 * big, dr: 1.4, rad: 0.8 * big, n: 0.35 });
+        sfx.push([r.dies, big > 1.5 ? 4 : 3, 0.9, 0]);
+        if (r.debris) for (let k = 0; k < r.debris; k++) { const a = hs(r.i * 11 + k) * 6.28, b = hs(r.i * 5 + k * 3) * 2 - 1; deb.push({ t: r.dies, p, v: mul(norm([Math.cos(a) * Math.sqrt(1 - b * b), b, Math.sin(a) * Math.sqrt(1 - b * b)]), 7 + 5 * hs(k + r.i)), s: 0.35 + 0.2 * hs(k * 7 + r.i), sh: k % 3, ax: norm([hs(k), hs(k + 1) - 0.5, hs(k + 2) - 0.5]), w: 2 + 4 * hs(k + 9) }); }
+      }
+    }
+    return { R, rpos, shots, booms, emit, deb };
+  }
+  function frameCombat(C, t, F, cpos) {
+    for (const r of C.R) {
+      if (t < r.born || t > r.dies + 0.06) continue;
+      const p = C.rpos(r, t);
+      let f = r.face ? r.face(t) : norm(sub(cpos, p));
+      const yaw = Math.atan2(f[0], f[2]), pit = Math.atan2(f[1], Math.hypot(f[0], f[2]));
+      let gl = 0;
+      for (const h of r.hits) if (t >= h) gl = Math.max(gl, Math.exp(-(t - h) * 9) * 0.8);
+      if (r.dies < 1e8) gl = Math.max(gl, ss(r.dies - 0.5, r.dies, t) * 0.9);
+      const sc = (r.scale || 1) * (r.born > -1e8 ? ss(r.born, r.born + 0.5, t) : 1) * (t > r.dies + 0.03 ? 0 : 1);
+      if (r.ty >= 4) { const v = sub(cpos, p); const vv = r.ty === 5 ? [v[0], -v[1], v[2]] : v; F.robots.push([p, r.ty, Math.atan2(vv[0], vv[2]), -Math.atan2(vv[1] - 0.95, Math.hypot(vv[0], vv[2])), sc, gl]); }
+      else F.robots.push([p, r.ty, yaw, pit, sc, gl]);
+      if (sc > 0) F.lights.push([add(p, mul(f, r.ty === 3 ? 3.4 : 1.7)), r.ty === 3 ? 12 : 6, r.ty === 3 ? [10, 0.8, 0.4] : [5, 0.35, 0.15], 1.2]);
+    }
+    for (const s of C.shots) {
+      if (t < s.t || t > s.end + 0.02) continue;
+      const D = sub(s.B, s.A), L = len(D), dir = mul(D, 1 / L);
+      const h = Math.min((t - s.t) * s.v, L), tl = Math.max(h - s.tl, 0);
+      const H = add(s.A, mul(dir, h)), T = add(s.A, mul(dir, tl));
+      const fade = s.hit ? 1 : 1 - ss(L - 8, L, h);
+      F.bolts.push([H, s.w * fade, T, s.c]);
+      F.lights.push([H, 9, s.c === 0 ? [9, 2.2, 0.8] : s.c === 4 ? [8, 1.4, 6] : s.c === 2 ? [8, 5, 1] : [1.5, 9, 2], 2 * fade]);
+      if (t - s.t < 0.07) F.lights.push([s.A, 6, [12, 4, 1.5], 3]);
+    }
+    for (const s of C.shots) if (s.hit && t >= s.end && t < s.end + 0.15) F.lights.push([s.B, 7, mul([10, 6, 2.5], 1 - (t - s.end) / 0.15), 2]);
+    for (const b of C.booms) boomFrame(b, t, F);
+    for (const e of C.emit) if (t >= e.t && t < e.t + e.dur + e.life * 1.4) F.emit.push(e);
+    for (const d of C.deb) debFrame(d, t, F);
+  }
+  function boomFrame(b, t, F) {
+    const a = (t - b.t) / b.dur;
+    if (a < 0 || a >= 1) return;
+    const r = b.r * (0.35 + 0.65 * (1 - Math.pow(1 - a, 3)));
+    const k = b.k || 0;
+    F.ex.push([b.p, r, a, b.I * (1 - a * 0.6), b.seed, k]);
+    if (k !== 2) F.lights.push([b.p, b.r * 7, mul(k === 1 ? [3, 6, 12] : [14, 6, 2], b.I * (1 - a) * (1 - a) * (b.LI || 1)), 4]);
+  }
+  function debFrame(d, t, F) {
+    const a = t - d.t;
+    if (a < 0 || a > (d.life || 4)) return;
+    const p = add(d.p, mul(d.v, (1 - Math.exp(-a * 0.5)) / 0.5));
+    F.debris.push([p, d.s, d.ax, d.w * a, Math.max(0, 1 - a * 0.45), d.sh]);
+  }
+  const shipPath1 = new Path([[30, 44, 152], [12, 37, 114], [-1, 32, 84], [-1, 26, 52], [0, 19, 25], [0, 12, 9], [0, 4, 1.5], [0, -6, 0], [0, -16, 0], [0, -55, 0], [0, -92, 0], ...elbow.slice(1), [0, -140, -70], [0, -140, -130], [0, -140, -220], [0, -140, -320], [0, -140, -480]], [0, 1, 0]);
+  const sp1 = speed([[0, 21], [7, 24], [10.5, 30], [14, 34], [17, 40], [20, 44]], 0, 20);
+  function shipAt(path, s, bank) {
+    const p = path.at(s), f = path.tan(s);
+    let u = path.up(s);
+    if (bank) u = rot(u, f, bank);
+    return { p, f, u };
+  }
+  S[0] = t => {
+    const F = blank(0, t);
+    const s = sp1(t);
+    const sh = shipAt(shipPath1, s, 0.35 * Math.sin(t * 0.7) * (1 - ss(6, 9, t)) + 0.12 * Math.sin(t * 1.3));
+    F.ship = [sh.p, sh.f, sh.u, 0.6 + 0.4 * ss(9, 12, t)];
+    const sc = Math.max(s - 9.5, 0);
+    const cp = add(shipPath1.at(sc), mul(shipPath1.up(sc), 2.6 + 0.8 * ss(6.5, 8.5, t) * (1 - ss(9.5, 11.5, t))));
+    const ct = add(shipPath1.at(s + 7), mul(shipPath1.up(s + 7), 0.9));
+    const chase = { pos: cp, tgt: ct, up: shipPath1.up(sc) };
+    const ow = [-16 + t * 1.2, 30 - t * 0.6, 100 - t * 2.2];
+    const lk = mix([0, 4, 0], sh.p, 0.15 + 0.45 * ss(3.0, 6.0, t));
+    const est = { pos: ow, tgt: lk, up: [0, 1, 0] };
+    const w = ss(4.6, 9.2, t);
+    const pos = mix(est.pos, chase.pos, w), tgt = mix(est.tgt, chase.tgt, w), up = norm(mix(est.up, chase.up, w));
+    F.cam = lookRig(pos, tgt, up);
+    F.fov = 0.62 - 0.06 * ss(4, 9, t) + 0.05 * ss(14, 19, t);
+    F.sun = [0.75, 0.42, -0.5, 0]; F.sunc = [1.7, 1.25, 0.95, 1];
+    F.amb = [0.05, 0.055, 0.075, 0]; F.fog = [0.012, 0.012, 0.018, 0.0012];
+    F.P[28] = 1; F.P[29] = 1; F.P[30] = 0.6 + 0.4 * Math.sin(t * 3.1); F.P[31] = 1;
+    shaftLights(F, pos, t, 1, 1);
+    F.lights.push([add(sh.p, mul(sh.f, -2.2)), 14, mul([2, 3.5, 8], F.ship[3]), 1]);
+    F.shake = 0.05 * ss(8, 9.5, t) * (1 - ss(11, 13, t)) + 0.02;
+    F.blur = 0.35;
+    return F;
+  };
+  function shaftLights(F, cpos, t, wi, red) {
+    for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + k * Math.PI / 2; F.lights.push([[Math.cos(a) * 17.2, 17.5, Math.sin(a) * 17.2], 46, mul([16, 10, 5], wi), 2]); }
+    for (let k = 0; k < 4; k++) { const y = -(4 + 24 * k); F.lights.push([[0, y, 0], 24, mul([8, 9.5, 12], wi), 1]); }
+    const s = (-40 - cpos[2]);
+    const k0 = Math.floor(Math.max(s - 3.168, 0) / 16);
+    for (let k = k0 - 1; k <= k0 + 4; k++) { if (k < 0) continue; const z = -40 - (3.168 + 16 * k); F.lights.push([[0, -140 + RS - 1.4, z], 20, mul([7, 8, 10], wi * (k % 3 === 2 && red < 1 ? 0.35 + 0.65 * Math.max(0, Math.sin(t * 9 + k)) : 1)), 1]); }
+    for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + k * Math.PI / 2; F.lights.push([[Math.cos(a) * 25, 24.2, Math.sin(a) * 25], 10, mul([10, 0.5, 0.2], F.P[30]), 1]); }
+  }
+  const RS = 11;
+  function blank(sc, t) {
+    return { sc, t, st: t - SC[sc].t0, cam: null, fov: 0.6, lights: [], robots: [], bolts: [], ex: [], debris: [], emit: [], ship: null, fx: [0, 0, 0, 0], fog: [0, 0, 0, 0], amb: [0.02, 0.02, 0.025, 0], sun: [0, 1, 0, 0], sunc: [0, 0, 0, 0], P: new Float32Array(32), shake: 0, blur: 0.3, key: false, bloom: 0.06, expo: 1, vig: 0.35 };
+  }
+  const p2 = new Path([[0, 0, 125], [0, 0, 98], [0, 0.4, 72], [0.4, 1, 50], [-3, 2.5, 30], [-12, 4, 15], [-19, 3, 0], [-18, -1, -14], [-9, -7, -21], [-4, -16, -17], [5, -21, -10], [13, -17, 1], [15, -6, 9], [9, 4, 17], [-4, 8, 19], [-17, 7, 9], [-26, 6, 1], [-40, 6, 0], [-60, 6, 0], [-95, 6, 0]]);
+  const sp2 = speed([[20, 20], [23, 17], [25, 11], [30, 10], [34, 12], [38, 15], [40, 24], [42, 30]], 20, 42);
+  const look2 = [[20, -1], [23.0, -1], [23.6, 0], [25.6, 0], [26.4, 1], [28.4, 1], [28.8, 5], [31.2, 5], [31.7, 2], [33.4, 2], [34.0, 3], [35.6, 3], [36.4, -1], [37.6, -1], [37.9, 4], [39.2, 4], [39.8, -1]];
+  function aimCam(path, spf, looks, C, t, opts) {
+    const s = spf(t);
+    const pos = path.at(s);
+    const tg = path.tan(s);
+    let fwd = norm(add(tg, mul(path.tan(s + 6), 0.6)));
+    let wsum = 0, aim = [0, 0, 0];
+    for (let i = 0; i < looks.length - 1; i++) {
+      const [ta, ra] = looks[i], [tb, rb] = looks[i + 1];
+      if (ra >= 0 && ra === rb) {
+        const w = ss(ta - 0.45, ta + 0.05, t) * (1 - ss(tb - 0.05, tb + 0.45, t));
+        if (w > 0) { const r = C.R[ra]; const rp = C.rpos(r, Math.min(t, r.dies)); aim = add(aim, mul(norm(sub(rp, pos)), w)); wsum += w; }
+      }
+    }
+    if (wsum > 0) fwd = norm(add(mul(fwd, 1 - Math.min(wsum, 1) * 0.85), mul(norm(aim), Math.min(wsum, 1) * 0.85)));
+    const a0 = path.tan(s - 4), a1 = path.tan(s + 4);
+    const lat = dot(cross(a0, a1), [0, 1, 0]);
+    const bank = cl(-lat * (opts && opts.bk || 1.4), -0.42, 0.42);
+    let up = [0, 1, 0];
+    up = norm(sub(up, mul(fwd, dot(up, fwd))));
+    up = rot(up, fwd, bank + (opts && opts.roll ? opts.roll(t) : 0));
+    return { pos, fwd, up };
+  }
+  let C2;
+  const cam2 = t => aimCam(p2, sp2, look2, C2, t);
+  C2 = combat({
+    bind: c => { C2 = c; }, t0: 20, t1: 42, cam: cam2,
+    robots: [
+      { ty: 1, c: [-12, 5, -6], a: [3, 2, 3], w: 0.7, k: 1, dies: 26.0, fireEvery: 1.3, fireAt: 3.6 },
+      { ty: 1, c: [10, 2, -14], a: [3, 2, 2], w: 0.8, k: 2, dies: 31.0, fireEvery: 1.5, fireAt: 4.4 },
+      { ty: 0, c: [3, -27, -4], a: [2, 1.2, 2], w: 0.5, k: 3, dies: 35.4, fireEvery: 1.1, fireAt: 9, bc: 2, bw: 0.3, debris: 3 },
+      { ty: 1, c: [14, -13, 14], a: [2, 2, 2], w: 0.9, k: 4, dies: 37.5, fireEvery: 1.4, fireAt: 12 },
+      { ty: 0, c: [-27, 9, -10], a: [2, 1.2, 1.5], w: 0.5, k: 5, dies: 39.1, fireEvery: 1.2, fireAt: 13, bc: 2, bw: 0.3, debris: 3 },
+      { ty: 2, c: [22, 13, -18], a: [2, 2, 2], w: 0.6, k: 6, dies: 33.2, fireEvery: 1.6, fireAt: 6 }
+    ],
+    fire: [{ t: 24.4, r: 0, n: 2 }, { t: 25.3, r: 0, n: 2 }, { t: 27.0, r: 5, n: 2, off: [0, 2.5, 0] }, { t: 29.6, r: 1, n: 2 }, { t: 30.4, r: 1, n: 2 }, { t: 32.5, r: 5, n: 2 }, { t: 33.8, r: 2, n: 2 }, { t: 34.4, r: 2, n: 2 }, { t: 34.9, r: 2, n: 2 }, { t: 36.7, r: 3, n: 2 }, { t: 38.2, r: 4, n: 2 }, { t: 38.7, r: 4, n: 2 }]
+  });
+  S[1] = t => {
+    const F = blank(1, t);
+    F.cam = cam2(t);
+    F.amb = [0.05, 0.055, 0.065, 0]; F.fog = [0.006, 0.007, 0.01, 0.006];
+    F.P[28] = 1; F.P[29] = 1; F.P[30] = 1; F.P[31] = 1;
+    for (let k = 0; k < 8; k++) { if (k === 2 || k === 4) continue; const a = k * Math.PI / 4; F.lights.push([[Math.cos(a) * 36.2, 3, Math.sin(a) * 36.2], 34, [6, 3.8, 1.8], 1]); }
+    F.lights.push([[0, 33, 0], 64, [9, 10, 13], 1]);
+    F.lights.push([[0, -33, 0], 56, [5, 6, 8], 1]);
+    F.lights.push([[0, -18, 0], 30, [3, 4, 6], 1]);
+    F.lights.push([[0, 0, 62], 30, [5, 5.5, 7], 1]);
+    frameCombat(C2, t, F, F.cam.pos);
+    F.shake = 0.02;
+    return F;
+  };
+  const c3 = z => [14 * Math.sin(z * 0.018) + 4 * Math.sin(z * 0.043 + 2), 4 * Math.sin(z * 0.031 + 1.3)];
+  const pts3 = [];
+  for (let z = 30; z >= -560; z -= 10) {
+    const c = c3(z);
+    const zc = Math.round(z / 55), side = ((zc % 2) + 2) % 2 === 1 ? 1 : -1;
+    const near = Math.exp(-Math.pow((z - zc * 55) / 22, 2));
+    const bi = Math.round((z + 40) / 140), upper = ((bi % 2) + 2) % 2 === 1;
+    const nb = Math.exp(-Math.pow((z - (bi * 140 - 40)) / 26, 2));
+    pts3.push([c[0] - side * near * 3.2 + 2.5 * Math.sin(z * 0.05), c[1] + 0.6 + (upper ? -1.2 : 1.1) * nb + 0.8 * Math.sin(z * 0.07), z]);
+  }
+  const p3 = new Path(pts3);
+  const sp3 = speed([[42, 22], [46, 26], [52, 24], [55, 20], [58, 28], [62, 32]], 42, 62);
+  let C3;
+  const cam3 = t => aimCam(p3, s => sp3(s) + 10, [[42, -1], [55.8, -1], [56.3, 0], [57.6, 0], [58.2, -1]], C3, t, { bk: 2.0 });
+  C3 = combat({
+    bind: c => { C3 = c; }, t0: 42, t1: 62, cam: cam3,
+    robots: [{ ty: 1, path: t => { const c = cam3(Math.min(t + 2.4, 63)).pos; return [c[0] + 8.0 - (t - 55) * 1.8, c[1] + 1.5, c[2] - 16]; }, born: 55.0, dies: 57.4, fireEvery: 0.8, fireAt: 13.3 }],
+    fire: [{ t: 56.5, r: 0, n: 2 }, { t: 57.0, r: 0, n: 2 }]
+  });
+  S[2] = t => {
+    const F = blank(2, t);
+    F.cam = cam3(t);
+    F.amb = [0.025, 0.012, 0.008, 0]; F.fog = [0.022, 0.008, 0.003, 0.0065];
+    F.fx[1] = 1;
+    const z0 = F.cam.pos[2];
+    const k0 = Math.round(z0 / 22);
+    for (let k = k0 + 2; k >= k0 - 5; k--) { const z = k * 22, c = c3(z); F.lights.push([[c[0] + 3 * Math.sin(k * 1.7), c[1] - 5.2, z], 34, [6, 1.5, 0.28], 1]); }
+    F.lights.push([add(F.cam.pos, [0, 0.5, 0]), 30, [3, 3.2, 3.6], 1]);
+    for (let k = 0; k < 4; k++) {
+      const z = -60 - k * 120;
+      F.emit.push({ t: 42, p: [c3(z)[0], c3(z)[1] - 5, z], d: [0, 1, 0], sp: 0.4, v: 0.5, life: 6, ty: 1, dur: 20, I: 0.5, sz: 0.06, dr: 0.5, rad: 22, n: 1 });
+    }
+    const gz = [-150, -300, -420];
+    gz.forEach((z, i) => { const tg = 42 + [5.2, 11.4, 16.0][i]; const c = c3(z); if (t > tg - 0.1 && t < tg + 3) { F.emit.push({ t: tg, p: [c[0] + (i % 2 ? 7 : -7), c[1] - 6.3, z], d: [0, 1, 0], sp: 0.35, v: 15, life: 1.6, ty: 3, dur: 0.6, I: 0.6, sz: 0.4, dr: 0.8, rad: 1.5, n: 1 }); F.lights.push([[c[0] + (i % 2 ? 7 : -7), c[1] - 3, z], 30, mul([30, 9, 2], Math.max(0, 1 - (t - tg) / 2.5)), 2]); } });
+    frameCombat(C3, t, F, F.cam.pos);
+    F.shake = 0.03;
+    F.P[28] = 1; F.P[29] = 1; F.P[30] = 1; F.P[31] = 1;
+    return F;
+  };
+  const p4 = new Path([[0, -4, 44], [0, -4, 22], [0, -3, 4], [-4, 0, -10], [-14, 3, -26], [-19, 4, -40], [-17, 2, -54], [-9, -2, -66], [0, -6, -78], [8, -9, -90], [16, -9, -102], [18, -5, -114], [12, 0, -126], [4, 2, -138], [0, 1, -150], [0, 0, -166], [0, 0, -190], [0, 0, -220]]);
+  const sp4 = speed([[62, 22], [64, 17], [66, 11], [72, 10], [76, 11], [79, 18], [82, 28]], 62, 82);
+  const look4 = [[62, -1], [64.6, -1], [65.0, 2], [66.2, 2], [66.8, 6], [68.2, 6], [68.8, 4], [70.0, 4], [70.5, 3], [71.6, 3], [72.2, 7], [74.3, 7], [74.9, 0], [77.2, 0], [77.8, -1]];
+  let C4;
+  const cam4 = t => aimCam(p4, sp4, look4, C4, t, { roll: t => 0.5 * ss(67, 69, t) * (1 - ss(70.5, 72.5, t)) });
+  C4 = combat({
+    bind: c => { C4 = c; }, t0: 62, t1: 82, cam: cam4,
+    robots: [
+      { ty: 0, c: [-3, 0, -66], a: [3, 2, 3], w: 0.4, k: 1, dies: 77.0, fireEvery: 1.0, fireAt: 3, bc: 2, bw: 0.3, debris: 3 },
+      { ty: 0, c: [9, -6, -132], a: [3, 2, 2], w: 0.5, k: 2, fireEvery: 1.3, fireAt: 9, bc: 2, bw: 0.3 },
+      { ty: 1, c: [-6, 4, -24], a: [3, 2, 3], w: 0.9, k: 3, dies: 66.0, fireEvery: 1.2, fireAt: 1.2 },
+      { ty: 2, c: [14, 6, -58], a: [2, 2, 2], w: 0.7, k: 4, dies: 71.4, fireEvery: 1.4, fireAt: 4 },
+      { ty: 5, c: [-14, 14.6, -40], a: [0, 0, 0], w: 0, k: 0, dies: 68.0, fireEvery: 0.6, fireAt: 2.4, bc: 2, bs: 50, miss: 3.2 },
+      { ty: 5, c: [14, 14.6, -100], a: [0, 0, 0], w: 0, k: 0, fireEvery: 0.7, fireAt: 8, bc: 2, bs: 50, miss: 3.4 },
+      { ty: 4, c: [-18, -14.6, -70], a: [0, 0, 0], w: 0, k: 0, dies: 74.1, fireEvery: 0.65, fireAt: 4, bc: 2, bs: 50, miss: 3.0 },
+      { ty: 1, c: [-12, -6, -108], a: [3, 2, 2], w: 0.8, k: 7, fireEvery: 1.3, fireAt: 9 }
+    ],
+    fire: [{ t: 64.9, r: 2, n: 2 }, { t: 65.5, r: 2, n: 2 }, { t: 67.0, r: 4, n: 2 }, { t: 67.5, r: 4, n: 2 }, { t: 69.0, r: 3, n: 2, off: [0, 3, 0] }, { t: 70.6, r: 3, n: 2 }, { t: 72.3, r: 6, n: 2 }, { t: 72.9, r: 6, n: 2 }, { t: 73.5, r: 6, n: 2 }, { t: 75.2, r: 0, n: 2 }, { t: 75.8, r: 0, n: 2 }, { t: 76.4, r: 0, n: 2 }]
+  });
+  S[3] = t => {
+    const F = blank(3, t);
+    F.cam = cam4(t);
+    F.amb = [0.04, 0.04, 0.045, 0]; F.fog = [0.01, 0.009, 0.009, 0.005];
+    const al = 0.5 + 0.5 * Math.sin(t * 4.2);
+    F.P[28] = 0.8; F.P[29] = 1; F.P[30] = 0.25 + 0.75 * al; F.P[31] = 1;
+    const z0 = F.cam.pos[2];
+    for (let k = 0; k < 8; k++) { const z = -20 * k; if (Math.abs(z - z0) > 50) continue; for (const sx of [-1, 1]) F.lights.push([[sx * 32.5, 7.5, z - 10], 30, [16, 9, 3.5], 1]); }
+    for (let k = 0; k < 8; k++) { const z = -10 - 20 * k; if (Math.abs(z - z0) > 34) continue; for (const sx of [-1, 1]) F.lights.push([[sx * 24.5, 4, z], 16, mul([12, 0.6, 0.3], 0.2 + 0.8 * al), 1]); }
+    for (let k = 0; k <= 7; k++) { const z = -20 * k; if (Math.abs(z - z0) > 25) continue; for (const sx of [-1, 1]) F.lights.push([[sx * 13, 10.6, z], 34, [7, 7.8, 9.5], 1.3]); }
+    for (let z = -164; z > -330; z -= 16) { if (Math.abs(z - z0) > 40) continue; F.lights.push([[0, 5.6, z], 18, [7, 6.5, 5.5], 1]); }
+    F.P[31] = 0.35;
+    frameCombat(C4, t, F, F.cam.pos);
+    F.shake = 0.025;
+    return F;
+  };
+  const p5 = new Path([[0, 0, 46], [0, 0, 30], [1, 0, 18], [8, 1, 10], [15, 3, 0], [16, 4, -10], [10, 3, -17], [0, 1, -19], [-10, -1, -16], [-17, -2, -7], [-18, -1, 4], [-12, 1, 13], [-2, 2, 17], [9, 1, 14], [16, -1, 4], [14, -2, -8], [6, -2, -16], [0, -2, -24], [0, -2, -40], [0, -2, -70]]);
+  const sp5 = speed([[82, 18], [85, 12], [90, 11], [94, 9], [96, 12], [98, 22], [100, 30]], 82, 100);
+  const bossP = t => { const a = (t - 82) * 0.42 + 1.2; return [Math.cos(a) * 7, 2 + 2.5 * Math.sin(t * 0.8), Math.sin(a) * 7 - 1]; };
+  let C5;
+  const look5 = [[82, -1], [83.2, -1], [83.8, 0], [96.4, 0], [97.8, -1]];
+  const cam5 = t => aimCam(p5, sp5, look5, C5, t, { bk: 1.2 });
+  C5 = combat({
+    bind: c => { C5 = c; }, t0: 82, t1: 100, cam: cam5,
+    robots: [{ ty: 3, path: bossP, dies: 94.2, fireEvery: 0.55, fireAt: 2.2, bc: 4, bw: 0.32, bs: 34, miss: 2.8, btl: 2.2 }],
+    fire: [86.2, 87.1, 88.4, 89.2, 90.5, 91.3, 92.1, 92.8, 93.4, 93.9].map(t => ({ t, r: 0, n: 2 }))
+  });
+  C5.booms.length = 0; C5.emit.length = 0;
+  sfx.splice(sfx.findIndex(e => e[0] === 94.2 && e[1] >= 3), 1);
+  const bk = { p: bossP(94.2) };
+  C5.booms.push({ t: 94.2, p: bk.p, r: 6, dur: 2.2, I: 0.6, k: 0, seed: 4.2 });
+  C5.booms.push({ t: 94.25, p: bk.p, r: 3.2, dur: 0.7, I: 0.8, k: 1, seed: 1.7, LI: 0.6 });
+  C5.booms.push({ t: 94.2, p: bk.p, r: 40, dur: 1.4, I: 0.9, k: 2, seed: 0 });
+  for (let k = 0; k < 4; k++) C5.booms.push({ t: 92.6 + k * 0.38, p: add(bossP(92.6 + k * 0.38), [Math.sin(k * 2.1) * 1.6, Math.cos(k * 1.3) * 1.4, 1]), r: 1.6, dur: 0.6, I: 0.8, k: 0, seed: k * 1.3 });
+  C5.emit.push({ t: 94.2, p: bk.p, d: [0, 0, 0], sp: 4, v: 26, life: 1.8, ty: 0, dur: 0.15, I: 0.9, sz: 0.07, dr: 1.0, rad: 1.2, n: 1 });
+  C5.emit.push({ t: 94.2, p: bk.p, d: [0, 0, 0], sp: 4, v: 14, life: 2.2, ty: 0, dur: 0.35, I: 0.6, sz: 0.05, dr: 0.8, rad: 2.0, n: 1 });
+  C5.emit.push({ t: 94.2, p: bk.p, d: [0, 0, 0], sp: 4, v: 4, life: 1.6, ty: 3, dur: 0.3, I: 0.0, sz: 0.45, dr: 1.4, rad: 1.5, n: 1 });
+  C5.emit.push({ t: 92.4, p: bk.p, d: [0, 1, 0], sp: 2, v: 6, life: 0.8, ty: 0, dur: 1.8, I: 0.4, sz: 0.04, dr: 1.0, rad: 1.6, n: 1, follow: bossP });
+  for (let k = 0; k < 8; k++) {
+    const a = k / 8 * 6.28 + 0.4, b = Math.sin(k * 2.4) * 0.6;
+    C5.deb.push({ t: 94.2, p: bk.p, v: mul(norm([Math.cos(a), b, Math.sin(a)]), 9 + 5 * hs(k)), s: 0.6 + 0.35 * hs(k + 3), sh: k % 3, ax: norm([hs(k + 1) - 0.5, hs(k + 2) - 0.5, hs(k + 4) - 0.5]), w: 1.5 + 2.5 * hs(k + 7), life: 5.8 });
+  }
+  sfx.push([94.2, 4, 1.0, 0]);
+  for (let k = 0; k < 4; k++) sfx.push([92.6 + k * 0.38, 3, 0.45, 0]);
+  S[4] = t => {
+    const F = blank(4, t);
+    F.cam = cam5(t);
+    F.amb = [0.035, 0.038, 0.048, 0]; F.fog = [0.008, 0.006, 0.009, 0.006];
+    F.P[28] = 1; F.P[29] = 1; F.P[30] = 1; F.P[31] = 0.6 + 0.4 * Math.sin(t * 2);
+    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; F.lights.push([[Math.cos(a) * 17, 17.5, Math.sin(a) * 17], 38, [14, 15, 19], 1]); }
+    F.lights.push([[0, -15, 0], 30, [3, 9, 12], 1]);
+    for (const e of C5.emit) if (e.follow && t >= e.t && t < 94.2) e.p = e.follow(t);
+    frameCombat(C5, t, F, F.cam.pos);
+    const bp = bossP(Math.min(t, 94.2));
+    if (t < 94.2) F.lights.push([add(bp, [0, 0, 0]), 16, [9, 1, 1], 1]);
+    const k = t - 94.2;
+    F.fx[0] = k > 0 ? 0.16 * Math.exp(-k * 4.5) : 0;
+    F.shake = 0.02 + (k > 0 ? 0.5 * Math.exp(-k * 1.6) : 0);
+    F.blur = 0.4;
+    F.bloom = 0.07;
+    return F;
+  };
+  const c6 = z => [9 * Math.sin(z * 0.021) + 4 * Math.sin(z * 0.047 + 1), 6 * Math.sin(z * 0.017 + 1) + 3 * Math.sin(z * 0.053)];
+  const sp6 = speed([[100, 34], [103, 46], [108, 56], [113, 64], [117, 70], [120, 72]], 100, 120);
+  const zr6 = t => 40 - sp6(t);
+  const roll6 = t => 6.2832 * ss(103.6, 105.7, t) - 6.2832 * ss(110.6, 112.9, t) + 3.1416 * ss(116.4, 117.8, t) - 3.1416 * ss(118.4, 119.8, t);
+  const cam6 = t => {
+    const z = zr6(t);
+    const pos = [...c6(z), z];
+    const z2 = z - 9;
+    const tgt = [...c6(z2), z2];
+    const fwd = norm(sub(tgt, pos));
+    const th = z * 0.012;
+    let up = [Math.sin(th), Math.cos(th), 0];
+    up = norm(sub(up, mul(fwd, dot(up, fwd))));
+    return { pos, fwd, up: rot(up, fwd, roll6(t)) };
+  };
+  let C6;
+  const zd = zr6(115.9);
+  C6 = combat({
+    bind: c => { C6 = c; }, t0: 100, t1: 120, cam: cam6,
+    robots: [
+      { ty: 1, path: t => [c6(zd - 14)[0] + 0.5, c6(zd - 14)[1], zd - 14 - (t - 113) * 6], born: 113.0, dies: 115.25, fireEvery: 0.7, fireAt: 13.4 },
+      { ty: 2, path: t => [c6(zr6(108.4) - 24)[0] - 0.5, c6(zr6(108.4) - 24)[1] + 0.5, zr6(108.4) - 24 - (t - 106) * 4], born: 106.0, dies: 108.2, fireEvery: 0.8, fireAt: 6.4 }
+    ],
+    fire: [{ t: 107.5, r: 1, n: 2 }, { t: 107.85, r: 1, n: 2 }, { t: 114.6, r: 0, n: 2 }, { t: 114.95, r: 0, n: 2 }]
+  });
+  S[5] = t => {
+    const F = blank(5, t);
+    F.cam = cam6(t);
+    F.amb = [0.012, 0.014, 0.02, 0]; F.fog = [0.002, 0.003, 0.005, 0.012];
+    F.P[28] = 1.2; F.P[29] = 1; F.P[30] = 1; F.P[31] = 1;
+    const z0 = F.cam.pos[2];
+    const k0 = Math.round(z0 / 12);
+    for (let k = k0 + 1; k >= k0 - 5; k--) { const z = k * 12; const c = c6(z); F.lights.push([[c[0], c[1], z], 10, [4.5, 5.5, 7.5], 1]); }
+    for (let k = Math.round((z0 - 30) / 96) + 1; k >= Math.round((z0 - 30) / 96) - 2; k--) { const z = k * 96 + 30; const c = c6(z); F.lights.push([[c[0], c[1] - 1, z], 14, [11, 6, 1.5], 1]); }
+    frameCombat(C6, t, F, F.cam.pos);
+    F.shake = 0.03 + 0.03 * ss(108, 118, t);
+    F.blur = 0.75;
+    F.fov = 0.66 + 0.06 * ss(104, 116, t);
+    return F;
+  };
+  const orb7 = new Path((() => { const a = []; a.push([0, -6, 72], [0, -6, 56], [0, -5, 40]); for (let k = 0; k <= 14; k++) { const ang = Math.PI / 2 - k / 14 * Math.PI * 2.3; const r = 28 + 3 * Math.sin(k * 0.9); a.push([Math.cos(ang) * r, -3 + 7 * Math.sin(k * 0.55), Math.sin(ang) * r]); } return a; })());
+  const sp7 = speed([[120, 18], [123, 13], [126, 12], [132, 13], [135, 15], [137, 9], [139, 3], [142, 0]], 120, 142);
+  const look7 = [[120, -1], [124.0, -1], [124.4, 0], [125.6, 0], [126.2, -1], [127.4, -1], [127.7, 1], [128.7, 1], [129.2, -1], [131.0, -1], [131.3, 2], [132.4, 2], [132.9, -1]];
+  let C7;
+  C7 = combat({
+    bind: c => { C7 = c; }, t0: 120, t1: 142, cam: t => cam7(t),
+    robots: [
+      { ty: 2, c: [-18, 8, 18], a: [3, 2, 3], w: 0.7, k: 1, dies: 125.6, fireEvery: 1.1, fireAt: 2.4 },
+      { ty: 2, c: [26, -2, -2], a: [2, 3, 3], w: 0.6, k: 2, dies: 128.7, fireEvery: 1.2, fireAt: 3.4 },
+      { ty: 1, c: [-6, 14, -26], a: [3, 2, 2], w: 0.8, k: 3, dies: 132.4, fireEvery: 1.2, fireAt: 6 }
+    ],
+    fire: [{ t: 124.6, r: 0, n: 2 }, { t: 125.1, r: 0, n: 2 }, { t: 127.8, r: 1, n: 2 }, { t: 128.2, r: 1, n: 2 }, { t: 131.5, r: 2, n: 2 }, { t: 131.9, r: 2, n: 2 }]
+  });
+  const core7 = [[129.6, 2], [130.3, 2], [133.4, 3], [134.2, 3], [134.8, 3], [135.4, 3]];
+  const coreShots = [];
+  for (const [tt, n] of core7) for (let k = 0; k < n; k++) coreShots.push(tt + k * 0.15);
+  function cam7(t) {
+    const base = aimCam(orb7, sp7, look7, C7, t, { bk: 0.8 });
+    const s = sp7(t);
+    const pos = orb7.at(s);
+    const toC = norm(sub([0, 0, 0], pos));
+    let w = ss(126.5, 128.5, t) * 0.55 + ss(129.0, 129.8, t) * 0.35 - ss(130.6, 131.2, t) * 0.35 + ss(133.0, 133.6, t) * 0.4;
+    w = cl(w, 0, 0.92);
+    for (let i = 0; i < look7.length - 1; i++) if (look7[i][1] >= 0 && look7[i][1] === look7[i + 1][1] && t > look7[i][0] - 0.4 && t < look7[i + 1][0] + 0.4) w *= 0.3;
+    let fwd = norm(mix(base.fwd, toC, w));
+    const pull = ss(136.8, 139.5, t);
+    fwd = norm(mix(fwd, toC, pull * 0.9));
+    let up = norm(sub([0, 1, 0], mul(fwd, dot([0, 1, 0], fwd))));
+    return { pos: add(pos, mul(toC, -6 * pull)), fwd, up };
+  }
+  coreShots.forEach((tt, k) => {
+    const sd = k % 2 ? 1 : -1;
+    const c = cam7(tt);
+    const f = fl(c.pos, c.fwd, c.up);
+    const A = add(add(c.pos, mul(f.r, sd * 0.9)), add(mul(f.u, -0.55), mul(c.fwd, 0.6)));
+    const B = mul(norm(sub(A, [0, 0, 0])), 6.6);
+    const end = tt + len(sub(B, A)) / 90;
+    C7.shots.push({ t: tt, A, B, v: 90, c: 0, w: 0.11, tl: 3.2, hit: true, end });
+    C7.emit.push({ t: end, p: B, d: norm(sub(A, B)), sp: 0.8, v: 10, life: 0.6, ty: 2, dur: 0.06, I: 0.6, sz: 0.04, dr: 2, rad: 0.2, n: 0.4 });
+    sfx.push([tt, 0, 0.5, sd * 0.25]);
+    sfx.push([end, 2, 0.4, 0]);
+  });
+  C7.booms.push({ t: 136.9, p: [0, 0, 0], r: 46, dur: 4.6, I: 1.6, k: 1, seed: 2.2 });
+  C7.booms.push({ t: 136.9, p: [0, 0, 0], r: 60, dur: 1.8, I: 1.2, k: 2, seed: 0 });
+  C7.booms.push({ t: 137.3, p: [0, 0, 0], r: 22, dur: 3.2, I: 1.4, k: 0, seed: 5.1 });
+  C7.emit.push({ t: 136.9, p: [0, 0, 0], d: [0, 0, 0], sp: 4, v: 34, life: 2.4, ty: 2, dur: 0.4, I: 0.9, sz: 0.08, dr: 0.7, rad: 5, n: 1 });
+  C7.emit.push({ t: 136.95, p: [0, 0, 0], d: [0, 0, 0], sp: 4, v: 22, life: 2.4, ty: 0, dur: 0.6, I: 0.8, sz: 0.06, dr: 0.7, rad: 5, n: 1 });
+  sfx.push([136.9, 5, 1.0, 0]);
+  S[6] = t => {
+    const F = blank(6, t);
+    F.cam = cam7(t);
+    const en = ss(124, 136.5, t);
+    F.fx[2] = en;
+    F.amb = [0.02, 0.026, 0.034, 0]; F.fog = [0.004, 0.008, 0.012, 0.005];
+    F.P[28] = 1 - 0.5 * ss(134, 137, t); F.P[29] = 1; F.P[30] = 0.5 + 0.5 * Math.sin(t * 5); F.P[31] = 1 + en;
+    for (let i = 0; i < 3; i++) { F.P[i * 4] = t * (0.35 + i * 0.17) * (1 + en * 1.6) + i * 2.1; F.P[i * 4 + 1] = 0.6 + i * 0.7 + t * 0.21 * (i - 1); }
+    const pu = 0.5 + 0.5 * Math.sin(t * (2 + en * 9));
+    F.lights.push([[0, 0, 0], 70, mul(mix([4, 12, 20], [30, 12, 5], en), (1 + 1.5 * en) * (0.85 + 0.3 * pu)), 1]);
+    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + 0.2618; F.lights.push([[Math.cos(a) * 20, 0, Math.sin(a) * 20], 16, mul([2, 6, 14], 0.6 + en), 1]); }
+    F.lights.push([[0, 0, 50], 30, [8, 9, 11], 1]);
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; F.lights.push([[Math.cos(a) * 40, 20, Math.sin(a) * 40], 40, [8, 9, 12], 1]); }
+    const na = 2 + Math.floor(en * 4.99);
+    for (let j = 0; j < na; j++) {
+      const ph = Math.floor(t * 2.2 + j * 0.37);
+      const tl = t * 2.2 + j * 0.37 - ph;
+      const life = Math.sin(Math.PI * cl(tl / 0.7, 0, 1));
+      if (life <= 0) continue;
+      const pk = Math.floor(hs(ph * 3 + j) * 6);
+      const a = pk * Math.PI / 3 + 0.2618;
+      const P0 = mul(norm([Math.cos(a), (hs(ph + j * 7) - 0.5) * 0.6, Math.sin(a)]), 6.6);
+      const P3 = [Math.cos(a) * 18.6, (hs(ph * 5 + j) - 0.5) * 30, Math.sin(a) * 18.6];
+      let prev = P0;
+      for (let q = 1; q <= 4; q++) {
+        const f = q / 4;
+        let P = mix(P0, P3, f);
+        if (q < 4) P = add(P, mul([Math.sin(t * 7 + q * 2 + j), Math.sin(t * 6.1 + q * 3.3 + j * 2), Math.cos(t * 6.7 + q + j)], 2.2 * Math.sin(Math.PI * f)));
+        F.bolts.push([P, 0.07 * life * (0.6 + en), prev, 3]);
+        prev = P;
+      }
+      F.lights.push([mix(P0, P3, 0.5), 14, mul([3, 6, 14], life), 1]);
+    }
+    frameCombat(C7, t, F, F.cam.pos);
+    const k = t - 136.9;
+    F.fx[0] = k > 0 ? Math.min(1.2, 0.6 * Math.exp(-k * 1.4) + ss(3.9, 5.0, k) * 1.2) : 0.06 * ss(134, 136.8, t) * pu;
+    F.shake = 0.02 + 0.08 * en * en + (k > 0 ? 0.8 * Math.exp(-k * 0.9) : 0);
+    F.bloom = 0.06 + 0.03 * en;
+    F.fov = 0.6 + 0.04 * ss(136.8, 139, t);
+    return F;
+  };
+  const p8pts = [[0, -140, -620], [0, -140, -470], [0, -140, -300], [0, -140, -160], [0, -140, -70], ...elbow.slice().reverse().slice(0, 6), [0, -92, 0], [0, -55, 0], [0, -16, 0], [0, 10, -1], [-3, 36, -9], [-12, 70, -28], [-30, 120, -66], [-60, 190, -128], [-110, 290, -230], [-190, 420, -420]];
+  const p8 = new Path(p8pts, [0, 1, 0]);
+  const sp8 = speed([[142, 40], [146, 46], [150, 50], [154, 56], [157, 52], [160, 44], [166, 50]], 142, 166);
+  const C8 = { R: [], rpos: () => [0, 0, 0], shots: [], booms: [], emit: [], deb: [] };
+  const sOf = z => { let lo = 0, hi = p8.L; for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (p8.at(m)[2] < z) lo = m; else hi = m; } return lo; };
+  const tAtS = s => { let lo = 142, hi = 166; for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (sp8(m) < s) lo = m; else hi = m; } return lo; };
+  [[-560, 1, 0.25], [-500, -1, 0.3], [-430, 1, 0.22], [-340, -1, 0.3], [-260, 1, 0.26], [-170, -1, 0.3], [-100, 1, 0.24]].forEach(([z, sd, lead], i) => {
+    const s = sOf(z), ta = tAtS(s);
+    const p0 = [sd * 7.5, -140 + 7.5, z];
+    const v = [-sd * 9, -9, 0];
+    const t0 = ta - lead - 0.8;
+    C8.deb.push({ t: t0, p: p0, v: mul(v, 0.5), s: 1.0 + 0.3 * hs(i), sh: i % 3, ax: norm([hs(i + 1), hs(i + 2) - 0.5, 0.3]), w: 1.2, life: 2.6, lin: true });
+    C8.booms.push({ t: ta - 0.6, p: [sd * -8.5, -140 - 3 + 4 * hs(i * 3), z - 18], r: 5, dur: 1.8, I: 1.0, k: 0, seed: i * 2.3 });
+    C8.emit.push({ t: ta - 0.6, p: [sd * -9.5, -140, z - 18], d: [sd * 1, 0.2, 0], sp: 0.5, v: 12, life: 1.4, ty: 3, dur: 1.2, I: 0.25, sz: 0.6, dr: 0.8, rad: 0.8, n: 1 });
+    C8.emit.push({ t: ta - 0.6, p: [sd * -9.5, -140, z - 18], d: [sd, 0, 0], sp: 1, v: 14, life: 1.0, ty: 0, dur: 0.2, I: 0.6, sz: 0.05, dr: 1.2, rad: 0.5, n: 0.7 });
+    sfx.push([ta - 0.6, 3, 0.6, -sd * 0.6]);
+    sfx.push([t0 + 0.6, 6, 0.4, sd * 0.5]);
+  });
+  [-60, -40, -20, -2].forEach((ya, i) => {
+    const s = sOf(0) + 140 + ya + 0.0;
+    const ss2 = p8.L;
+    let lo = 0, hi = ss2;
+    for (let q = 0; q < 40; q++) { const m = (lo + hi) / 2; if (p8.at(m)[1] < ya) lo = m; else hi = m; }
+    const ta = tAtS(lo);
+    const a = i * 1.9 + 0.5;
+    C8.deb.push({ t: ta - 1.2, p: [Math.cos(a) * 9.6, ya + 6, Math.sin(a) * 9.6], v: [-Math.cos(a) * 3, -3, -Math.sin(a) * 3], s: 0.9, sh: 2, ax: norm([Math.sin(a), 0.3, Math.cos(a)]), w: 0.8, life: 3, lin: true });
+    C8.booms.push({ t: ta - 0.3, p: [-Math.cos(a) * 9, ya - 4, -Math.sin(a) * 9], r: 4.5, dur: 1.6, I: 1.0, k: 0, seed: i * 3.1 + 0.5 });
+    sfx.push([ta - 0.3, 3, 0.55, 0]);
+  });
+  const tExit = tAtS(sOf(0) + 140 + 6);
+  C8.booms.push({ t: 158.4, p: [0, -6, 0], r: 34, dur: 5.2, I: 1.4, k: 0, seed: 7.7 });
+  C8.booms.push({ t: 158.4, p: [0, 6, 0], r: 90, dur: 2.0, I: 0.8, k: 2, seed: 0 });
+  C8.booms.push({ t: 158.9, p: [0, 22, 0], r: 22, dur: 4.6, I: 1.1, k: 0, seed: 3.3 });
+  C8.emit.push({ t: 158.4, p: [0, 4, 0], d: [0, 1, 0], sp: 1.4, v: 40, life: 2.8, ty: 0, dur: 0.6, I: 0.9, sz: 0.12, dr: 0.6, rad: 5, n: 1 });
+  C8.emit.push({ t: 158.4, p: [0, 6, 0], d: [0, 1, 0], sp: 0.8, v: 18, life: 3.6, ty: 3, dur: 1.4, I: 0.2, sz: 2.2, dr: 0.5, rad: 6, n: 1 });
+  sfx.push([158.4, 5, 1.0, 0]);
+  for (let k = 0; k < 6; k++) { const b = { t: 143 + k * 1.9, p: [(k % 2 ? 1 : -1) * 9, -136, 0], r: 4, dur: 1.4, I: 0.9, k: 0, seed: k + 0.3 }; const s = sp8(b.t + 0.9); b.p[2] = p8.at(s)[2] + 26; if (b.p[2] < -50) { C8.booms.push(b); sfx.push([b.t, 3, 0.4, b.p[0] > 0 ? 0.5 : -0.5]); } }
+  function ship8(t) {
+    const s = sp8(t);
+    const bank = 0.3 * Math.sin(t * 1.4) * (1 - ss(155, 157, t)) + 0.5 * ss(157, 160, t);
+    return shipAt(p8, s, bank);
+  }
+  const cam8 = t => {
+    const s = sp8(t);
+    const sh = ship8(t);
+    const sc = Math.max(s - 8.5, 0);
+    let pos = add(p8.at(sc), mul(p8.up(sc), 2.4));
+    let tgt = add(p8.at(s + 7), mul(p8.up(s + 7), 0.9));
+    let up = p8.up(sc);
+    const w = ss(tExit - 0.4, tExit + 2.4, t);
+    if (w > 0) {
+      const sE = sp8(tExit);
+      const anchor = add(p8.at(Math.max(sE - 8.5, 0)), mul(p8.up(Math.max(sE - 8.5, 0)), 2.4));
+      const k = Math.max(t - tExit, 0);
+      const hold = add(anchor, [3 * ss(0, 6, k) + 0.6 * k, 14 * (1 - Math.exp(-k * 0.55)), 12 * ss(0, 5, k) + k * 0.6]);
+      pos = mix(pos, hold, w);
+      tgt = mix(tgt, add(sh.p, [0, -6 * ss(1, 5, k), 0]), w);
+      up = norm(mix(up, [0, 0, -1], w * 0.0 + 0.0));
+      up = norm(mix(up, [0, 1, 0], w));
+    }
+    return { pos, fwd: norm(sub(tgt, pos)), up: norm(up) };
+  };
+  S[7] = t => {
+    const F = blank(7, t);
+    const sh = ship8(t);
+    F.ship = [sh.p, sh.f, sh.u, 1.0];
+    F.cam = cam8(t);
+    const out = ss(tExit - 1, tExit + 1, t);
+    F.sun = [0.75, 0.42, -0.5, 0]; F.sunc = [1.7, 1.25, 0.95, 1];
+    F.amb = [0.05, 0.03, 0.03, 0]; F.fog = [0.03, 0.012, 0.008, 0.004 * (1 - out) + 0.0012 * out];
+    const al = 0.5 + 0.5 * Math.sin(t * 5.5);
+    F.P[28] = 0.55 + 0.45 * Math.max(0, Math.sin(t * 13)) * 0.5; F.P[29] = 1; F.P[30] = 0.3 + 0.7 * al; F.P[31] = 1;
+    shaftLights(F, F.cam.pos, t, 0.6, 0);
+    if (out < 1) for (let k = -1; k <= 3; k++) { const z = F.cam.pos[2] + k * 24; if (z > -50) continue; F.lights.push([[0, -132, z], 22, mul([16, 2.2, 0.8], al * (1 - out)), 1]); }
+    F.lights.push([add(sh.p, mul(sh.f, -2.2)), 14, [3, 5, 11], 1]);
+    frameCombat(C8, t, F, F.cam.pos);
+    const k = t - 158.4;
+    F.fx[0] = k > 0 ? 0.25 * Math.exp(-k * 2.2) : 0;
+    F.shake = 0.04 + 0.03 * (1 - out) + (k > 0 ? 0.35 * Math.exp(-k * 1.1) : 0);
+    F.blur = 0.45;
+    F.fov = 0.62 + 0.05 * ss(146, 152, t) - 0.08 * ss(tExit, tExit + 3, t);
+    return F;
+  };
+  const shakeV = (t, a) => [sn(t * 9.3, 1.1) * a, sn(t * 8.1, 4.2) * a, sn(t * 7.3, 2.5) * a * 0.6];
+  function frame(t) {
+    t = cl(t, 0, END - 1e-3);
+    let sc = 0;
+    while (sc < 7 && t >= SC[sc + 1].t0) sc++;
+    const F = S[sc](t);
+    const a = t - SC[sc].t0, b = SC[sc].t1 - t;
+    let fade = Math.min(ss(0, 0.55, a), ss(0, 0.45, b));
+    if (sc === 0) fade = ss(0, 1.8, a);
+    if (sc === 7) fade = Math.min(ss(0, 0.9, a), ss(0, 2.6, b));
+    if (sc === 6 && t > 137) fade = 1;
+    if (sc === 7 && a < 1.2) { F.fx[0] = Math.max(F.fx[0], 1.2 * (1 - ss(0, 1.2, a))); fade = 1; }
+    F.fade = fade;
+    if (F.shake > 0) {
+      const v = shakeV(t, F.shake);
+      const r = norm(cross(F.cam.fwd, F.cam.up));
+      F.cam.fwd = norm(add(F.cam.fwd, add(mul(r, v[0] * 0.03), mul(F.cam.up, v[1] * 0.03))));
+      F.cam.up = rot(F.cam.up, F.cam.fwd, v[2] * 0.02);
+      F.cam.pos = add(F.cam.pos, add(mul(r, v[0] * 0.05), mul(F.cam.up, v[1] * 0.05)));
+    }
+    return F;
+  }
+  sfx.sort((a, b) => a[0] - b[0]);
+  const spdAt = t => { const d = 0.05; const a = frame(t).cam.pos, b = frame(Math.min(t + d, END - 0.01)).cam.pos; return len(sub(b, a)) / d; };
+  return { SC, END, frame, sfx, spdAt, P1: shipPath1, P8: p8 };
+})();
+const $ = i => document.getElementById(i);
+const H = document.documentElement;
+const T = i => $(i).textContent;
+const phase = p => { H.dataset.phase = p; };
+const cv = $("cv");
+const NP = 24 * 1024;
+const UF = 16 * (21 + 32 + 24 + 48 + 16 + 24 + 8);
+const OFF = { L: 84, R: 84 + 128, B: 84 + 224, X: 84 + 416, D: 84 + 480, P: 84 + 576 };
+const PF = 16 * (1 + 120);
+let dev, ctx, fmt, UB, PUB, PB, NT, SR, SL, pipes = {}, BG = {}, tex = null;
+let U = new Float32Array(UF / 4), PUa = new Float32Array(PF / 4);
+let scale = 0.72, W = 0, Hh = 0, TW = 0, TH = 0, rw = 0, rh = 0, prw = 0, prh = 0, hk = 0, fr = 0, reset = 1;
+let prev = null, actx = null, node = null, f0 = -1, playing = false, tStart = 0, raf = 0, lastTitle = -1, ema = 16.7, lastNow = 0, adaptT = 0;
+const BU = new Float32Array(64 * 11), BS = [[1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1]];
+const msg = s => { const m = $("msg"); if (m) m.textContent = s; };
+const prog = (x, s) => { const b = $("lbar"); if (b) b.style.transform = "scaleX(" + x + ")"; if (s) msg(s); };
+function nogpu(k) {
+  phase("nogpu");
+  $("ui").innerHTML = '<section class="st"><p class="one">' + (k ? "The graphics device was lost. Reload to fly again." : "This flight needs a browser with WebGPU.") + "</p></section>";
+}
+const mod = code => dev.createShaderModule({ code });
+const BL = entries => dev.createBindGroupLayout({ entries });
+const PL = l => dev.createPipelineLayout({ bindGroupLayouts: [l] });
+const FR = GPUShaderStage.FRAGMENT, VX = GPUShaderStage.VERTEX, CP = GPUShaderStage.COMPUTE;
+async function build() {
+  const us = T("w-u"), cm = T("w-common");
+  const shade = mod(us + "\n" + cm + "\n" + T("w-obj") + "\n" + T("w-scene") + "\n" + T("w-shade"));
+  const post = mod(us + "\n" + T("w-post"));
+  const part = mod(us + "\n" + T("w-part"));
+  const blm = mod(T("w-bloom"));
+  const nz = mod(T("w-noise"));
+  const mp = mod(T("w-mip"));
+  const LU = BL([{ binding: 0, visibility: FR | VX | CP, buffer: { type: "uniform" } }, { binding: 1, visibility: FR | CP, texture: { viewDimension: "3d" } }, { binding: 2, visibility: FR | CP, sampler: {} }]);
+  const LT = BL([{ binding: 0, visibility: FR, buffer: { type: "uniform" } }, { binding: 1, visibility: FR, texture: {} }, { binding: 2, visibility: FR, texture: {} }, { binding: 3, visibility: FR, sampler: {} }]);
+  const LC = BL([{ binding: 0, visibility: FR, buffer: { type: "uniform" } }, { binding: 1, visibility: FR, texture: {} }, { binding: 3, visibility: FR, sampler: {} }, { binding: 4, visibility: FR, texture: {} }]);
+  const LPS = BL([{ binding: 1, visibility: CP, buffer: { type: "uniform" } }, { binding: 2, visibility: CP, buffer: { type: "storage" } }]);
+  const LPD = BL([{ binding: 0, visibility: VX | FR, buffer: { type: "uniform" } }, { binding: 3, visibility: VX, buffer: { type: "read-only-storage" } }, { binding: 4, visibility: FR, texture: { sampleType: "unfilterable-float" } }]);
+  const LB = BL([{ binding: 0, visibility: FR, buffer: { type: "uniform", hasDynamicOffset: true } }, { binding: 1, visibility: FR, texture: {} }, { binding: 2, visibility: FR, sampler: {} }]);
+  const LN = BL([{ binding: 0, visibility: CP, storageTexture: { access: "write-only", format: "rgba8unorm", viewDimension: "3d" } }]);
+  const LM = BL([{ binding: 0, visibility: CP, texture: { viewDimension: "3d" } }, { binding: 1, visibility: CP, storageTexture: { access: "write-only", format: "rgba8unorm", viewDimension: "3d" } }]);
+  Object.assign(pipes, { LU, LT, LC, LPS, LPD, LB });
+  const add = { color: { srcFactor: "one", dstFactor: "one", operation: "add" }, alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" } };
+  const H16 = "rgba16float";
+  prog(0.15, "compiling the mine");
+  const jobs = [
+    dev.createRenderPipelineAsync({ layout: PL(LU), vertex: { module: shade, entryPoint: "vq" }, fragment: { module: shade, entryPoint: "fs", targets: [{ format: H16 }, { format: "r32float" }] }, primitive: { topology: "triangle-list" } }).then(p => { pipes.rm = p; prog(0.55, "lighting the tunnels"); }),
+    dev.createComputePipelineAsync({ layout: PL(LPS), compute: { module: part, entryPoint: "sim" } }).then(p => pipes.ps = p),
+    dev.createRenderPipelineAsync({ layout: PL(LPD), vertex: { module: part, entryPoint: "pv" }, fragment: { module: part, entryPoint: "pf", targets: [{ format: H16, blend: add }] }, primitive: { topology: "triangle-list" } }).then(p => pipes.pd = p),
+    dev.createRenderPipelineAsync({ layout: PL(LT), vertex: { module: post, entryPoint: "vq" }, fragment: { module: post, entryPoint: "taa", targets: [{ format: H16 }] } }).then(p => pipes.taa = p),
+    dev.createRenderPipelineAsync({ layout: PL(LC), vertex: { module: post, entryPoint: "vq" }, fragment: { module: post, entryPoint: "comp", targets: [{ format: fmt }] } }).then(p => pipes.comp = p),
+    dev.createRenderPipelineAsync({ layout: PL(LB), vertex: { module: blm, entryPoint: "vq" }, fragment: { module: blm, entryPoint: "down", targets: [{ format: H16 }] } }).then(p => pipes.bd = p),
+    dev.createRenderPipelineAsync({ layout: PL(LB), vertex: { module: blm, entryPoint: "vq" }, fragment: { module: blm, entryPoint: "up", targets: [{ format: H16, blend: add }] } }).then(p => pipes.bu = p),
+    dev.createComputePipelineAsync({ layout: PL(LN), compute: { module: nz, entryPoint: "gen" } }).then(p => pipes.nz = p),
+    dev.createComputePipelineAsync({ layout: PL(LM), compute: { module: mp, entryPoint: "mip" } }).then(p => pipes.mp = p)
+  ];
+  await Promise.all(jobs);
+  prog(0.8, "casting the noise");
+  UB = dev.createBuffer({ size: UF, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  PUB = dev.createBuffer({ size: PF, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  PB = dev.createBuffer({ size: NP * 48, usage: GPUBufferUsage.STORAGE });
+  pipes.BUB = dev.createBuffer({ size: 256 * 11, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  NT = dev.createTexture({ size: [64, 64, 64], dimension: "3d", format: "rgba8unorm", mipLevelCount: 7, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING });
+  SR = dev.createSampler({ addressModeU: "repeat", addressModeV: "repeat", addressModeW: "repeat", magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" });
+  SL = dev.createSampler({ magFilter: "linear", minFilter: "linear" });
+  const e = dev.createCommandEncoder();
+  let c = e.beginComputePass();
+  c.setPipeline(pipes.nz);
+  c.setBindGroup(0, dev.createBindGroup({ layout: LN, entries: [{ binding: 0, resource: NT.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }] }));
+  c.dispatchWorkgroups(16, 16, 16);
+  c.end();
+  for (let m = 1; m < 7; m++) {
+    const n = 64 >> m;
+    c = e.beginComputePass();
+    c.setPipeline(pipes.mp);
+    c.setBindGroup(0, dev.createBindGroup({ layout: LM, entries: [{ binding: 0, resource: NT.createView({ baseMipLevel: m - 1, mipLevelCount: 1 }) }, { binding: 1, resource: NT.createView({ baseMipLevel: m, mipLevelCount: 1 }) }] }));
+    c.dispatchWorkgroups(Math.max(1, Math.ceil(n / 4)), Math.max(1, Math.ceil(n / 4)), Math.max(1, Math.ceil(n / 4)));
+    c.end();
+  }
+  dev.queue.submit([e.finish()]);
+  BG.u = dev.createBindGroup({ layout: LU, entries: [{ binding: 0, resource: { buffer: UB } }, { binding: 1, resource: NT.createView() }, { binding: 2, resource: SR }] });
+  BG.ps = dev.createBindGroup({ layout: LPS, entries: [{ binding: 1, resource: { buffer: PUB } }, { binding: 2, resource: { buffer: PB } }] });
+  await dev.queue.onSubmittedWorkDone();
+}
+function sizeTex() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let w = Math.max(2, Math.round(cv.clientWidth * dpr)), h = Math.max(2, Math.round(cv.clientHeight * dpr));
+  const k = Math.min(1, 2560 / w, 1440 / h);
+  w = Math.round(w * k); h = Math.round(h * k);
+  if (w === W && h === Hh && tex) return;
+  W = w; Hh = h; cv.width = w; cv.height = h;
+  TW = w; TH = h;
+  if (tex) for (const t of tex.all) t.destroy();
+  const mk = (w, h, f) => dev.createTexture({ size: [w, h], format: f, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+  const col = mk(TW, TH, "rgba16float"), dep = mk(TW, TH, "r32float"), h0 = mk(TW, TH, "rgba16float"), h1 = mk(TW, TH, "rgba16float");
+  const bl = [];
+  let bw = TW, bh = TH;
+  for (let i = 0; i < 6; i++) { bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); bl.push(mk(bw, bh, "rgba16float")); }
+  tex = { col, dep, h: [h0, h1], bl, all: [col, dep, h0, h1, ...bl] };
+  const v = t => t.createView();
+  tex.v = { col: v(col), dep: v(dep), h: [v(h0), v(h1)], bl: bl.map(v) };
+  BG.pd = dev.createBindGroup({ layout: pipes.LPD, entries: [{ binding: 0, resource: { buffer: UB } }, { binding: 3, resource: { buffer: PB } }, { binding: 4, resource: tex.v.dep }] });
+  BG.taa = [0, 1].map(k => dev.createBindGroup({ layout: pipes.LT, entries: [{ binding: 0, resource: { buffer: UB } }, { binding: 1, resource: tex.v.col }, { binding: 2, resource: tex.v.h[1 - k] }, { binding: 3, resource: SL }] }));
+  BG.comp = [0, 1].map(k => dev.createBindGroup({ layout: pipes.LC, entries: [{ binding: 0, resource: { buffer: UB } }, { binding: 1, resource: tex.v.h[k] }, { binding: 3, resource: SL }, { binding: 4, resource: tex.v.bl[0] }] }));
+  BG.bd0 = [0, 1].map(k => dev.createBindGroup({ layout: pipes.LB, entries: [{ binding: 0, resource: { buffer: pipes.BUB, size: 32 } }, { binding: 1, resource: tex.v.h[k] }, { binding: 2, resource: SL }] }));
+  BG.bl = tex.v.bl.map(vw => dev.createBindGroup({ layout: pipes.LB, entries: [{ binding: 0, resource: { buffer: pipes.BUB, size: 32 } }, { binding: 1, resource: vw }, { binding: 2, resource: SL }] }));
+  reset = 1;
+}
+const halton = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
+const nrm3 = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const crs = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const put = (o, a, b, c, d) => { U[o] = a; U[o + 1] = b; U[o + 2] = c; U[o + 3] = d; };
+let CLS = null;
+function pack(F, t) {
+  const f = nrm3(F.cam.fwd), r = nrm3(crs(f, F.cam.up)), up = crs(r, f), p = F.cam.pos;
+  const cur = [p, r, up, f];
+  if (!prev || reset) prev = cur;
+  put(0, p[0], p[1], p[2], F.fov); put(4, r[0], r[1], r[2], 0); put(8, up[0], up[1], up[2], 0); put(12, f[0], f[1], f[2], 0);
+  put(16, prev[0][0], prev[0][1], prev[0][2], 0); put(20, ...prev[1], 0); put(24, ...prev[2], 0); put(28, ...prev[3], 0);
+  prev = cur;
+  put(32, rw, rh, TW, TH);
+  const j = fr % 8 + 1;
+  put(36, halton(j, 2) - 0.5, halton(j, 3) - 0.5, prw || rw, prh || rh);
+  put(40, t, F.st, F.sc, 0);
+  put(44, F.fx[0], F.fx[1], F.fx[2], F.fx[3]);
+  put(48, ...F.fog); put(52, ...F.amb); put(56, ...F.sun); put(60, ...F.sunc);
+  if (F.ship) { put(64, ...F.ship[0], 1); put(68, ...F.ship[1], 0); put(72, ...F.ship[2], F.ship[3]); } else put(64, 0, 0, 0, 0);
+  const Ls = F.lights.map(l => { const dx = l[0][0] - p[0], dy = l[0][1] - p[1], dz = l[0][2] - p[2]; const d = Math.hypot(dx, dy, dz); const lum = Math.max(l[2][0], l[2][1], l[2][2]); return [l, d > l[1] + 40 ? 0 : l[3] * lum / (1 + (d / l[1]) ** 2)]; }).filter(a => a[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 16);
+  Ls.forEach((a, i) => { const l = a[0]; put(OFF.L + i * 8, l[0][0], l[0][1], l[0][2], l[1]); put(OFF.L + i * 8 + 4, l[2][0], l[2][1], l[2][2], 0); });
+  const Rb = F.robots.slice(0, 12);
+  Rb.forEach((a, i) => { put(OFF.R + i * 8, a[0][0], a[0][1], a[0][2], a[1]); put(OFF.R + i * 8 + 4, a[2], a[3], a[4], a[5]); });
+  const Bb = F.bolts.slice(0, 24);
+  Bb.forEach((a, i) => { put(OFF.B + i * 8, a[0][0], a[0][1], a[0][2], a[1]); put(OFF.B + i * 8 + 4, a[2][0], a[2][1], a[2][2], a[3]); });
+  const Xb = F.ex.slice(0, 8);
+  Xb.forEach((a, i) => { put(OFF.X + i * 8, a[0][0], a[0][1], a[0][2], a[1]); put(OFF.X + i * 8 + 4, a[2], a[3], a[4], a[5]); });
+  const Db = F.debris.slice(0, 8);
+  Db.forEach((a, i) => { put(OFF.D + i * 12, a[0][0], a[0][1], a[0][2], a[1]); put(OFF.D + i * 12 + 4, a[2][0], a[2][1], a[2][2], a[3]); put(OFF.D + i * 12 + 8, a[4], a[5], 0, 0); });
+  put(76, Ls.length, Rb.length, Bb.length, Xb.length);
+  put(80, Db.length, 0, reset, 0);
+  for (let i = 0; i < 20; i++) U[OFF.P + i] = F.P[i];
+  put(OFF.P + 20, F.bloom, F.expo, F.vig, F.fade);
+  put(OFF.P + 24, W, Hh, F.blur, 0.22 * (1 - Math.min(1, rw / W)) + 0.05);
+  put(OFF.P + 28, F.P[28], F.P[29], F.P[30], F.P[31]);
+  PUa.fill(0);
+  PUa[0] = t; PUa[1] = 24;
+  for (const em of F.emit) {
+    const s = (em.id === undefined ? 0 : em.id) % 24, o = 4 + s * 20;
+    if (PUa[o + 9] > 0 && PUa[o + 3] > em.t) continue;
+    PUa.set([em.p[0], em.p[1], em.p[2], em.t, em.d[0], em.d[1], em.d[2], em.sp, em.v, em.life, em.ty, em.dur, em.I, em.sz, em.dr, em.rad, em.n === undefined ? 1 : em.n, 0, 0, 0], o);
+  }
+}
+function draw(t) {
+  const F = TL.frame(t);
+  rw = Math.max(2, Math.round(W * scale)); rh = Math.max(2, Math.round(Hh * scale));
+  pack(F, t);
+  dev.queue.writeBuffer(UB, 0, U);
+  dev.queue.writeBuffer(PUB, 0, PUa);
+  BU.fill(0);
+  let bw = TW >> 1, bh = TH >> 1;
+  BS[0][0] = bw; BS[0][1] = bh;
+  for (let i = 1; i < 6; i++) { bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); BS[i][0] = bw; BS[i][1] = bh; }
+  BU.set([1, 1.0, rw / TW, rh / TH, BS[0][0], BS[0][1], 1 / TW, 1 / TH], 0);
+  for (let i = 1; i < 6; i++) BU.set([0, 0, 1, 1, BS[i][0], BS[i][1], 1 / BS[i - 1][0], 1 / BS[i - 1][1]], i * 64);
+  for (let i = 0; i < 5; i++) BU.set([0, 0, 1, 1, BS[i][0], BS[i][1], 1 / BS[i + 1][0], 1 / BS[i + 1][1]], (6 + i) * 64);
+  dev.queue.writeBuffer(pipes.BUB, 0, BU);
+  const e = dev.createCommandEncoder();
+  const c = e.beginComputePass();
+  c.setPipeline(pipes.ps); c.setBindGroup(0, BG.ps); c.dispatchWorkgroups(NP / 64); c.end();
+  let p = e.beginRenderPass({ colorAttachments: [{ view: tex.v.col, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1e4] }, { view: tex.v.dep, loadOp: "clear", storeOp: "store", clearValue: [1e4, 0, 0, 0] }] });
+  p.setViewport(0, 0, rw, rh, 0, 1); p.setScissorRect(0, 0, rw, rh);
+  p.setPipeline(pipes.rm); p.setBindGroup(0, BG.u); p.draw(3); p.end();
+  p = e.beginRenderPass({ colorAttachments: [{ view: tex.v.col, loadOp: "load", storeOp: "store" }] });
+  p.setViewport(0, 0, rw, rh, 0, 1); p.setScissorRect(0, 0, rw, rh);
+  p.setPipeline(pipes.pd); p.setBindGroup(0, BG.pd); p.draw(6, NP); p.end();
+  hk = 1 - hk;
+  p = e.beginRenderPass({ colorAttachments: [{ view: tex.v.h[hk], loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1e4] }] });
+  p.setViewport(0, 0, rw, rh, 0, 1); p.setScissorRect(0, 0, rw, rh);
+  p.setPipeline(pipes.taa); p.setBindGroup(0, BG.taa[hk]); p.draw(3); p.end();
+  for (let i = 0; i < 6; i++) {
+    p = e.beginRenderPass({ colorAttachments: [{ view: tex.v.bl[i], loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }] });
+    p.setPipeline(pipes.bd); p.setBindGroup(0, i === 0 ? BG.bd0[hk] : BG.bl[i - 1], [i * 256]); p.draw(3); p.end();
+  }
+  for (let i = 4; i >= 0; i--) {
+    p = e.beginRenderPass({ colorAttachments: [{ view: tex.v.bl[i], loadOp: "load", storeOp: "store" }] });
+    p.setPipeline(pipes.bu); p.setBindGroup(0, BG.bl[i + 1], [(6 + i) * 256]); p.draw(3); p.end();
+  }
+  p = e.beginRenderPass({ colorAttachments: [{ view: ctx.getCurrentTexture().createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }] });
+  p.setPipeline(pipes.comp); p.setBindGroup(0, BG.comp[hk]); p.draw(3); p.end();
+  dev.queue.submit([e.finish()]);
+  prw = rw; prh = rh; reset = 0; fr++;
+  return F;
+}
+const titles = ["insertion", "contact", "molten", "perimeter", "takedown", "velocity", "core", "egress"];
+function hud(F, t) {
+  $("pb").style.transform = "scaleX(" + (t / TL.END).toFixed(4) + ")";
+  if (F.sc !== lastTitle) {
+    lastTitle = F.sc;
+    const el = $("ttl");
+    el.innerHTML = '<span class="n">0' + (F.sc + 1) + '</span><span class="w">' + titles[F.sc] + "</span>";
+    el.classList.remove("on"); void el.offsetWidth; el.classList.add("on");
+  }
+}
+function now() {
+  if (actx && f0 >= 0) {
+    const ts = actx.getOutputTimestamp();
+    return ts.contextTime + Math.max(0, performance.now() - ts.performanceTime) / 1000 - f0 / actx.sampleRate;
+  }
+  return (performance.now() - tStart) / 1000;
+}
+function loop(ms) {
+  raf = 0;
+  if (!playing || document.hidden) return;
+  const dt = lastNow ? ms - lastNow : 16.7;
+  lastNow = ms;
+  if (dt > 0 && dt < 100) ema = ema * 0.92 + dt * 0.08;
+  adaptT += dt;
+  if (adaptT > 500) {
+    adaptT = 0;
+    if (ema > 18.2 && scale > 0.42) scale = Math.max(0.42, scale - 0.06);
+    else if (ema < 14.6 && scale < 1) scale = Math.min(1, scale + 0.04);
+  }
+  sizeTex();
+  let t = Math.max(0, now());
+  if (t >= TL.END) { finish(); return; }
+  const F = draw(t);
+  hud(F, t);
+  raf = requestAnimationFrame(loop);
+}
+function finish() {
+  playing = false;
+  if (node) node.port.postMessage("stop");
+  phase("end");
+  $("ui").innerHTML = '<section class="st end"><h2 class="big">mine cleared</h2><p class="sub">generated, not stored &middot; ' + "130" + ' KB</p><button class="go" id="again" type="button">fly again</button></section>';
+  $("again").onclick = start;
+}
+async function audio() {
+  if (!actx) {
+    actx = new AudioContext({ latencyHint: "playback" });
+    const url = URL.createObjectURL(new Blob([T("w-synth") + "\n" + T("w-wk")], { type: "text/javascript" }));
+    await actx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    node = new AudioWorkletNode(actx, "synth", { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { sfx: TL.sfx } });
+    node.connect(actx.destination);
+    node.port.onmessage = e => { f0 = e.data; };
+  }
+  if (actx.state !== "running") await actx.resume();
+  f0 = -1;
+  node.port.postMessage("go");
+}
+async function start() {
+  phase("play");
+  $("ui").innerHTML = "";
+  lastTitle = -1; reset = 1; prev = null;
+  try { await audio(); } catch (e) { actx = null; }
+  tStart = performance.now();
+  playing = true; lastNow = 0;
+  if (!raf) raf = requestAnimationFrame(loop);
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { if (actx && playing) actx.suspend(); }
+  else if (playing) { const go = () => { lastNow = 0; reset = 1; if (!raf) raf = requestAnimationFrame(loop); }; if (actx) actx.resume().then(go); else go(); }
+});
+addEventListener("keydown", e => { if (e.key === "Escape" && playing) finish(); });
+async function boot() {
+  if (!navigator.gpu) return nogpu();
+  const ad = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  if (!ad) return nogpu();
+  dev = await ad.requestDevice();
+  dev.lost.then(i => { if (i.reason !== "destroyed") { playing = false; nogpu(1); } });
+  ctx = cv.getContext("webgpu");
+  fmt = navigator.gpu.getPreferredCanvasFormat();
+  ctx.configure({ device: dev, format: fmt, alphaMode: "opaque" });
+  prog(0.05, "waking the mine");
+  await build();
+  sizeTex();
+  prog(1, "ready");
+  phase("gate");
+  $("ui").innerHTML = '<section class="st gate"><h1 class="big">core breach</h1><p class="sub">a zero-g mine run &middot; rendered live from code</p><button class="go" id="go" type="button">launch</button><p class="fine">sound on &middot; esc ends the run</p></section>';
+  $("go").onclick = start;
+  $("go").focus();
+}
+addEventListener("resize", () => { if (dev && tex && !playing) sizeTex(); });
+boot().catch(() => nogpu());
+</script>
+</body>
+</html>
