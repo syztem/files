@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beautiful Website</title>
+    <style>
+        /* Global styles */
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        canvas {
+            width: 100%;
+            height: 100vh;
+            display: block;
+        }
+        /* End global styles */
+
+        /* Three.js styles */
+        #three-canvas {
+            width: 100%;
+            height: 100vh;
+        }
+        /* End Three.js styles */
+    </style>
+</head>
+<body>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.6.0"></script>
+    <script src="https://unpkg.com/htmxtreme/dist/htmxtreme.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.143.3/dist/three.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ @wasm/worker_threads@1.0.0/wasm/worker_threads.wasm"></script>
+    <script>
+        // Initialize WebGPU
+        const gpu = new window.WebGPU();
+        // Initialize Three.js
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("three-canvas") });
+        // Create a basic scene with a camera and a sphere
+        const sphere = new THREE.Mesh(new THREE.SphereGeometry(5, 60, 60), new THREE.MeshBasicMaterial(new THREE.MeshPhongMaterial()));
+        scene.add(sphere);
+        camera.position.z = 10;
+        camera.position.x = 5;
+        camera.position.y = 5;
+        // Set up the renderer
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        // Set up the scene and camera
+        renderer.setClearColor(new THREE.Color(0x000000));
+        renderer.setClearAlpha(1);
+        renderer.setFaceCullingEnabled(false);
+        renderer.render(scene, camera, document.getElementById("three-canvas"));
+        // Add event listeners for resize and touch events
+        window.addEventListener("resize", () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        window.addEventListener("touchstart", () => {
+            // Toggle touch events
+        });
+        window.addEventListener("touchend", () => {
+            // Toggle touch events
+        });
+        // Add the sphere to the scene
+        scene.add(sphere);
+        // Start the animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            sphere.rotation.x = Math.sin(Date.now() / 1000);
+            renderer.render(scene, camera, document.getElementById("three-canvas"));
+        }
+        animate();
+    </script>
+</body>
+</html>
