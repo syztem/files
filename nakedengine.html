@@ -1,0 +1,3215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>THE NAKED ENGINE</title>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden;cursor:none}
+canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+#ui{pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="gpu"></canvas>
+<canvas id="ui"></canvas>
+<script type="module">
+const GLYPHS = {
+A:"00 04 26 44 40|02 42",B:"00 06 36 45 44 33 03|33 42 41 30 00",C:"45 36 16 05 01 10 30 41",D:"00 06 26 45 41 20 00",
+E:"46 06 00 40|03 23",F:"46 06 00|03 23",G:"45 36 16 05 01 10 30 41 43 23",H:"00 06|03 43|40 46",I:"06 46|26 20|00 40",
+J:"06 46|36 31 20 10 01",K:"00 06|03 46|03 40",L:"06 00 40",M:"00 06 23 46 40",N:"00 06 40 46",O:"10 01 05 16 36 45 41 30 10",
+P:"00 06 36 45 44 33 03",Q:"10 01 05 16 36 45 41 30 10|22 40",R:"00 06 36 45 44 33 03|13 40",S:"01 10 30 41 42 33 13 04 05 16 36 45",
+T:"06 46|26 20",U:"06 01 10 30 41 46",V:"06 20 46",W:"06 00 23 40 46",X:"00 46|06 40",Y:"06 23 46|23 20",Z:"06 46 00 40",
+"0":"10 01 05 16 36 45 41 30 10|01 45","1":"14 26 20|00 40","2":"05 16 36 45 44 00 40","3":"06 46 23|23 33 42 41 30 10 01",
+"4":"30 36 02 42","5":"46 06 03 33 42 41 30 10 01","6":"45 36 16 05 01 10 30 41 42 33 13 03","7":"06 46 10",
+"8":"13 04 05 16 36 45 44 33 13 02 01 10 30 41 42 33","9":"10 30 41 45 36 16 05 04 13 43",
+".":"10 11 21 20 10",",":"21 10",":":"21 22|24 25","-":"13 33","/":"00 46","'":"26 25","!":"26 22|20 21",
+"?":"05 16 36 45 44 23 22|20 21","&":"40 04 05 16 26 25 02 01 10 30 42","(":"36 15 11 30",")":"16 35 31 10","+":"13 33|21 25"
+};
+const GLYPH_W = 4, GLYPH_H = 6, GLYPH_ADV = 6;
+const glyphStrokes = (ch) => {
+  const g = GLYPHS[ch.toUpperCase()];
+  if (!g) return null;
+  return g.split("|").map(s => s.split(" ").map(p => [parseInt(p[0], 10), parseInt(p[1], 10)]));
+};
+const textWidth = (text) => text.length * GLYPH_ADV - (GLYPH_ADV - GLYPH_W);
+const forEachSegment = (text, fn) => {
+  let cx = 0;
+  for (const ch of text) {
+    const strokes = glyphStrokes(ch);
+    if (strokes) {
+      for (const st of strokes) {
+        for (let i = 0; i + 1 < st.length; i++) fn(cx + st[i][0], st[i][1], cx + st[i + 1][0], st[i + 1][1]);
+      }
+    }
+    cx += GLYPH_ADV;
+  }
+};
+const ui = document.getElementById("ui");
+const uictx = ui.getContext("2d");
+const fitUI = () => {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  ui.width = Math.floor(innerWidth * dpr);
+  ui.height = Math.floor(innerHeight * dpr);
+  uictx.setTransform(dpr, 0, 0, dpr, 0, 0);
+};
+fitUI();
+const drawVectorText = (text, x, y, size, color, align, glow) => {
+  const unit = size / GLYPH_H;
+  const w = textWidth(text) * unit;
+  const ox = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
+  uictx.save();
+  uictx.lineWidth = Math.max(1.5, size * 0.09);
+  uictx.lineCap = "round";
+  uictx.lineJoin = "round";
+  uictx.strokeStyle = color;
+  if (glow) { uictx.shadowBlur = size * 0.5; uictx.shadowColor = color; }
+  uictx.beginPath();
+  forEachSegment(text, (x1, y1, x2, y2) => {
+    uictx.moveTo(ox + x1 * unit, y - y1 * unit);
+    uictx.lineTo(ox + x2 * unit, y - y2 * unit);
+  });
+  uictx.stroke();
+  uictx.restore();
+};
+const clearUI = () => uictx.clearRect(0, 0, innerWidth, innerHeight);
+const drawScanBackdrop = () => {
+  uictx.fillStyle = "#03010a";
+  uictx.fillRect(0, 0, innerWidth, innerHeight);
+  uictx.fillStyle = "rgba(255,255,255,0.025)";
+  for (let y = 0; y < innerHeight; y += 4) uictx.fillRect(0, y, innerWidth, 1);
+};
+const drawOffline = () => {
+  drawScanBackdrop();
+  drawVectorText("WEBGPU REQUIRED // SYSTEM OFFLINE", innerWidth / 2, innerHeight / 2 + 10, Math.min(28, innerWidth / 40), "#ff2a6d", "center", true);
+};
+if (!navigator.gpu) {
+  drawOffline();
+  addEventListener("resize", () => { fitUI(); drawOffline(); });
+  throw new Error("WebGPU unavailable");
+}
+const WGSL_COMMON = `
+const PI: f32 = 3.14159265;
+struct Light { pos: vec4f, color: vec4f, dir: vec4f }
+struct Globals {
+  view: mat4x4f,
+  proj: mat4x4f,
+  viewProj: mat4x4f,
+  invVP: mat4x4f,
+  shadowVP: mat4x4f,
+  car: mat4x4f,
+  camPos: vec4f,
+  sunDir: vec4f,
+  sunColor: vec4f,
+  fog: vec4f,
+  skyTop: vec4f,
+  skyBot: vec4f,
+  sunDisc: vec4f,
+  scroll: vec4f,
+  fx: vec4f,
+  post: vec4f,
+  env: vec4f,
+  terrain: vec4f,
+  pfx: vec4f,
+  lights: array<Light, 8>,
+}
+struct FSOut { @builtin(position) p: vec4f, @location(0) uv: vec2f }
+@vertex fn vsFull(@builtin(vertex_index) vi: u32) -> FSOut {
+  var o: FSOut;
+  let x = f32(i32(vi & 1u) * 4 - 1);
+  let y = f32(i32(vi >> 1u) * 4 - 1);
+  o.p = vec4f(x, y, 0.0, 1.0);
+  o.uv = vec2f(x * 0.5 + 0.5, 0.5 - y * 0.5);
+  return o;
+}
+fn hash11(n: f32) -> f32 { return fract(sin(n) * 43758.5453); }
+fn hash21(p: vec2f) -> f32 {
+  var q = fract(p * vec2f(123.34, 456.21));
+  q = q + dot(q, q + 45.32);
+  return fract(q.x * q.y);
+}
+fn hash31(p: vec3f) -> f32 { return fract(sin(dot(p, vec3f(12.9898, 78.233, 37.719))) * 43758.5453); }
+fn acesTone(x: vec3f) -> vec3f {
+  let a = 2.51; let b = 0.03; let c = 2.43; let d = 0.59; let e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3f(0.0), vec3f(1.0));
+}
+`;
+
+const WGSL_MESH = WGSL_COMMON + `
+struct Inst { m: mat4x4f, color: vec4f, mat: vec4f }
+@group(0) @binding(0) var<uniform> g: Globals;
+@group(0) @binding(1) var<storage, read> inst: array<Inst>;
+@group(0) @binding(2) var albedoTex: texture_2d_array<f32>;
+@group(0) @binding(3) var normalTex: texture_2d_array<f32>;
+@group(0) @binding(4) var envTex: texture_2d<f32>;
+@group(0) @binding(5) var linSamp: sampler;
+@group(0) @binding(6) var shadowTex: texture_depth_2d;
+@group(0) @binding(7) var shadowSamp: sampler_comparison;
+
+fn terrainH(x: f32, z: f32) -> f32 {
+  let t = g.terrain;
+  let low = t.x * sin(z * t.y) * cos(x * t.y * 0.63 + 1.7);
+  let b = sin(z * t.w) * sin(x * t.w * 1.31 + 0.5);
+  let bump = t.z * max(b - 0.55, 0.0) * 2.2;
+  return low + bump;
+}
+
+struct VIn {
+  @location(0) pos: vec3f,
+  @location(1) nrm: vec3f,
+  @location(2) uv: vec2f,
+  @location(3) col: vec4f,
+  @builtin(instance_index) ii: u32,
+}
+struct VOut {
+  @builtin(position) clip: vec4f,
+  @location(0) wpos: vec3f,
+  @location(1) nrm: vec3f,
+  @location(2) uv: vec2f,
+  @location(3) col: vec4f,
+  @location(4) @interpolate(flat) mat: vec4f,
+  @location(5) @interpolate(flat) icol: vec4f,
+}
+struct Placed { wpos: vec3f, nrm: vec3f, uv: vec2f }
+
+fn place(v: VIn, i: Inst) -> Placed {
+  let mode = u32(round(fract(i.mat.w) * 4.0));
+  var m = i.m;
+  if (mode == 2u) { m = g.car * i.m; }
+  if (mode == 1u) { m[3].z = m[3].z + g.scroll.x; }
+  let dw = i.color.w;
+  var wp = (m * vec4f(v.pos, 1.0)).xyz;
+  if (dw > 0.0) {
+    let ph = g.scroll.w * 2.3 + m[3].x * 0.37 + m[3].z * 0.11;
+    let hgt = max(wp.y - m[3].y, 0.0);
+    wp.x = wp.x + sin(ph) * dw * hgt * 0.12;
+    wp.y = wp.y + sin(ph * 1.7 + 1.0) * dw * g.fx.z;
+    wp.z = wp.z + cos(ph * 0.9) * dw * hgt * 0.08;
+  }
+  if (mode == 0u) {
+    let rel = m[3].z - g.scroll.x + g.scroll.z;
+    let wrapped = rel - floor(rel / g.scroll.y) * g.scroll.y;
+    let shift = wrapped - rel;
+    wp.z = wp.z + shift;
+    wp.y = wp.y + terrainH(m[3].x, m[3].z + shift);
+  }
+  if (mode == 1u) {
+    wp.y = wp.y + terrainH(wp.x, wp.z);
+  }
+  let nm = mat3x3f(m[0].xyz, m[1].xyz, m[2].xyz);
+  let s = vec3f(length(m[0].xyz), length(m[1].xyz), length(m[2].xyz));
+  let n = normalize(nm * (v.nrm / (s * s)));
+  var uv = v.uv * vec2f(max(s.x, s.z), s.y) * 0.1;
+  if (mode == 1u) { uv = wp.xz * (-dw) + vec2f(0.5); }
+  var o: Placed;
+  o.wpos = wp;
+  o.nrm = n;
+  o.uv = uv;
+  return o;
+}
+
+@vertex fn vsMain(v: VIn) -> VOut {
+  let i = inst[v.ii];
+  let p = place(v, i);
+  var o: VOut;
+  o.clip = g.viewProj * vec4f(p.wpos, 1.0);
+  o.wpos = p.wpos;
+  o.nrm = p.nrm;
+  o.uv = p.uv;
+  o.col = v.col;
+  o.mat = i.mat;
+  o.icol = i.color;
+  return o;
+}
+
+@vertex fn vsShadow(v: VIn) -> @builtin(position) vec4f {
+  let i = inst[v.ii];
+  let p = place(v, i);
+  return g.shadowVP * vec4f(p.wpos, 1.0);
+}
+
+fn cotangentFrame(n: vec3f, p: vec3f, uv: vec2f) -> mat3x3f {
+  let dp1 = dpdx(p);
+  let dp2 = dpdy(p);
+  let duv1 = dpdx(uv);
+  let duv2 = dpdy(uv);
+  let dp2perp = cross(dp2, n);
+  let dp1perp = cross(n, dp1);
+  let t = dp2perp * duv1.x + dp1perp * duv2.x;
+  let b = dp2perp * duv1.y + dp1perp * duv2.y;
+  let invmax = inverseSqrt(max(dot(t, t), dot(b, b)) + 1e-12);
+  return mat3x3f(t * invmax, b * invmax, n);
+}
+
+fn envSample(d: vec3f, rough: f32) -> vec3f {
+  let u = atan2(d.x, d.z) / (2.0 * PI) + 0.5;
+  let v = acos(clamp(d.y, -1.0, 1.0)) / PI;
+  return textureSampleLevel(envTex, linSamp, vec2f(u, v), rough * 7.0).rgb;
+}
+
+fn shadowFactor(wp: vec3f, n: vec3f) -> f32 {
+  let sp = g.shadowVP * vec4f(wp + n * 0.08, 1.0);
+  if (sp.w <= 0.001) { return 1.0; }
+  let ndc = sp.xyz / sp.w;
+  let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || ndc.z > 1.0) { return 1.0; }
+  var s = 0.0;
+  let texel = 1.0 / 2048.0;
+  for (var y = -1; y <= 1; y++) {
+    for (var x = -1; x <= 1; x++) {
+      s = s + textureSampleCompareLevel(shadowTex, shadowSamp, uv + vec2f(f32(x), f32(y)) * texel, ndc.z - 0.0012);
+    }
+  }
+  return s / 9.0;
+}
+
+fn brdf(n: vec3f, v: vec3f, l: vec3f, alb: vec3f, metal: f32, rough: f32) -> vec3f {
+  let h = normalize(v + l);
+  let ndh = max(dot(n, h), 0.0);
+  let ndv = max(dot(n, v), 1e-4);
+  let ndl = max(dot(n, l), 0.0);
+  let a = rough * rough;
+  let a2 = a * a;
+  let dd = ndh * ndh * (a2 - 1.0) + 1.0;
+  let d = a2 / (PI * dd * dd);
+  let k = (rough + 1.0) * (rough + 1.0) / 8.0;
+  let gg = (ndv / (ndv * (1.0 - k) + k)) * (ndl / (ndl * (1.0 - k) + k));
+  let f0 = mix(vec3f(0.04), alb, metal);
+  let f = f0 + (1.0 - f0) * pow(1.0 - max(dot(h, v), 0.0), 5.0);
+  let spec = d * gg * f / (4.0 * ndv * ndl + 1e-4);
+  let kd = (1.0 - f) * (1.0 - metal);
+  return kd * alb / PI + spec;
+}
+
+fn lightAtten(li: u32, wp: vec3f) -> vec4f {
+  let lt = g.lights[li];
+  let toL = lt.pos.xyz - wp;
+  let d2 = dot(toL, toL);
+  let d = sqrt(d2);
+  let l = toL / max(d, 1e-4);
+  let range = lt.pos.w;
+  var att = clamp(1.0 - d2 / (range * range), 0.0, 1.0);
+  att = att * att * 9.0 / (1.0 + d2 * 0.18);
+  if (lt.dir.w > 0.0) {
+    let cosA = dot(-l, normalize(lt.dir.xyz));
+    att = att * smoothstep(lt.dir.w, lt.dir.w + 0.12, cosA);
+  }
+  return vec4f(l, att);
+}
+
+fn applyFog(col: vec3f, wp: vec3f) -> vec3f {
+  let dist = length(g.camPos.xyz - wp);
+  let f = 1.0 - exp(-dist * g.fog.w);
+  return mix(col, g.fog.rgb, f);
+}
+
+@fragment fn fsMain(f: VOut) -> @location(0) vec4f {
+  let layer = i32(floor(f.mat.w + 0.001));
+  let texA = textureSample(albedoTex, linSamp, f.uv, layer);
+  let texN = textureSample(normalTex, linSamp, f.uv, layer);
+  let vdir = normalize(g.camPos.xyz - f.wpos);
+  var n = normalize(f.nrm);
+  if (dot(n, vdir) < 0.0) { n = -n; }
+  let tbn = cotangentFrame(n, f.wpos, f.uv);
+  n = normalize(tbn * normalize(texN.xyz * 2.0 - 1.0));
+  let base = texA.rgb * f.col.rgb * f.icol.rgb;
+  let metal = clamp(f.mat.y, 0.0, 1.0);
+  let rough = clamp(f.mat.z * texN.w * 2.0, 0.04, 1.0);
+  let pulse = 1.0 + g.fx.x * 0.35;
+  let emissive = base * (f.col.a + f.mat.x * texA.a) * pulse * 1.3;
+  var col = vec3f(0.0);
+  let sun = normalize(g.sunDir.xyz);
+  col = col + brdf(n, vdir, sun, base, metal, rough) * g.sunColor.rgb * g.sunDir.w * max(dot(n, sun), 0.0);
+  for (var li = 0u; li < 8u; li++) {
+    let lt = g.lights[li];
+    if (lt.color.w <= 0.0) { continue; }
+    let la = lightAtten(li, f.wpos);
+    if (la.w <= 0.0001) { continue; }
+    var sh = 1.0;
+    if (li == 0u) { sh = shadowFactor(f.wpos, n); }
+    let radiance = lt.color.rgb * lt.color.w * la.w * sh;
+    col = col + brdf(n, vdir, la.xyz, base, metal, rough) * radiance * max(dot(n, la.xyz), 0.0);
+  }
+  let ndv = max(dot(n, vdir), 1e-4);
+  let f0 = mix(vec3f(0.04), base, metal);
+  let r = reflect(-vdir, n);
+  let env = envSample(r, rough) * g.env.y * (1.0 - rough * 0.7);
+  let fe = f0 + (max(vec3f(1.0 - rough), f0) - f0) * pow(1.0 - ndv, 5.0);
+  col = col + env * fe;
+  let amb = mix(g.skyBot.rgb, g.skyTop.rgb, n.y * 0.5 + 0.5) * g.env.x;
+  col = col + amb * base * (1.0 - metal);
+  col = col + emissive;
+  return vec4f(applyFog(col, f.wpos), 1.0);
+}
+
+@fragment fn fsGlow(f: VOut) -> @location(0) vec4f {
+  let layer = i32(floor(f.mat.w + 0.001));
+  let texA = textureSample(albedoTex, linSamp, f.uv, layer);
+  let vdir = normalize(g.camPos.xyz - f.wpos);
+  let n = normalize(f.nrm);
+  let facing = abs(dot(n, vdir));
+  let base = texA.rgb * f.col.rgb * f.icol.rgb;
+  let pulse = 1.0 + g.fx.x * 0.35;
+  var e = base * (f.col.a + f.mat.x * texA.a) * pulse;
+  e = e * mix(1.0, pow(facing, 1.5), clamp(f.mat.y, 0.0, 1.0));
+  let dist = length(g.camPos.xyz - f.wpos);
+  let fogF = exp(-dist * g.fog.w);
+  return vec4f(e * fogF, 1.0);
+}
+`;
+
+const WGSL_SKY = WGSL_COMMON + `
+@group(0) @binding(0) var<uniform> g: Globals;
+@fragment fn fsSky(i: FSOut) -> @location(0) vec4f {
+  let ndc = vec2f(i.uv.x * 2.0 - 1.0, 1.0 - i.uv.y * 2.0);
+  let pf = g.invVP * vec4f(ndc, 1.0, 1.0);
+  let pn = g.invVP * vec4f(ndc, 0.0, 1.0);
+  let d = normalize(pf.xyz / pf.w - pn.xyz / pn.w);
+  let t = clamp(d.y, -1.0, 1.0);
+  var col = mix(g.skyBot.rgb, g.skyTop.rgb, pow(max(t, 0.0), 0.45));
+  col = col + g.skyBot.rgb * exp(-abs(t) * 9.0) * 0.8;
+  let sd = normalize(g.sunDir.xyz);
+  let cosang = dot(d, sd);
+  let disc = smoothstep(g.sunDisc.w - 0.0015, g.sunDisc.w, cosang);
+  var band = 1.0;
+  if (g.env.z > 0.5) {
+    let gap = clamp(0.55 - d.y * 7.0, 0.0, 0.5);
+    band = step(gap, fract(d.y * 36.0 - g.scroll.w * 0.3));
+  }
+  let halo = pow(max(cosang, 0.0), 24.0) * 0.35;
+  col = col + g.sunDisc.rgb * (disc * band * 4.0 + halo);
+  if (g.env.w > 0.5) {
+    let cell = floor(d * 160.0);
+    let h = hash31(cell);
+    let star = step(0.985, h);
+    let twinkle = 0.6 + 0.4 * sin(g.scroll.w * 3.0 + h * 50.0);
+    let sp = fract(d * 160.0) - 0.5;
+    let dd = dot(sp, sp);
+    col = col + vec3f(0.9, 0.95, 1.0) * star * twinkle * smoothstep(0.08, 0.0, dd) * 3.0 * smoothstep(-0.05, 0.1, t);
+  }
+  let fogF = 1.0 - exp(-max(0.0, 0.1 - t) * 40.0 * g.fog.w * 20.0);
+  col = mix(col, g.fog.rgb, clamp(fogF, 0.0, 1.0) * 0.85);
+  return vec4f(col, 1.0);
+}
+`;
+
+const WGSL_PARTICLES = WGSL_COMMON + `
+struct P { pos: vec4f, vel: vec4f }
+struct Ind { vc: u32, ic: atomic<u32>, fv: u32, fi: u32 }
+@group(0) @binding(0) var<uniform> g: Globals;
+@group(0) @binding(1) var<storage, read_write> parts: array<P>;
+@group(0) @binding(2) var<storage, read_write> alive: array<u32>;
+@group(0) @binding(3) var<storage, read_write> ind: Ind;
+
+fn hash3(n: f32) -> vec3f { return vec3f(hash11(n), hash11(n + 17.1), hash11(n + 31.7)); }
+
+@compute @workgroup_size(256) fn csSim(@builtin(global_invocation_id) id: vec3u) {
+  let i = id.x;
+  if (i >= arrayLength(&parts)) { return; }
+  var p = parts[i];
+  let dt = g.pfx.x;
+  let mode = u32(g.pfx.y + 0.5);
+  let carZ = g.scroll.x;
+  let seed = f32(i) * 0.731 + g.scroll.w * 7.13;
+  let r = hash3(seed);
+  let r2 = hash3(seed + 101.3);
+  p.pos.w = p.pos.w - dt;
+  let dead = p.pos.w <= 0.0 || p.pos.z < carZ - 12.0 || p.pos.y < -30.0;
+  if (dead) {
+    p.pos.w = 0.0;
+    if (r2.z < g.pfx.w * dt) {
+      let x = (r.x - 0.5) * 60.0;
+      let z = carZ + 4.0 + r.z * 110.0;
+      if (mode == 1u) {
+        p.pos = vec4f(x, 6.0 + r.y * 16.0, z, 0.8 + r2.x * 0.6);
+        p.vel = vec4f(1.5, -28.0 - r2.y * 8.0, -4.0, 0.3 + r2.x * 0.5);
+      } else if (mode == 2u) {
+        p.pos = vec4f(x * 0.5, 0.5 + r.y * 5.0, z, 1.2 + r2.x * 1.2);
+        p.vel = vec4f((r2.x - 0.5) * 9.0, 4.0 + r2.y * 9.0, (r.y - 0.5) * 6.0, 0.2 + r2.y * 0.8);
+      } else if (mode == 3u) {
+        p.pos = vec4f(x, 0.3 + r.y * 14.0, z, 0.6 + r2.x * 1.0);
+        p.vel = vec4f((r2.x - 0.5) * 1.5, (r2.y - 0.3) * 1.5, 0.0, 0.3 + r2.y * 0.7);
+      } else if (mode == 4u) {
+        p.pos = vec4f(x, 0.2 + r.y * 7.0, z, 2.0 + r2.x * 2.0);
+        p.vel = vec4f((r2.x - 0.5) * 3.0, 6.0 + r2.y * 10.0, 0.0, 0.4 + r2.y * 0.8);
+      } else if (mode == 5u) {
+        p.pos = vec4f(x, -0.5 + r.y * 2.0, z, 5.0 + r2.x * 4.0);
+        p.vel = vec4f(0.0, 1.0 + r2.y * 2.5, 0.0, 0.15 + r2.x * 0.9);
+      } else {
+        p.pos = vec4f(x * 2.5, g.camPos.y + (r.y - 0.5) * 60.0, carZ + 40.0 + r.z * 260.0, 6.0 + r2.x * 4.0);
+        p.vel = vec4f(0.0, 0.0, 0.0, 0.3 + r2.y * 0.7);
+      }
+    }
+  } else {
+    if (mode == 1u) {
+      p.vel.z = p.vel.z + 0.0;
+    } else if (mode == 2u) {
+      p.vel.y = p.vel.y - 14.0 * dt;
+      if (p.pos.y < 0.1 && p.vel.y < 0.0) { p.vel.y = -p.vel.y * 0.45; p.vel.x = p.vel.x * 0.7; }
+    } else if (mode == 3u) {
+      p.vel.x = p.vel.x + sin(g.scroll.w * 2.0 + p.pos.z) * dt;
+    } else if (mode == 4u) {
+      p.vel.y = p.vel.y - 18.0 * dt;
+      if (p.pos.y < 0.3 && p.vel.y < 0.0) { p.vel.y = -p.vel.y * 0.85; }
+    } else if (mode == 5u) {
+      p.vel.x = sin(g.scroll.w * 3.0 + p.pos.z * 0.7 + p.pos.y) * 0.6;
+      p.vel.y = min(p.vel.y + dt * 0.8, 4.0);
+    } else {
+      p.vel.z = p.vel.z + 0.0;
+    }
+    p.pos = vec4f(p.pos.xyz + p.vel.xyz * dt, p.pos.w);
+  }
+  parts[i] = p;
+  if (p.pos.w > 0.0) {
+    let slot = atomicAdd(&ind.ic, 1u);
+    alive[slot] = i;
+  }
+}
+
+`;
+
+const WGSL_PARTICLES_DRAW = WGSL_COMMON + `
+struct P { pos: vec4f, vel: vec4f }
+@group(0) @binding(0) var<uniform> g: Globals;
+@group(0) @binding(1) var<storage, read> parts: array<P>;
+@group(0) @binding(2) var<storage, read> alive: array<u32>;
+
+struct PV { @builtin(position) clip: vec4f, @location(0) uv: vec2f, @location(1) col: vec4f, @location(2) @interpolate(flat) mode: u32 }
+
+@vertex fn vsPart(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> PV {
+  let idx = alive[ii];
+  let p = parts[idx];
+  var k = vi;
+  if (vi == 3u) { k = 2u; }
+  if (vi == 4u) { k = 1u; }
+  if (vi == 5u) { k = 3u; }
+  let corner = vec2f(f32(k & 1u), f32(k >> 1u)) * 2.0 - 1.0;
+  let right = vec3f(g.view[0].x, g.view[1].x, g.view[2].x);
+  let up = vec3f(g.view[0].y, g.view[1].y, g.view[2].y);
+  let mode = u32(g.pfx.y + 0.5);
+  var sz = g.pfx.z * (0.4 + p.vel.w);
+  var stretchUp = 1.0;
+  var col = vec3f(1.0);
+  var a = 1.0;
+  let life = p.pos.w;
+  if (mode == 1u) {
+    stretchUp = 7.0;
+    col = vec3f(0.6, 0.8, 1.0) * 0.6;
+    a = 0.5;
+  } else if (mode == 2u) {
+    col = mix(vec3f(1.0, 0.85, 0.4), vec3f(0.9, 0.95, 1.0), step(0.5, p.vel.w));
+    a = smoothstep(0.0, 0.3, life);
+  } else if (mode == 3u) {
+    let tw = 0.5 + 0.5 * sin(g.scroll.w * 14.0 + p.vel.w * 40.0 + f32(idx));
+    col = mix(vec3f(1.0, 0.3, 0.9), vec3f(0.3, 0.9, 1.0), p.vel.w) * tw;
+    a = smoothstep(0.0, 0.2, life) * smoothstep(1.6, 1.0, life);
+  } else if (mode == 4u) {
+    let c = fract(p.vel.w * 3.0);
+    col = select(select(vec3f(0.2, 1.0, 1.0), vec3f(1.0, 0.2, 1.0), c > 0.33), vec3f(1.0, 1.0, 0.2), c > 0.66);
+    a = smoothstep(0.0, 0.5, life);
+  } else if (mode == 5u) {
+    col = vec3f(0.7, 0.95, 1.0);
+    a = 0.6 * smoothstep(0.0, 1.0, life);
+  } else {
+    stretchUp = 1.0;
+    col = vec3f(0.9, 0.9, 1.0);
+    a = 0.9;
+  }
+  let pulse = 1.0 + g.fx.x * 0.5;
+  var wp = p.pos.xyz + right * corner.x * sz + up * corner.y * sz * stretchUp;
+  var o: PV;
+  o.clip = g.viewProj * vec4f(wp, 1.0);
+  o.uv = corner;
+  let dist = length(g.camPos.xyz - p.pos.xyz);
+  let fogF = exp(-dist * g.fog.w);
+  o.col = vec4f(col * pulse * fogF, a);
+  o.mode = mode;
+  return o;
+}
+
+@fragment fn fsPart(i: PV) -> @location(0) vec4f {
+  let d = dot(i.uv, i.uv);
+  var a = exp(-d * 3.5) * (1.0 - smoothstep(0.6, 1.0, d));
+  if (i.mode == 4u) {
+    a = 1.0 - step(0.85, max(abs(i.uv.x), abs(i.uv.y)));
+  }
+  if (i.mode == 5u) {
+    let ring = smoothstep(0.35, 0.6, d) * (1.0 - smoothstep(0.75, 1.0, d));
+    a = ring * 0.8 + exp(-d * 6.0) * 0.15;
+  }
+  return vec4f(i.col.rgb * a * i.col.a, 1.0);
+}
+`;
+
+const WGSL_POST = WGSL_COMMON + `
+struct PostU { texel: vec4f, params: vec4f }
+@group(0) @binding(0) var samp: sampler;
+@group(0) @binding(1) var texA: texture_2d<f32>;
+@group(0) @binding(2) var texB: texture_2d<f32>;
+@group(0) @binding(3) var texC: texture_2d<f32>;
+@group(0) @binding(4) var<uniform> pu: PostU;
+@group(0) @binding(5) var<uniform> g: Globals;
+
+fn regionUV(uv: vec2f) -> vec2f {
+  let s = g.post.xy;
+  return clamp(uv, vec2f(0.0), vec2f(1.0) - pu.texel.xy * 1.5) * s;
+}
+
+@fragment fn fsBright(i: FSOut) -> @location(0) vec4f {
+  let t = pu.texel.xy;
+  var c = textureSample(texA, samp, regionUV(i.uv + vec2f(-1.0, -1.0) * t)).rgb;
+  c = c + textureSample(texA, samp, regionUV(i.uv + vec2f(1.0, -1.0) * t)).rgb;
+  c = c + textureSample(texA, samp, regionUV(i.uv + vec2f(-1.0, 1.0) * t)).rgb;
+  c = c + textureSample(texA, samp, regionUV(i.uv + vec2f(1.0, 1.0) * t)).rgb;
+  c = c * 0.25;
+  let l = max(c.r, max(c.g, c.b));
+  let w = smoothstep(pu.params.x, pu.params.x + pu.params.y, l);
+  return vec4f(c * w, 1.0);
+}
+
+@fragment fn fsDown(i: FSOut) -> @location(0) vec4f {
+  let t = pu.texel.xy;
+  var c = textureSample(texA, samp, i.uv + vec2f(-1.0, -1.0) * t).rgb;
+  c = c + textureSample(texA, samp, i.uv + vec2f(1.0, -1.0) * t).rgb;
+  c = c + textureSample(texA, samp, i.uv + vec2f(-1.0, 1.0) * t).rgb;
+  c = c + textureSample(texA, samp, i.uv + vec2f(1.0, 1.0) * t).rgb;
+  c = c + textureSample(texA, samp, i.uv).rgb * 2.0;
+  return vec4f(c / 6.0, 1.0);
+}
+
+@fragment fn fsUp(i: FSOut) -> @location(0) vec4f {
+  let t = pu.texel.xy * pu.params.x;
+  var c = textureSample(texA, samp, i.uv + vec2f(-1.0, -1.0) * t).rgb;
+  c = c + textureSample(texA, samp, i.uv + vec2f(0.0, -1.0) * t).rgb * 2.0;
+  c = c + textureSample(texA, samp, i.uv + vec2f(1.0, -1.0) * t).rgb;
+  c = c + textureSample(texA, samp, i.uv + vec2f(-1.0, 0.0) * t).rgb * 2.0;
+  c = c + textureSample(texA, samp, i.uv).rgb * 4.0;
+  c = c + textureSample(texA, samp, i.uv + vec2f(1.0, 0.0) * t).rgb * 2.0;
+  c = c + textureSample(texA, samp, i.uv + vec2f(-1.0, 1.0) * t).rgb;
+  c = c + textureSample(texA, samp, i.uv + vec2f(0.0, 1.0) * t).rgb * 2.0;
+  c = c + textureSample(texA, samp, i.uv + vec2f(1.0, 1.0) * t).rgb;
+  c = c / 16.0;
+  let b = textureSample(texB, samp, i.uv).rgb;
+  return vec4f(c * pu.params.y + b, 1.0);
+}
+
+@fragment fn fsAnamorph(i: FSOut) -> @location(0) vec4f {
+  let step = pu.texel.x * pu.params.x;
+  var c = vec3f(0.0);
+  var wsum = 0.0;
+  for (var k = -12; k <= 12; k++) {
+    let w = exp(-f32(k * k) * 0.02);
+    c = c + textureSample(texA, samp, i.uv + vec2f(f32(k) * step, 0.0)).rgb * w;
+    wsum = wsum + w;
+  }
+  c = c / wsum;
+  return vec4f(c * pu.params.y, 1.0);
+}
+
+@fragment fn fsComposite(i: FSOut) -> @location(0) vec4f {
+  let uv = i.uv;
+  let cen = uv - 0.5;
+  let r2 = dot(cen, cen);
+  let ca = (0.003 + g.post.z * 0.025) * (0.3 + r2 * 2.5);
+  let off = cen * ca;
+  var col: vec3f;
+  col.r = textureSample(texA, samp, regionUV(uv + off)).r;
+  col.g = textureSample(texA, samp, regionUV(uv)).g;
+  col.b = textureSample(texA, samp, regionUV(uv - off)).b;
+  let bloom = textureSample(texB, samp, uv).rgb;
+  let ana = textureSample(texC, samp, uv).rgb;
+  col = col + bloom * pu.params.x + ana * vec3f(0.55, 0.8, 1.6) * pu.params.y;
+  col = col + vec3f(g.fx.w);
+  col = acesTone(col * g.camPos.w);
+  let vig = 1.0 - 0.5 * smoothstep(0.15, 0.6, r2);
+  col = col * vig;
+  let scan = 0.9 + 0.1 * sin(i.p.y * PI * pu.params.z);
+  col = col * scan;
+  let grain = hash21(uv * vec2f(1713.0, 977.0) + vec2f(fract(g.scroll.w * 13.37), fract(g.scroll.w * 7.77))) - 0.5;
+  col = col + grain * 0.035;
+  col = max(col, vec3f(0.0)) * g.post.w;
+  return vec4f(pow(col, vec3f(1.0 / 2.2)), 1.0);
+}
+`;
+
+const WGSL_TEXGEN = WGSL_COMMON + `
+struct TexU { kind: u32, size: u32, seed: f32, pad: f32 }
+struct Mat { col: vec3f, emis: f32, h: f32, rough: f32 }
+@group(0) @binding(0) var<uniform> tu: TexU;
+@group(0) @binding(1) var outAlbedo: texture_storage_2d_array<rgba8unorm, write>;
+@group(0) @binding(2) var outHeight: texture_storage_2d_array<rg32float, write>;
+@group(0) @binding(3) var inHeight: texture_2d_array<f32>;
+@group(0) @binding(4) var outNormal: texture_storage_2d_array<rgba8unorm, write>;
+@group(0) @binding(5) var outEnv: texture_storage_2d<rgba16float, write>;
+
+fn wrapP(p: vec2f, period: f32) -> vec2f { return p - floor(p / period) * period; }
+fn vnoise(p: vec2f, period: f32) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  let a = hash21(wrapP(i, period));
+  let b = hash21(wrapP(i + vec2f(1.0, 0.0), period));
+  let c = hash21(wrapP(i + vec2f(0.0, 1.0), period));
+  let d = hash21(wrapP(i + vec2f(1.0, 1.0), period));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+fn fbm(p: vec2f, period: f32) -> f32 {
+  var v = 0.0;
+  var a = 0.5;
+  var pp = p;
+  var per = period;
+  for (var k = 0; k < 5; k++) {
+    v = v + a * vnoise(pp, per);
+    pp = pp * 2.0 + vec2f(13.1, 7.3);
+    per = per * 2.0;
+    a = a * 0.5;
+  }
+  return v;
+}
+struct Vor { f1: f32, f2: f32, id: f32 }
+fn voronoi(p: vec2f, period: f32) -> Vor {
+  let i = floor(p);
+  let f = fract(p);
+  var o: Vor;
+  o.f1 = 8.0;
+  o.f2 = 8.0;
+  o.id = 0.0;
+  for (var y = -1; y <= 1; y++) {
+    for (var x = -1; x <= 1; x++) {
+      let nb = vec2f(f32(x), f32(y));
+      let cell = wrapP(i + nb, period);
+      let h = hash21(cell);
+      let pt = nb + vec2f(h, hash21(cell + 19.19)) - f;
+      let d = dot(pt, pt);
+      if (d < o.f1) { o.f2 = o.f1; o.f1 = d; o.id = h; }
+      else if (d < o.f2) { o.f2 = d; }
+    }
+  }
+  o.f1 = sqrt(o.f1);
+  o.f2 = sqrt(o.f2);
+  return o;
+}
+fn hue(h: f32) -> vec3f {
+  let k = fract(vec3f(h, h + 1.0 / 3.0, h + 2.0 / 3.0)) * 6.0;
+  return clamp(abs(k - 3.0) - 1.0, vec3f(0.0), vec3f(1.0));
+}
+fn neon(h: f32) -> vec3f { return mix(vec3f(1.0), hue(h), 0.85); }
+fn dashLine(x: f32, center: f32, halfWidth: f32, v: f32, dashLen: f32, duty: f32) -> f32 {
+  let on = step(fract(v / dashLen), duty);
+  return (1.0 - smoothstep(halfWidth, halfWidth + 0.004, abs(x - center))) * on;
+}
+fn solidLine(x: f32, center: f32, halfWidth: f32) -> f32 {
+  return 1.0 - smoothstep(halfWidth, halfWidth + 0.004, abs(x - center));
+}
+
+fn texAsphalt(uv: vec2f) -> Mat {
+  var m: Mat;
+  let grain = fbm(uv * 96.0, 96.0);
+  let coarse = fbm(uv * 6.0 + 3.0, 6.0);
+  var col = vec3f(0.045, 0.047, 0.055) + grain * 0.025 + coarse * 0.02;
+  var h = grain * 0.2 + coarse * 0.5;
+  var rough = 0.55;
+  let puddle = smoothstep(0.52, 0.62, fbm(uv * 3.0 + 17.0, 3.0) + coarse * 0.3);
+  col = mix(col, vec3f(0.02, 0.025, 0.04), puddle);
+  rough = mix(rough, 0.03, puddle);
+  h = mix(h, 0.2, puddle);
+  let lane = dashLine(uv.x, 0.5, 0.012, uv.y, 0.25, 0.5) + dashLine(uv.x, 0.25, 0.009, uv.y, 0.25, 0.5) + dashLine(uv.x, 0.75, 0.009, uv.y, 0.25, 0.5);
+  let edge = solidLine(uv.x, 0.03, 0.007) + solidLine(uv.x, 0.97, 0.007);
+  let paint = clamp(lane + edge, 0.0, 1.0) * (0.7 + 0.3 * grain) * (1.0 - puddle * 0.7);
+  col = mix(col, vec3f(0.85, 0.85, 0.8), clamp(lane, 0.0, 1.0) * paint);
+  col = mix(col, vec3f(0.95, 0.75, 0.15), clamp(edge, 0.0, 1.0) * paint);
+  rough = mix(rough, 0.35, paint);
+  m.col = col;
+  m.emis = 0.0;
+  m.h = h;
+  m.rough = rough;
+  return m;
+}
+fn texMarble(uv: vec2f) -> Mat {
+  var m: Mat;
+  let warp = fbm(uv * 4.0, 4.0);
+  let vein = abs(sin((uv.x + uv.y) * 14.0 + warp * 9.0));
+  let v = pow(1.0 - vein, 6.0);
+  let v2 = pow(1.0 - abs(sin(uv.y * 22.0 - warp * 6.0)), 10.0) * 0.5;
+  let col = mix(vec3f(0.86, 0.84, 0.8), vec3f(0.12, 0.1, 0.14), clamp(v + v2, 0.0, 1.0));
+  m.col = col;
+  m.emis = 0.0;
+  m.h = 0.5 + (v + v2) * 0.1;
+  m.rough = 0.12;
+  return m;
+}
+fn texVelvet(uv: vec2f) -> Mat {
+  var m: Mat;
+  let folds = fbm(uv * 3.0 + 5.0, 3.0);
+  let fine = fbm(uv * 120.0, 120.0);
+  let sheen = pow(abs(sin(uv.x * 9.0 + folds * 8.0)), 3.0);
+  let col = vec3f(0.6, 0.04, 0.1) * (0.7 + sheen * 0.7 + fine * 0.2);
+  m.col = col;
+  m.emis = 0.0;
+  m.h = folds;
+  m.rough = 0.95;
+  return m;
+}
+fn texDisco(uv: vec2f) -> Mat {
+  var m: Mat;
+  let cells = 4.0;
+  let c = floor(uv * cells);
+  let f = fract(uv * cells);
+  let id = hash21(c * 3.1 + 0.5);
+  let edge = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+  let pad = smoothstep(0.03, 0.08, edge);
+  let inner = smoothstep(0.08, 0.3, edge);
+  let col = neon(id);
+  m.col = mix(vec3f(0.03), col * (0.6 + 0.4 * inner), pad);
+  m.emis = pad * (0.5 + 0.5 * inner);
+  m.h = pad * 0.5;
+  m.rough = mix(0.6, 0.15, pad);
+  return m;
+}
+fn texPCB(uv: vec2f) -> Mat {
+  var m: Mat;
+  let grid = 12.0;
+  let c = floor(uv * grid);
+  let f = fract(uv * grid);
+  let hid = hash21(c + 0.7);
+  let hv = hash21(c + 9.1);
+  var trace = 0.0;
+  if (hid < 0.35) { trace = max(trace, 1.0 - smoothstep(0.06, 0.09, abs(f.y - 0.5))); }
+  if (hv < 0.3) { trace = max(trace, 1.0 - smoothstep(0.06, 0.09, abs(f.x - 0.5))); }
+  let pd = length(f - 0.5);
+  let padR = step(0.75, hash21(c + 4.4));
+  let pad = padR * (1.0 - smoothstep(0.16, 0.19, pd)) * smoothstep(0.06, 0.08, pd);
+  let via = padR * (1.0 - smoothstep(0.04, 0.06, pd));
+  let led = step(0.955, hash21(c + 2.2)) * (1.0 - smoothstep(0.1, 0.14, pd));
+  let ledCol = hue(hash21(c + 8.8) * 0.4 + 0.05);
+  let base = vec3f(0.01, 0.1, 0.05) + fbm(uv * 40.0, 40.0) * 0.02;
+  let gold = vec3f(0.95, 0.72, 0.22);
+  var col = mix(base, gold * 0.8, clamp(trace, 0.0, 1.0));
+  col = mix(col, gold, pad);
+  col = mix(col, vec3f(0.02), via);
+  col = mix(col, ledCol, led);
+  m.col = col;
+  m.emis = led;
+  m.h = 0.3 + trace * 0.25 + pad * 0.35 + led * 0.6;
+  m.rough = mix(0.5, 0.2, max(trace, pad));
+  return m;
+}
+fn texSynth(uv: vec2f) -> Mat {
+  var m: Mat;
+  var col = vec3f(0.08, 0.085, 0.1) + fbm(uv * 80.0, 80.0) * 0.03;
+  var emis = 0.0;
+  var h = 0.5;
+  let cols = 16.0;
+  let rows = 4.0;
+  let c = floor(uv * vec2f(cols, rows));
+  let f = fract(uv * vec2f(cols, rows));
+  let kind = hash21(c + 1.3);
+  if (kind < 0.45) {
+    let seg = floor(f.y * 10.0);
+    let lvl = hash21(c + floor(uv.x * 4.0) + 7.0) * 10.0;
+    let inBar = step(0.25, f.x) * step(f.x, 0.75) * step(0.1, fract(f.y * 10.0)) * step(fract(f.y * 10.0), 0.8);
+    let lit = inBar * step(seg, lvl);
+    let lc = mix(vec3f(0.2, 1.0, 0.3), vec3f(1.0, 0.2, 0.1), smoothstep(5.0, 9.0, seg));
+    col = mix(col, lc, lit);
+    col = mix(col, vec3f(0.02), inBar * (1.0 - lit));
+    emis = lit;
+    h = 0.5 - inBar * 0.2;
+  } else if (kind < 0.8) {
+    let d = length(f - 0.5);
+    let knob = 1.0 - smoothstep(0.3, 0.33, d);
+    let ring = smoothstep(0.33, 0.36, d) * (1.0 - smoothstep(0.38, 0.41, d));
+    let ang = atan2(f.y - 0.5, f.x - 0.5);
+    let pointer = knob * step(0.12, d) * (1.0 - smoothstep(0.03, 0.05, abs(ang - (hash21(c + 5.5) * 4.0 - 2.0))));
+    col = mix(col, vec3f(0.02), knob);
+    col = mix(col, vec3f(0.6, 0.6, 0.62), ring * 0.6);
+    col = mix(col, vec3f(0.95), pointer);
+    h = 0.5 + knob * 0.4;
+  } else {
+    let line = step(0.4, f.y) * step(f.y, 0.46) * step(0.15, f.x) * step(f.x, 0.85);
+    col = mix(col, vec3f(0.7), line);
+    let btn = step(0.3, f.x) * step(f.x, 0.7) * step(0.6, f.y) * step(f.y, 0.9);
+    let bc = hue(hash21(c + 2.0));
+    col = mix(col, bc, btn);
+    emis = btn * step(0.5, hash21(c + 3.0));
+    h = 0.5 + btn * 0.3;
+  }
+  m.col = col;
+  m.emis = emis;
+  m.h = h;
+  m.rough = 0.4;
+  return m;
+}
+fn texTerrazzo(uv: vec2f) -> Mat {
+  var m: Mat;
+  let v = voronoi(uv * 18.0, 18.0);
+  let chip = 1.0 - smoothstep(0.25, 0.32, v.f1);
+  let cc = mix(vec3f(0.9, 0.45, 0.55), mix(vec3f(0.2, 0.7, 0.75), vec3f(0.95, 0.75, 0.3), step(0.66, v.id)), step(0.33, v.id));
+  let base = vec3f(0.9, 0.88, 0.82) + fbm(uv * 50.0, 50.0) * 0.04;
+  m.col = mix(base, cc, chip);
+  m.emis = 0.0;
+  m.h = 0.5 + chip * 0.05;
+  m.rough = 0.18;
+  return m;
+}
+fn texSand(uv: vec2f) -> Mat {
+  var m: Mat;
+  let ripple = sin(uv.y * 60.0 + fbm(uv * 5.0, 5.0) * 12.0) * 0.5 + 0.5;
+  let v = voronoi(uv * 10.0, 10.0);
+  let pebble = 1.0 - smoothstep(0.18, 0.22, v.f1);
+  let caust = pow(1.0 - smoothstep(0.0, 0.12, v.f2 - v.f1), 3.0);
+  let v2 = voronoi(uv * 6.0 + 3.3, 6.0);
+  let caust2 = pow(1.0 - smoothstep(0.0, 0.1, v2.f2 - v2.f1), 3.0);
+  var col = vec3f(0.75, 0.62, 0.42) * (0.7 + ripple * 0.3);
+  col = mix(col, vec3f(0.35, 0.3, 0.3), pebble);
+  col = col + vec3f(0.5, 0.9, 1.0) * (caust + caust2) * 0.35;
+  m.col = col;
+  m.emis = (caust + caust2) * 0.25;
+  m.h = ripple * 0.4 + pebble * 0.6;
+  m.rough = 0.8;
+  return m;
+}
+fn texBillboard(uv: vec2f) -> Mat {
+  var m: Mat;
+  let frame = step(0.03, uv.x) * step(uv.x, 0.97) * step(0.03, uv.y) * step(uv.y, 0.97);
+  let gx = 8.0;
+  let gy = 4.0;
+  let c = floor(uv * vec2f(gx, gy));
+  let f = fract(uv * vec2f(gx, gy));
+  let kind = hash21(c + 0.9);
+  var glyph = 0.0;
+  if (kind < 0.3) {
+    glyph = step(0.2, f.x) * step(f.x, 0.8) * step(0.2, f.y) * step(f.y, 0.35) + step(0.2, f.x) * step(f.x, 0.35) * step(0.2, f.y) * step(f.y, 0.8);
+  } else if (kind < 0.6) {
+    let d = length(f - 0.5);
+    glyph = smoothstep(0.2, 0.23, d) * (1.0 - smoothstep(0.33, 0.36, d));
+  } else if (kind < 0.85) {
+    glyph = step(abs(f.x - f.y), 0.12) + step(abs(f.x + f.y - 1.0), 0.12);
+  }
+  glyph = clamp(glyph, 0.0, 1.0) * frame;
+  let hcol = neon(hash11(floor(uv.y * gy) * 0.37 + tu.seed));
+  m.col = mix(vec3f(0.05, 0.05, 0.07), hcol, glyph);
+  m.col = mix(vec3f(0.4, 0.4, 0.45), m.col, frame);
+  m.emis = glyph;
+  m.h = 0.5 + glyph * 0.2;
+  m.rough = 0.3;
+  return m;
+}
+fn texFacade(uv: vec2f) -> Mat {
+  var m: Mat;
+  let gx = 6.0;
+  let gy = 10.0;
+  let c = floor(uv * vec2f(gx, gy));
+  let f = fract(uv * vec2f(gx, gy));
+  let win = step(0.15, f.x) * step(f.x, 0.85) * step(0.2, f.y) * step(f.y, 0.8);
+  let lit = step(0.5, hash21(c + tu.seed));
+  let warm = step(0.5, hash21(c + 3.3));
+  let wc = mix(vec3f(0.3, 0.9, 1.0), vec3f(1.0, 0.75, 0.4), warm) * (0.7 + 0.3 * hash21(c + 6.1));
+  let wall = vec3f(0.08, 0.08, 0.11) + fbm(uv * 30.0, 30.0) * 0.03;
+  var col = mix(wall, vec3f(0.02, 0.03, 0.05), win);
+  col = mix(col, wc, win * lit);
+  m.col = col;
+  m.emis = win * lit;
+  m.h = 0.6 - win * 0.3;
+  m.rough = mix(0.7, 0.15, win);
+  return m;
+}
+fn texGrid(uv: vec2f) -> Mat {
+  var m: Mat;
+  let f = fract(uv * 4.0);
+  let lx = 1.0 - smoothstep(0.02, 0.05, min(f.x, 1.0 - f.x));
+  let ly = 1.0 - smoothstep(0.02, 0.05, min(f.y, 1.0 - f.y));
+  let line = clamp(lx + ly, 0.0, 1.0);
+  let glow = exp(-min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)) * 8.0) * 0.5;
+  let col = mix(vec3f(1.0, 0.15, 0.7), vec3f(0.2, 0.9, 1.0), step(0.5, fract(uv.y * 2.0)));
+  m.col = mix(vec3f(0.01, 0.0, 0.03) + col * glow * 0.3, col, line);
+  m.emis = line + glow * 0.4;
+  m.h = 0.5 + line * 0.1;
+  m.rough = 0.4;
+  return m;
+}
+fn texFlat(uv: vec2f) -> Mat {
+  var m: Mat;
+  m.col = vec3f(1.0);
+  m.emis = 1.0;
+  m.h = 0.5;
+  m.rough = 0.5;
+  return m;
+}
+fn texChromeTrim(uv: vec2f) -> Mat {
+  var m: Mat;
+  let brush = fbm(vec2f(uv.x * 2.0, uv.y * 200.0), 200.0);
+  m.col = vec3f(0.95, 0.95, 0.97) * (0.9 + brush * 0.1);
+  m.emis = 1.0;
+  m.h = 0.5 + brush * 0.05;
+  m.rough = 0.5;
+  return m;
+}
+
+@compute @workgroup_size(8, 8) fn csGen(@builtin(global_invocation_id) id: vec3u) {
+  if (id.x >= tu.size || id.y >= tu.size) { return; }
+  let uv = (vec2f(id.xy) + 0.5) / f32(tu.size);
+  var m: Mat;
+  switch tu.kind {
+    case 0u: { m = texAsphalt(uv); }
+    case 1u: { m = texMarble(uv); }
+    case 2u: { m = texVelvet(uv); }
+    case 3u: { m = texDisco(uv); }
+    case 4u: { m = texPCB(uv); }
+    case 5u: { m = texSynth(uv); }
+    case 6u: { m = texTerrazzo(uv); }
+    case 7u: { m = texSand(uv); }
+    case 8u: { m = texBillboard(uv); }
+    case 9u: { m = texFacade(uv); }
+    case 10u: { m = texGrid(uv); }
+    case 12u: { m = texChromeTrim(uv); }
+    default: { m = texFlat(uv); }
+  }
+  textureStore(outAlbedo, vec2i(id.xy), i32(tu.kind), vec4f(clamp(m.col, vec3f(0.0), vec3f(1.0)), clamp(m.emis, 0.0, 1.0)));
+  textureStore(outHeight, vec2i(id.xy), i32(tu.kind), vec4f(m.h, m.rough, 0.0, 0.0));
+}
+
+@compute @workgroup_size(8, 8) fn csNormal(@builtin(global_invocation_id) id: vec3u) {
+  if (id.x >= tu.size || id.y >= tu.size) { return; }
+  let s = i32(tu.size);
+  let p = vec2i(id.xy);
+  let layer = i32(tu.kind);
+  let sv = vec2i(s, s);
+  let c = textureLoad(inHeight, p, layer, 0);
+  let hl = textureLoad(inHeight, (p + vec2i(-1, 0) + sv) % sv, layer, 0).x;
+  let hr = textureLoad(inHeight, (p + vec2i(1, 0) + sv) % sv, layer, 0).x;
+  let hd = textureLoad(inHeight, (p + vec2i(0, -1) + sv) % sv, layer, 0).x;
+  let hu = textureLoad(inHeight, (p + vec2i(0, 1) + sv) % sv, layer, 0).x;
+  let strength = tu.seed;
+  let n = normalize(vec3f((hl - hr) * strength, (hd - hu) * strength, 1.0));
+  textureStore(outNormal, p, layer, vec4f(n * 0.5 + 0.5, clamp(c.y, 0.02, 1.0)));
+}
+
+@compute @workgroup_size(8, 8) fn csEnv(@builtin(global_invocation_id) id: vec3u) {
+  let w = tu.size;
+  let h = tu.size / 2u;
+  if (id.x >= w || id.y >= h) { return; }
+  let uv = (vec2f(id.xy) + 0.5) / vec2f(f32(w), f32(h));
+  let phi = (uv.x - 0.5) * 2.0 * PI;
+  let theta = uv.y * PI;
+  let d = vec3f(sin(theta) * sin(phi), cos(theta), sin(theta) * cos(phi));
+  let t = d.y;
+  var col = mix(vec3f(0.5, 0.05, 0.35), vec3f(0.01, 0.0, 0.06), pow(max(t, 0.0), 0.4));
+  col = mix(col, vec3f(0.6, 0.1, 0.4), exp(-abs(t) * 10.0));
+  let sun = pow(max(dot(d, normalize(vec3f(0.3, 0.1, 1.0))), 0.0), 40.0);
+  col = col + vec3f(1.0, 0.4, 0.2) * sun * 6.0;
+  let skyline = step(t, fbm(vec2f(uv.x * 10.0, 0.0), 10.0) * 0.18 - 0.02);
+  let band = fract(uv.x * 40.0 + hash11(floor(uv.y * 60.0)) * 3.0);
+  let streak = step(0.6, hash21(vec2f(floor(uv.x * 40.0), floor(uv.y * 60.0)))) * step(0.6, band) * step(t, 0.3) * step(-0.3, t);
+  let sc = mix(vec3f(0.1, 0.9, 1.0), vec3f(1.0, 0.2, 0.8), hash21(vec2f(floor(uv.x * 40.0), 1.0)));
+  col = mix(col, vec3f(0.05, 0.02, 0.08), skyline * 0.6);
+  col = col + sc * streak * 3.0 * (1.0 - skyline * 0.5);
+  if (t < 0.0) {
+    let wet = fbm(uv * 30.0, 30.0);
+    col = col * (0.25 + wet * 0.2) + sc * streak * 1.5;
+  }
+  textureStore(outEnv, vec2i(id.xy), vec4f(col, 1.0));
+}
+`;
+
+const wgslMip = (arr, fmt) => `
+@group(0) @binding(0) var src: ${arr ? "texture_2d_array<f32>" : "texture_2d<f32>"};
+@group(0) @binding(1) var dst: ${arr ? "texture_storage_2d_array<" + fmt + ", write>" : "texture_storage_2d<" + fmt + ", write>"};
+@compute @workgroup_size(8, 8) fn csMip(@builtin(global_invocation_id) id: vec3u) {
+  let dims = textureDimensions(dst);
+  if (id.x >= dims.x || id.y >= dims.y) { return; }
+  let p = vec2i(id.xy) * 2;
+  ${arr ? "let l = i32(id.z);" : ""}
+  let c = (textureLoad(src, p, ${arr ? "l, " : ""}0) + textureLoad(src, p + vec2i(1, 0), ${arr ? "l, " : ""}0) + textureLoad(src, p + vec2i(0, 1), ${arr ? "l, " : ""}0) + textureLoad(src, p + vec2i(1, 1), ${arr ? "l, " : ""}0)) * 0.25;
+  textureStore(dst, vec2i(id.xy), ${arr ? "l, " : ""}c);
+}
+`;
+const M4 = {
+  identity(o) { o.fill(0); o[0] = o[5] = o[10] = o[15] = 1; return o; },
+  copy(o, a) { o.set(a); return o; },
+  mul(o, a, b) {
+    const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3], a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+    const a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11], a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+    for (let c = 0; c < 4; c++) {
+      const b0 = b[c * 4], b1 = b[c * 4 + 1], b2 = b[c * 4 + 2], b3 = b[c * 4 + 3];
+      o[c * 4] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
+      o[c * 4 + 1] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
+      o[c * 4 + 2] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
+      o[c * 4 + 3] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
+    }
+    return o;
+  },
+  perspective(o, fovy, aspect, near, far) {
+    const f = 1 / Math.tan(fovy / 2);
+    o.fill(0);
+    o[0] = -f / aspect; o[5] = f; o[10] = far / (near - far); o[11] = -1; o[14] = (far * near) / (near - far);
+    return o;
+  },
+  lookAt(o, ex, ey, ez, tx, ty, tz, ux, uy, uz) {
+    let zx = ex - tx, zy = ey - ty, zz = ez - tz;
+    let l = 1 / Math.hypot(zx, zy, zz); zx *= l; zy *= l; zz *= l;
+    let xx = uy * zz - uz * zy, xy = uz * zx - ux * zz, xz = ux * zy - uy * zx;
+    l = 1 / Math.hypot(xx, xy, xz); xx *= l; xy *= l; xz *= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    o[0] = xx; o[1] = yx; o[2] = zx; o[3] = 0;
+    o[4] = xy; o[5] = yy; o[6] = zy; o[7] = 0;
+    o[8] = xz; o[9] = yz; o[10] = zz; o[11] = 0;
+    o[12] = -(xx * ex + xy * ey + xz * ez); o[13] = -(yx * ex + yy * ey + yz * ez); o[14] = -(zx * ex + zy * ey + zz * ez); o[15] = 1;
+    return o;
+  },
+  invert(o, m) {
+    const a00 = m[0], a01 = m[1], a02 = m[2], a03 = m[3], a10 = m[4], a11 = m[5], a12 = m[6], a13 = m[7];
+    const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11], a30 = m[12], a31 = m[13], a32 = m[14], a33 = m[15];
+    const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11;
+    const b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12, b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30;
+    const b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+    let det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+    if (!det) return M4.identity(o);
+    det = 1 / det;
+    o[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det; o[1] = (a02 * b10 - a01 * b11 - a03 * b09) * det;
+    o[2] = (a31 * b05 - a32 * b04 + a33 * b03) * det; o[3] = (a22 * b04 - a21 * b05 - a23 * b03) * det;
+    o[4] = (a12 * b08 - a10 * b11 - a13 * b07) * det; o[5] = (a00 * b11 - a02 * b08 + a03 * b07) * det;
+    o[6] = (a32 * b02 - a30 * b05 - a33 * b01) * det; o[7] = (a20 * b05 - a22 * b02 + a23 * b01) * det;
+    o[8] = (a10 * b10 - a11 * b08 + a13 * b06) * det; o[9] = (a01 * b08 - a00 * b10 - a03 * b06) * det;
+    o[10] = (a30 * b04 - a31 * b02 + a33 * b00) * det; o[11] = (a21 * b02 - a20 * b04 - a23 * b00) * det;
+    o[12] = (a11 * b07 - a10 * b09 - a12 * b06) * det; o[13] = (a00 * b09 - a01 * b07 + a02 * b06) * det;
+    o[14] = (a31 * b01 - a30 * b03 - a32 * b00) * det; o[15] = (a20 * b03 - a21 * b01 + a22 * b00) * det;
+    return o;
+  },
+  trs(o, tx, ty, tz, rx, ry, rz, sx, sy, sz) {
+    const cx = Math.cos(rx), sxx = Math.sin(rx), cy = Math.cos(ry), sy_ = Math.sin(ry), cz = Math.cos(rz), sz_ = Math.sin(rz);
+    const r00 = cy * cz, r01 = cy * sz_, r02 = -sy_;
+    const r10 = sxx * sy_ * cz - cx * sz_, r11 = sxx * sy_ * sz_ + cx * cz, r12 = sxx * cy;
+    const r20 = cx * sy_ * cz + sxx * sz_, r21 = cx * sy_ * sz_ - sxx * cz, r22 = cx * cy;
+    o[0] = r00 * sx; o[1] = r01 * sx; o[2] = r02 * sx; o[3] = 0;
+    o[4] = r10 * sy; o[5] = r11 * sy; o[6] = r12 * sy; o[7] = 0;
+    o[8] = r20 * sz; o[9] = r21 * sz; o[10] = r22 * sz; o[11] = 0;
+    o[12] = tx; o[13] = ty; o[14] = tz; o[15] = 1;
+    return o;
+  },
+  transformPoint(o, m, x, y, z) {
+    o[0] = m[0] * x + m[4] * y + m[8] * z + m[12];
+    o[1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+    o[2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+    return o;
+  },
+  transformDir(o, m, x, y, z) {
+    o[0] = m[0] * x + m[4] * y + m[8] * z;
+    o[1] = m[1] * x + m[5] * y + m[9] * z;
+    o[2] = m[2] * x + m[6] * y + m[10] * z;
+    return o;
+  },
+};
+const xf = (tx = 0, ty = 0, tz = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) => M4.trs(new Float32Array(16), tx, ty, tz, rx, ry, rz, sx, sy, sz);
+const xmul = (a, b) => M4.mul(new Float32Array(16), a, b);
+
+const VERT_FLOATS = 12;
+const VERT_BYTES = VERT_FLOATS * 4;
+const MAX_VERTS = 1 << 20;
+const MAX_INDICES = 1 << 22;
+const vertexPool = new Float32Array(MAX_VERTS * VERT_FLOATS);
+const indexPool = new Uint32Array(MAX_INDICES);
+let poolVerts = 0, poolIndices = 0;
+const meshTable = [];
+
+const tmpN = new Float32Array(3);
+const tmpP = new Float32Array(3);
+
+class MeshBuilder {
+  constructor() { this.v = []; this.i = []; this.color = [1, 1, 1, 0]; this.m = null; }
+  set(m, color) { this.m = m; this.color = color || [1, 1, 1, 0]; return this; }
+  vert(x, y, z, nx, ny, nz, u, v) {
+    const m = this.m;
+    if (m) {
+      M4.transformPoint(tmpP, m, x, y, z);
+      const sx = Math.hypot(m[0], m[1], m[2]), sy = Math.hypot(m[4], m[5], m[6]), sz = Math.hypot(m[8], m[9], m[10]);
+      M4.transformDir(tmpN, m, nx / (sx * sx), ny / (sy * sy), nz / (sz * sz));
+      const l = Math.hypot(tmpN[0], tmpN[1], tmpN[2]) || 1;
+      this.v.push(tmpP[0], tmpP[1], tmpP[2], tmpN[0] / l, tmpN[1] / l, tmpN[2] / l, u, v, this.color[0], this.color[1], this.color[2], this.color[3]);
+    } else {
+      this.v.push(x, y, z, nx, ny, nz, u, v, this.color[0], this.color[1], this.color[2], this.color[3]);
+    }
+    return this.v.length / VERT_FLOATS - 1;
+  }
+  tri(a, b, c) { this.i.push(a, b, c); }
+  quad(a, b, c, d) { this.i.push(a, b, c, a, c, d); }
+  box(w, h, d, uvs = 1) {
+    const hw = w / 2, hh = h / 2, hd = d / 2;
+    const faces = [
+      [[hw, -hh, -hd], [hw, -hh, hd], [hw, hh, hd], [hw, hh, -hd], [1, 0, 0], d, h],
+      [[-hw, -hh, hd], [-hw, -hh, -hd], [-hw, hh, -hd], [-hw, hh, hd], [-1, 0, 0], d, h],
+      [[-hw, hh, hd], [hw, hh, hd], [hw, hh, -hd], [-hw, hh, -hd], [0, 1, 0], w, d],
+      [[-hw, -hh, -hd], [hw, -hh, -hd], [hw, -hh, hd], [-hw, -hh, hd], [0, -1, 0], w, d],
+      [[hw, -hh, hd], [-hw, -hh, hd], [-hw, hh, hd], [hw, hh, hd], [0, 0, 1], w, h],
+      [[-hw, -hh, -hd], [hw, -hh, -hd], [hw, hh, -hd], [-hw, hh, -hd], [0, 0, -1], w, h],
+    ];
+    for (const f of faces) {
+      const n = f[4], uw = f[5] * uvs, vh = f[6] * uvs;
+      const a = this.vert(f[0][0], f[0][1], f[0][2], n[0], n[1], n[2], 0, 0);
+      const b = this.vert(f[1][0], f[1][1], f[1][2], n[0], n[1], n[2], uw, 0);
+      const c = this.vert(f[2][0], f[2][1], f[2][2], n[0], n[1], n[2], uw, vh);
+      const dd = this.vert(f[3][0], f[3][1], f[3][2], n[0], n[1], n[2], 0, vh);
+      this.quad(a, b, c, dd);
+    }
+    return this;
+  }
+  lathe(profile, seg, uvs = 1) {
+    const rings = profile.length;
+    const base = this.v.length / VERT_FLOATS;
+    for (let i = 0; i < rings; i++) {
+      const [r, y] = profile[i];
+      const p0 = profile[Math.max(0, i - 1)], p1 = profile[Math.min(rings - 1, i + 1)];
+      let dr = p1[0] - p0[0], dy = p1[1] - p0[1];
+      const l = Math.hypot(dr, dy) || 1; dr /= l; dy /= l;
+      const nr = dy, ny = -dr;
+      for (let j = 0; j <= seg; j++) {
+        const a = (j / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+        this.vert(r * ca, y, r * sa, nr * ca, ny, nr * sa, (j / seg) * uvs, (i / (rings - 1)) * uvs);
+      }
+    }
+    for (let i = 0; i < rings - 1; i++) {
+      for (let j = 0; j < seg; j++) {
+        const a = base + i * (seg + 1) + j, b = a + 1, c = a + seg + 1, d = c + 1;
+        this.quad(a, c, d, b);
+      }
+    }
+    return this;
+  }
+  cylinder(rb, rt, h, seg, uvs = 1) {
+    this.lathe([[rb, 0], [rt, h]], seg, uvs);
+    this.disc(rb, 0, seg, -1);
+    this.disc(rt, h, seg, 1);
+    return this;
+  }
+  disc(r, y, seg, dir) {
+    const c = this.vert(0, y, 0, 0, dir, 0, 0.5, 0.5);
+    const base = this.v.length / VERT_FLOATS;
+    for (let j = 0; j <= seg; j++) {
+      const a = (j / seg) * Math.PI * 2;
+      this.vert(r * Math.cos(a), y, r * Math.sin(a), 0, dir, 0, 0.5 + 0.5 * Math.cos(a), 0.5 + 0.5 * Math.sin(a));
+    }
+    for (let j = 0; j < seg; j++) {
+      if (dir > 0) this.tri(c, base + j + 1, base + j); else this.tri(c, base + j, base + j + 1);
+    }
+    return this;
+  }
+  sphere(r, segU, segV) {
+    const prof = [];
+    for (let i = 0; i <= segV; i++) {
+      const t = (i / segV) * Math.PI;
+      prof.push([Math.sin(t) * r, -Math.cos(t) * r]);
+    }
+    return this.lathe(prof, segU);
+  }
+  torus(R, r, segU, segV, arc = Math.PI * 2) {
+    const base = this.v.length / VERT_FLOATS;
+    for (let i = 0; i <= segU; i++) {
+      const a = (i / segU) * arc, ca = Math.cos(a), sa = Math.sin(a);
+      for (let j = 0; j <= segV; j++) {
+        const b = (j / segV) * Math.PI * 2, cb = Math.cos(b), sb = Math.sin(b);
+        this.vert((R + r * cb) * ca, r * sb, (R + r * cb) * sa, cb * ca, sb, cb * sa, i / segU * 4, j / segV);
+      }
+    }
+    for (let i = 0; i < segU; i++) {
+      for (let j = 0; j < segV; j++) {
+        const a = base + i * (segV + 1) + j, b = a + segV + 1;
+        this.quad(a, b, b + 1, a + 1);
+      }
+    }
+    return this;
+  }
+  extrude(poly, depth) {
+    const n = poly.length;
+    let cx = 0, cy = 0;
+    for (const p of poly) { cx += p[0]; cy += p[1]; }
+    cx /= n; cy /= n;
+    const hz = depth / 2;
+    const cf = this.vert(cx, cy, hz, 0, 0, 1, 0.5, 0.5);
+    const fbase = this.v.length / VERT_FLOATS;
+    for (const p of poly) this.vert(p[0], p[1], hz, 0, 0, 1, p[0], p[1]);
+    for (let i = 0; i < n; i++) this.tri(cf, fbase + i, fbase + (i + 1) % n);
+    const cb = this.vert(cx, cy, -hz, 0, 0, -1, 0.5, 0.5);
+    const bbase = this.v.length / VERT_FLOATS;
+    for (const p of poly) this.vert(p[0], p[1], -hz, 0, 0, -1, p[0], p[1]);
+    for (let i = 0; i < n; i++) this.tri(cb, bbase + (i + 1) % n, bbase + i);
+    for (let i = 0; i < n; i++) {
+      const p = poly[i], q = poly[(i + 1) % n];
+      let nx = q[1] - p[1], ny = -(q[0] - p[0]);
+      const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+      const a = this.vert(p[0], p[1], hz, nx, ny, 0, 0, 0);
+      const b = this.vert(q[0], q[1], hz, nx, ny, 0, 1, 0);
+      const c = this.vert(q[0], q[1], -hz, nx, ny, 0, 1, 1);
+      const d = this.vert(p[0], p[1], -hz, nx, ny, 0, 0, 1);
+      this.quad(a, b, c, d);
+    }
+    return this;
+  }
+  plane(w, d, segX, segZ, uvs = 1) {
+    const base = this.v.length / VERT_FLOATS;
+    for (let i = 0; i <= segZ; i++) {
+      for (let j = 0; j <= segX; j++) {
+        const x = (j / segX - 0.5) * w, z = (i / segZ - 0.5) * d;
+        this.vert(x, 0, z, 0, 1, 0, x * uvs, z * uvs);
+      }
+    }
+    for (let i = 0; i < segZ; i++) {
+      for (let j = 0; j < segX; j++) {
+        const a = base + i * (segX + 1) + j, b = a + 1, c = a + segX + 1, d = c + 1;
+        this.quad(a, c, d, b);
+      }
+    }
+    return this;
+  }
+  cone(r, h, seg) {
+    this.lathe([[r, 0], [0.001, h]], seg);
+    return this;
+  }
+  bake() {
+    const nv = this.v.length / VERT_FLOATS, ni = this.i.length;
+    if (poolVerts + nv > MAX_VERTS || poolIndices + ni > MAX_INDICES) throw new Error("mesh pool exhausted");
+    vertexPool.set(this.v, poolVerts * VERT_FLOATS);
+    for (let k = 0; k < ni; k++) indexPool[poolIndices + k] = this.i[k] + poolVerts;
+    const id = meshTable.length;
+    meshTable.push({ first: poolIndices, count: ni });
+    poolVerts += nv;
+    poolIndices += ni;
+    return id;
+  }
+}
+
+const COL = {
+  white: [1, 1, 1, 0], black: [0.02, 0.02, 0.025, 0], chrome: [0.95, 0.95, 0.97, 0], tire: [0.03, 0.03, 0.035, 0],
+  red: [1, 0.05, 0.08, 0], redGlow: [1, 0.06, 0.1, 1.5], blueGlow: [0.2, 0.4, 1, 1.5], amber: [1, 0.6, 0.15, 0],
+  magenta: [1, 0.15, 0.75, 0], cyan: [0.15, 0.9, 1, 0], gold: [0.95, 0.72, 0.22, 0], glass: [0.8, 0.95, 1, 0],
+  green: [0.1, 0.6, 0.2, 0], wood: [0.35, 0.2, 0.1, 0], ivory: [0.95, 0.92, 0.85, 0], navy: [0.05, 0.08, 0.3, 0],
+};
+const emis = (c, e) => [c[0], c[1], c[2], e];
+const scaleCol = (c, k) => [c[0] * k, c[1] * k, c[2] * k, c[3]];
+
+const buildCarMesh = () => {
+  const b = new MeshBuilder();
+  const body = [0.93, 0.93, 0.95, 0];
+  const dark = [0.05, 0.055, 0.075, 0];
+  b.set(xf(0, 0.72, 0), body).box(1.95, 0.5, 5.4);
+  b.set(xf(0, 1.02, 1.85), dark).box(1.9, 0.12, 1.75);
+  b.set(xf(0, 1.02, -1.95), dark).box(1.9, 0.12, 1.5);
+  b.set(xf(0, 1.02, 0), body).box(1.9, 0.12, 2.0);
+  b.set(xf(0, 1.27, -0.1), body).box(1.75, 0.42, 2.0);
+  b.set(xf(0, 1.5, -0.1), body).box(1.7, 0.06, 2.1);
+  b.set(xf(0, 1.27, 0.98, -0.72, 0, 0), [0.05, 0.08, 0.12, 0]).box(1.68, 0.5, 0.06);
+  b.set(xf(0, 1.27, -1.18, 0.65, 0, 0), [0.05, 0.08, 0.12, 0]).box(1.68, 0.48, 0.06);
+  b.set(xf(0.87, 1.27, -0.1), [0.05, 0.08, 0.12, 0]).box(0.02, 0.36, 1.8);
+  b.set(xf(-0.87, 1.27, -0.1), [0.05, 0.08, 0.12, 0]).box(0.02, 0.36, 1.8);
+  b.set(xf(0.98, 0.95, 0.9, 0, 0, 0), COL.chrome).box(0.08, 0.1, 0.25);
+  b.set(xf(-0.98, 0.95, 0.9, 0, 0, 0), COL.chrome).box(0.08, 0.1, 0.25);
+  b.set(xf(0, 0.55, 2.75), COL.chrome).box(2.0, 0.18, 0.12);
+  b.set(xf(0, 0.55, -2.75), COL.chrome).box(2.0, 0.18, 0.12);
+  b.set(xf(0, 0.72, 2.72), COL.chrome).box(1.4, 0.3, 0.05);
+  b.set(xf(0, 0.72, 2.72), dark).box(1.3, 0.22, 0.07);
+  b.set(xf(0.72, 0.78, 2.73), emis([1, 0.95, 0.8, 0], 2.5)).box(0.34, 0.16, 0.06);
+  b.set(xf(-0.72, 0.78, 2.73), emis([1, 0.95, 0.8, 0], 2.5)).box(0.34, 0.16, 0.06);
+  b.set(xf(0.72, 0.78, -2.73), emis([1, 0.1, 0.05, 0], 1.2)).box(0.34, 0.16, 0.06);
+  b.set(xf(-0.72, 0.78, -2.73), emis([1, 0.1, 0.05, 0], 1.2)).box(0.34, 0.16, 0.06);
+  for (const sx of [-0.75, 0.75]) {
+    b.set(xf(sx, 0.62, 2.95, 0, 0, 0), COL.chrome).box(0.06, 0.6, 0.06);
+  }
+  b.set(xf(0, 0.85, 2.95), COL.chrome).box(1.56, 0.06, 0.06);
+  b.set(xf(0, 0.45, 2.95), COL.chrome).box(1.56, 0.06, 0.06);
+  for (const sz of [1.62, -1.62]) {
+    for (const sx of [-0.88, 0.88]) {
+      b.set(xf(sx, 0.36, sz, 0, 0, Math.PI / 2), COL.tire).cylinder(0.36, 0.36, 0.24, 18);
+      b.set(xf(sx + (sx > 0 ? 0.125 : -0.125), 0.36, sz, 0, 0, Math.PI / 2), COL.chrome).cylinder(0.2, 0.2, 0.02, 16);
+    }
+  }
+  b.set(xf(0, 1.6, 0.3), dark).box(1.3, 0.1, 0.32);
+  b.set(xf(0, 1.6, 0.3), COL.chrome).box(0.26, 0.14, 0.34);
+  b.set(xf(-1.0, 1.2, 0.95, 0, 0, 0), COL.chrome).cylinder(0.08, 0.08, 0.5, 12);
+  b.set(xf(-1.0, 1.45, 0.95, Math.PI / 2, 0, 0), COL.chrome).cylinder(0.13, 0.13, 0.2, 14);
+  b.set(xf(-1.0, 1.45, 1.06, Math.PI / 2, 0, 0), emis([1, 0.97, 0.85, 0], 3)).cylinder(0.11, 0.11, 0.02, 14);
+  b.set(xf(0.6, 1.16, 2.1), COL.chrome).box(0.03, 0.2, 0.03);
+  return b.bake();
+};
+const buildDomeMesh = () => new MeshBuilder().set(xf(0, 0, 0), [1, 1, 1, 0]).box(0.34, 0.15, 0.22).bake();
+const mulberry = (seed) => () => {
+  seed = (seed + 0x6D2B79F5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+const TEX = { ASPHALT: 0, MARBLE: 1, VELVET: 2, DISCO: 3, PCB: 4, SYNTH: 5, TERRAZZO: 6, SAND: 7, BILLBOARD: 8, FACADE: 9, GRID: 10, FLAT: 11, CHROME: 12 };
+const TEX_COUNT = 13;
+const MODE_WRAP = 0, MODE_GROUND = 0.25, MODE_CAR = 0.5, MODE_STATIC = 0.75;
+
+const PROPS = {};
+const buildProps = () => {
+  PROPS.car = buildCarMesh();
+  PROPS.dome = buildDomeMesh();
+  PROPS.unitBox = new MeshBuilder().set(null, COL.white).box(1, 1, 1).bake();
+  PROPS.ground = new MeshBuilder().set(null, COL.white).plane(260, 1400, 26, 140, 1).bake();
+  PROPS.cone = new MeshBuilder().set(null, COL.white).cone(1, 1, 24).bake();
+  PROPS.sphere = new MeshBuilder().set(null, COL.white).sphere(1, 24, 16).bake();
+  PROPS.torus = new MeshBuilder().set(null, COL.white).torus(1, 0.08, 48, 10).bake();
+  PROPS.arch = new MeshBuilder().set(xf(0, 0, 0, 0, 0, 0), COL.white).torus(1, 0.06, 32, 8, Math.PI).bake();
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0.5, 0), COL.white).box(1, 1, 1, 1);
+    b.set(xf(0, 1.0, 0), [0.6, 0.6, 0.65, 0]).box(1.02, 0.02, 1.02);
+    PROPS.skyscraper = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 4.5, 0), [0.3, 0.3, 0.33, 0]).cylinder(0.14, 0.1, 9, 10);
+    b.set(xf(0.9, 9.0, 0), [0.3, 0.3, 0.33, 0]).box(1.9, 0.12, 0.12);
+    b.set(xf(1.75, 8.85, 0), [0.35, 0.35, 0.38, 0]).box(0.7, 0.22, 0.4);
+    b.set(xf(1.75, 8.72, 0), emis([1, 0.75, 0.4, 0], 4)).box(0.6, 0.05, 0.32);
+    PROPS.lampPost = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), COL.white).box(1, 1, 0.04, 1);
+    b.set(xf(0, 0, -0.04), [0.25, 0.25, 0.28, 0]).box(1.06, 1.06, 0.04);
+    PROPS.billboard = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    let y = 0, x = 0;
+    for (let i = 0; i < 8; i++) {
+      b.set(xf(x, y + 0.6, 0, 0, 0, -0.06 * i), [0.4, 0.26, 0.14, 0]).cylinder(0.22 - i * 0.012, 0.2 - i * 0.012, 1.25, 8);
+      x += Math.sin(0.06 * i) * 1.2; y += Math.cos(0.06 * i) * 1.2;
+    }
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      b.set(xf(x, y + 0.2, 0, 0, a, -0.5 - (i % 2) * 0.4), [0.12, 0.55, 0.2, 0]).box(0.4, 0.04, 3.2);
+    }
+    PROPS.palm = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), [0.75, 0.9, 1, 0]).lathe([[0.9, 0], [0.85, 0.1], [0.15, 0.2], [0.12, 2.2], [0.5, 2.6], [1.1, 3.4], [1.25, 5.5], [1.18, 6.4], [1.12, 6.5]], 24);
+    PROPS.flute = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), [0.05, 0.2, 0.08, 0]).lathe([[1.3, 0], [1.4, 0.2], [1.4, 4.8], [1.1, 5.6], [0.5, 6.2], [0.45, 7.8], [0.5, 8.0], [0.0, 8.0]], 20);
+    b.set(xf(0, 2.6, 1.4), COL.ivory).box(1.6, 1.6, 0.06);
+    PROPS.bottle = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), COL.gold).lathe([[1.2, 0], [1.3, 0.3], [0.3, 0.6], [0.25, 3.5], [0.6, 4.0], [0.3, 4.4]], 16);
+    for (let i = -1; i <= 1; i++) {
+      b.set(xf(i * 1.6, 4.4, 0), COL.gold).box(0.3, 0.3, 3.4);
+      b.set(xf(i * 1.6, 5.6, 0), COL.gold).lathe([[0.5, 0], [0.55, 0.4], [0.35, 0.5]], 12);
+      b.set(xf(i * 1.6, 6.0, 0), COL.ivory).cylinder(0.3, 0.28, 2.2, 10);
+      b.set(xf(i * 1.6, 8.2, 0), emis([1, 0.65, 0.2, 0], 5)).lathe([[0.05, 0], [0.25, 0.4], [0.02, 1.1]], 10);
+    }
+    PROPS.candelabra = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), COL.ivory).lathe([[0, 0], [3.0, 0], [3.6, 0.3], [3.9, 0.4]], 32);
+    b.set(xf(0, 0.4, 0), [0.85, 0.1, 0.05, 0]).lathe([[0.9, 0], [1.3, 0.6], [1.2, 1.3], [0.8, 1.9], [0.0, 2.1]], 14);
+    b.set(xf(0, 0.6, -1.9, 0.3, 0, 0), [0.85, 0.1, 0.05, 0]).box(1.3, 0.3, 2.2);
+    b.set(xf(0, 0.5, -3.2), [0.9, 0.2, 0.1, 0]).box(1.9, 0.12, 1.2);
+    b.set(xf(0.9, 0.7, 1.7, 0, 0.5, 0), [0.85, 0.1, 0.05, 0]).box(0.4, 0.3, 1.7);
+    b.set(xf(-0.9, 0.7, 1.7, 0, -0.5, 0), [0.85, 0.1, 0.05, 0]).box(0.4, 0.3, 1.7);
+    b.set(xf(1.3, 0.75, 2.6, 0, 0.2, 0), [0.9, 0.15, 0.08, 0]).box(0.6, 0.35, 1.0);
+    b.set(xf(-1.3, 0.75, 2.6, 0, -0.2, 0), [0.9, 0.15, 0.08, 0]).box(0.6, 0.35, 1.0);
+    b.set(xf(0.3, 1.5, 2.0, -0.9, 0, 0), [0.7, 0.1, 0.05, 0]).box(0.05, 0.05, 3.0);
+    b.set(xf(-0.3, 1.5, 2.0, -0.9, 0, 0), [0.7, 0.1, 0.05, 0]).box(0.05, 0.05, 3.0);
+    PROPS.lobsterPlatter = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), COL.chrome).box(0.5, 0.08, 9);
+    b.set(xf(0, 0.1, 3.6), COL.chrome).box(1.4, 0.06, 2.0);
+    for (let i = -1; i <= 1; i++) b.set(xf(i * 0.45, 0.1, 5.3), COL.chrome).box(0.18, 0.06, 1.6);
+    PROPS.fork = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0.1, 0), [0.1, 0.12, 0.3, 0]).box(1.3, 0.2, 2.6);
+    b.set(xf(0, 0.6, -0.5), [0.1, 0.12, 0.3, 0]).box(1.2, 0.8, 1.5);
+    b.set(xf(0, 1.2, -0.7), [0.1, 0.12, 0.3, 0]).box(1.1, 0.4, 0.9);
+    for (const [x, z] of [[-0.45, 0.8], [0.45, 0.8], [-0.45, -0.8], [0.45, -0.8]]) {
+      b.set(xf(x, -0.2, z, 0, 0, Math.PI / 2), emis([1, 0.3, 0.9, 0], 0.6)).cylinder(0.34, 0.34, 0.3, 12);
+      b.set(xf(x, -0.2, z, 0, 0, Math.PI / 2), COL.chrome).cylinder(0.12, 0.12, 0.34, 8);
+    }
+    b.set(xf(0, -0.3, 1.5), emis([1, 0.9, 0.2, 0], 0.6)).cylinder(0.25, 0.25, 0.4, 10);
+    b.set(xf(0, 0.6, -0.5), emis([0.3, 1, 1, 0], 1.5)).box(1.26, 0.08, 0.12);
+    PROPS.skate = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), COL.chrome).sphere(1, 28, 18);
+    b.set(xf(0, 1.0, 0), [0.2, 0.2, 0.22, 0]).cylinder(0.06, 0.06, 6, 6);
+    PROPS.discoBall = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 1.5, 0), [0.06, 0.06, 0.07, 0]).box(2.4, 3.0, 1.8);
+    b.set(xf(0, 0.9, 0.92), [0.5, 0.5, 0.52, 0]).cylinder(0.6, 0.6, 0.15, 20);
+    b.set(xf(0, 0.9, 0.92), [0.1, 0.1, 0.1, 0]).cylinder(0.35, 0.35, 0.18, 16);
+    b.set(xf(0, 2.3, 0.92), [0.5, 0.5, 0.52, 0]).cylinder(0.35, 0.35, 0.15, 16);
+    b.set(xf(0, 2.3, 0.92), [0.1, 0.1, 0.1, 0]).cylinder(0.2, 0.2, 0.18, 12);
+    b.set(xf(0, 1.5, 0.92), emis([1, 0.2, 0.8, 0], 2)).box(1.8, 0.1, 0.1);
+    PROPS.speaker = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0.6, 0), [0.05, 0.05, 0.06, 0]).box(8, 1.2, 14);
+    for (let i = -3; i <= 3; i++) {
+      b.set(xf(4.3, 0.6, i * 1.8), [0.7, 0.7, 0.72, 0]).box(0.6, 0.25, 0.4);
+      b.set(xf(-4.3, 0.6, i * 1.8), [0.7, 0.7, 0.72, 0]).box(0.6, 0.25, 0.4);
+    }
+    b.set(xf(0, 1.21, 0), [0.75, 0.75, 0.78, 0]).box(3.5, 0.02, 0.4);
+    b.set(xf(-2.4, 1.21, 4.0), [0.75, 0.75, 0.78, 0]).cylinder(0.4, 0.4, 0.03, 12);
+    PROPS.chip = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), [0.1, 0.15, 0.5, 0]).cylinder(2.2, 2.2, 9, 24);
+    b.set(xf(0, 7.0, 0), [0.75, 0.75, 0.8, 0]).cylinder(2.22, 2.22, 1.2, 24);
+    b.set(xf(0, 8.9, 0), [0.75, 0.75, 0.8, 0]).lathe([[2.2, 0], [1.9, 0.3], [0.2, 0.4], [0, 0.4]], 24);
+    b.set(xf(0, 1.0, 0), [0.75, 0.75, 0.8, 0]).lathe([[0, 0], [0.2, 0], [2.0, 0.2], [2.21, 0.4]], 24);
+    PROPS.capacitor = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 1.0, 0, 0, 0, Math.PI / 2), [0.78, 0.65, 0.42, 0]).lathe([[0.5, 0], [0.9, 0.6], [0.9, 5.4], [0.5, 6.0]], 18);
+    const bands = [[0.8, 0.1, 0.05, 0], [0.2, 0.2, 0.9, 0], [0.9, 0.5, 0.1, 0], [0.9, 0.75, 0.2, 0]];
+    for (let i = 0; i < 4; i++) b.set(xf(-1.9 + i * 1.0 + (i === 3 ? 1.0 : 0), 1.0, 0, 0, 0, Math.PI / 2), bands[i]).cylinder(0.93, 0.93, 0.4, 18);
+    b.set(xf(0, 1.0, 0, 0, 0, Math.PI / 2), [0.7, 0.7, 0.72, 0]).cylinder(0.12, 0.12, 12, 8);
+    PROPS.resistor = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), [0.25, 0.25, 0.28, 0]).cylinder(1.4, 1.4, 1.0, 20);
+    b.set(xf(0, 1.0, 0), [0.35, 0.3, 0.28, 0.1]).lathe([[1.2, 0], [1.25, 4.5], [1.0, 6.0], [0.5, 6.6], [0.2, 6.8], [0, 6.8]], 20);
+    b.set(xf(0, 1.5, 0), emis([1, 0.55, 0.15, 0], 3.5)).cylinder(0.25, 0.25, 4.2, 8);
+    b.set(xf(0, 1.3, 0), emis([1, 0.4, 0.1, 0], 2)).lathe([[0.9, 0], [0.9, 3.0], [0.6, 3.8]], 16);
+    PROPS.tube = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0.4, 0), [0.08, 0.08, 0.09, 0]).cylinder(2.2, 2.0, 0.8, 24);
+    b.set(xf(0, 1.2, 0), COL.chrome).cylinder(0.9, 0.7, 0.6, 16);
+    b.set(xf(0, 1.8, 0), [0.08, 0.08, 0.09, 0]).cylinder(0.45, 0.4, 7.0, 12);
+    b.set(xf(0, 9.6, 0), emis([1, 0.05, 0.05, 0], 0.35)).sphere(1.6, 20, 14);
+    PROPS.joystick = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 6, 0), COL.white).box(7, 12, 5, 0.25);
+    b.set(xf(0, 12.4, 1.0), [0.1, 0.1, 0.12, 0]).box(7.2, 0.8, 7);
+    b.set(xf(0, 11.2, 2.0, 0.35, 0, 0), emis([0.25, 0.9, 1, 0], 2.0)).box(6.4, 1.6, 0.2);
+    b.set(xf(0, 7.0, 2.6, -0.45, 0, 0), [0.03, 0.05, 0.08, 0]).box(5.8, 4.0, 0.2);
+    b.set(xf(0, 4.3, 3.0), [0.1, 0.1, 0.12, 0]).box(6.6, 0.8, 2.4);
+    for (let i = -2; i <= 2; i++) b.set(xf(i * 1.1, 4.8, 3.3), emis(i % 2 ? [1, 0.2, 0.2, 0] : [0.2, 0.5, 1, 0], 1.2)).cylinder(0.3, 0.3, 0.2, 10);
+    PROPS.cabinet = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 1.5, 0), [0.4, 0.3, 0.25, 0]).cylinder(0.5, 0.35, 3.0, 8);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      b.set(xf(Math.cos(a) * 0.5, 3.0, Math.sin(a) * 0.5, 0.6 * Math.sin(a), 0, -0.6 * Math.cos(a)), COL.white).cylinder(0.3, 0.15, 3.0, 7);
+      b.set(xf(Math.cos(a) * 2.0, 5.4, Math.sin(a) * 2.0), COL.white).sphere(0.7, 10, 7);
+    }
+    b.set(xf(0, 5.6, 0), COL.white).sphere(0.9, 12, 8);
+    PROPS.coral = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), COL.white).sphere(1, 14, 10);
+    for (let i = 0; i < 26; i++) {
+      const u = (i * 0.618) % 1, v = (i * 0.37) % 1;
+      const th = Math.acos(2 * v - 1), ph = u * Math.PI * 2;
+      const dx = Math.sin(th) * Math.cos(ph), dy = Math.cos(th), dz = Math.sin(th) * Math.sin(ph);
+      const ry = Math.atan2(dx, dz), rx = -Math.asin(dy);
+      b.set(xf(dx * 0.9, dy * 0.9, dz * 0.9, rx + Math.PI / 2, ry, 0), COL.white).cone(0.1, 1.4, 5);
+    }
+    PROPS.urchin = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), COL.white).lathe([[0, 0], [0.5, 0.3], [0.8, 1.2], [0.6, 2.4], [0.2, 3.0], [0, 3.0]], 12);
+    b.set(xf(0, -0.4, 0, 0.5, 0, 0), COL.white).extrude([[0, 0], [0.8, -0.9], [0.8, 0.9]], 0.1);
+    b.set(xf(0, 1.6, 0.55, 0, 0, 0), [0.05, 0.05, 0.05, 0]).sphere(0.12, 8, 6);
+    b.set(xf(0, 1.6, -0.55, 0, 0, 0), [0.05, 0.05, 0.05, 0]).sphere(0.12, 8, 6);
+    b.set(xf(0.0, 2.6, 0, 0, 0, 0), COL.white).extrude([[0, 0], [0.9, -0.3], [0.9, 0.6]], 0.08);
+    PROPS.fish = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), [0.04, 0.04, 0.045, 0]).box(4.0, 0.5, 2.2);
+    b.set(xf(0, 0.26, 0.4), COL.ivory).box(3.2, 0.02, 1.0);
+    b.set(xf(0, 0.27, 0.6), [0.9, 0.1, 0.1, 0]).box(3.0, 0.02, 0.2);
+    b.set(xf(-0.9, 0.26, -0.2, 0, 0, 0), [0.1, 0.1, 0.12, 0]).cylinder(0.45, 0.45, 0.02, 14);
+    b.set(xf(0.9, 0.26, -0.2, 0, 0, 0), [0.1, 0.1, 0.12, 0]).cylinder(0.45, 0.45, 0.02, 14);
+    PROPS.vhs = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 1.0, 0), COL.wood).box(4, 2, 2.6);
+    b.set(xf(0, 2.0, 0, 0, 0, Math.PI / 2), COL.wood).cylinder(1.3, 1.3, 4, 16);
+    b.set(xf(0, 1.0, 0), COL.gold).box(4.1, 0.3, 2.7);
+    b.set(xf(1.5, 1.0, 0), COL.gold).box(0.3, 2.1, 2.7);
+    b.set(xf(-1.5, 1.0, 0), COL.gold).box(0.3, 2.1, 2.7);
+    PROPS.chest = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0.5, 0), COL.white).box(1, 1, 1);
+    b.set(xf(0, 0.5, 0), emis([1, 1, 1, 0], 1.5)).box(0.84, 1.02, 0.84);
+    b.set(xf(0, 0.5, 0), emis([1, 1, 1, 0], 1.5)).box(1.02, 0.84, 0.84);
+    b.set(xf(0, 0.5, 0), emis([1, 1, 1, 0], 1.5)).box(0.84, 0.84, 1.02);
+    PROPS.pixelCube = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0), COL.white).extrude([[0, 1], [0.3, 0.3], [1, 0.3], [0.45, -0.15], [0.65, -0.85], [0, -0.45], [-0.65, -0.85], [-0.45, -0.15], [-1, 0.3], [-0.3, 0.3]], 0.35);
+    b.set(xf(0, 0, 0, Math.PI / 2, 0, 0), COL.white).torus(1.15, 0.07, 48, 10);
+    PROPS.badge = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 1.0, 0), COL.white).box(1, 2, 1);
+    PROPS.pylon = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0, 0, 0, 0, 0), COL.white).extrude([[-1, 0], [1, 0], [1, 0.08], [-1, 0.08]], 1);
+    PROPS.slab = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 1.8, 0), [0.25, 0.1, 0.06, 0]).box(5, 3.6, 0.4);
+    b.set(xf(0, 0.5, 1.6), [0.25, 0.1, 0.06, 0]).box(5, 1.0, 3.6);
+    for (const [x, z] of [[-2.2, 0], [2.2, 0], [-2.2, 3.2], [2.2, 3.2]]) b.set(xf(x, -1.5, z), [0.25, 0.1, 0.06, 0]).box(0.5, 3.0, 0.5);
+    b.set(xf(0, 1.1, 1.6), [0.55, 0.05, 0.1, 0]).box(4.6, 0.25, 3.2);
+    PROPS.chair = b.bake();
+  }
+  {
+    const b = new MeshBuilder();
+    b.set(xf(0, 0.4, 0), [0.75, 0.2, 0.5, 0]).lathe([[2.0, 0], [2.0, 1.2], [1.5, 1.2], [1.5, 2.4], [1.0, 2.4], [1.0, 3.6], [0, 3.6]], 24);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      b.set(xf(Math.cos(a) * 0.7, 4.0, Math.sin(a) * 0.7), COL.ivory).cylinder(0.08, 0.08, 0.9, 6);
+      b.set(xf(Math.cos(a) * 0.7, 4.95, Math.sin(a) * 0.7), emis([1, 0.7, 0.2, 0], 5)).sphere(0.14, 6, 5);
+    }
+    PROPS.cake = b.bake();
+  }
+};
+
+const INST_FLOATS = 24;
+class InstanceList {
+  constructor() { this.data = []; this.draws = []; }
+  add(mesh, m, color, mat) {
+    const first = this.data.length / INST_FLOATS;
+    for (let k = 0; k < 16; k++) this.data.push(m[k]);
+    this.data.push(color[0], color[1], color[2], color[3], mat[0], mat[1], mat[2], mat[3]);
+    const d = this.draws[this.draws.length - 1];
+    if (d && d.mesh === mesh && d.first + d.count === first) d.count++;
+    else this.draws.push({ mesh, first, count: 1 });
+    return first;
+  }
+}
+const matOf = (tex, emissive = 0, metal = 0, rough = 0.5, mode = MODE_WRAP) => [emissive, metal, rough, tex + mode];
+const textInstances = (list, text, x, y, z, size, color, emissive, yaw = 0, mirror = false, mode = MODE_STATIC) => {
+  const unit = size / GLYPH_H;
+  const w = textWidth(text) * unit;
+  const th = Math.max(0.04 * size, 0.06);
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  forEachSegment(text, (x1, y1, x2, y2) => {
+    let ax = (x1 * unit - w / 2), ay = y1 * unit, bx = (x2 * unit - w / 2), by = y2 * unit;
+    if (mirror) { ax = -ax; bx = -bx; }
+    const mx = (ax + bx) / 2, my = (ay + by) / 2;
+    const len = Math.hypot(bx - ax, by - ay) + th;
+    const rz = Math.atan2(by - ay, bx - ax);
+    const wx = x + mx * cy, wz = z - mx * sy;
+    list.add(PROPS.unitBox, xmul(xf(wx, y + my, wz, 0, yaw, 0), xf(0, 0, 0, 0, 0, rz, len, th, th)), color, matOf(TEX.FLAT, emissive, 0, 0.4, mode));
+  });
+};
+const BPM = 126;
+const BARS = 80;
+const STEPS = 16;
+const H = -1;
+const _ = 0;
+const SCENE_BARS = [0, 12, 24, 36, 48, 60, 72];
+
+const drumPat = (s) => Array.from(s, (c) => (c === "x" ? 9 : c === "o" ? 5 : c === "O" ? 12 : c === "X" ? 14 : 0));
+const DR = {
+  kickRock: drumPat("x.....x...x....."),
+  kickRockB: drumPat("x.....x...x....x"),
+  kickDisco: drumPat("x...x...x...x..."),
+  kickArcade: drumPat("x.....x.x.....x."),
+  kickHalf: drumPat("x.........x....."),
+  kickIntro: drumPat("x.......x......."),
+  kickCredits: drumPat("x..............."),
+  kickBuild: drumPat("x...x...x...x.x."),
+  snareRock: drumPat("....x.......x..."),
+  snareFill: drumPat("....x.......xoxx"),
+  snareRoll: drumPat("....x...oxoxxxxx"),
+  snareHalf: drumPat("........x......."),
+  snareBuild: drumPat("x.x.x.x.xxxxxxxx"),
+  hatRock: drumPat("x.x.x.x.x.x.x.O."),
+  hatDisco: drumPat("x.O.x.O.x.O.x.O."),
+  hatArcade: drumPat("xoxoxoxoxoxoxoxo"),
+  hatHalf: drumPat("o...o...o...o..."),
+  hatCrash: drumPat("X.x.x.x.x.x.x.O."),
+  hatCrashDisco: drumPat("X.O.x.O.x.O.x.O."),
+  hatCredits: drumPat("o.......o......."),
+  clapDisco: drumPat("....x.......x..."),
+  none: new Array(16).fill(0),
+};
+
+const BASS_T = {
+  slap: [0, _, 0, 12, _, 0, _, 7, _, 0, _, 12, _, 10, 0, _],
+  slapB: [0, _, 0, 12, _, 0, _, 7, _, 0, 12, _, 10, _, 7, 12],
+  disco: [0, _, 12, _, 0, _, 12, _, 0, _, 12, _, 0, _, 12, _],
+  arcade: [0, 0, 12, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, 0, 10, 12],
+  half: [0, H, H, H, H, H, H, H, 7, H, H, H, H, H, H, H],
+  hold: [0, H, H, H, H, H, H, H, H, H, H, H, H, H, H, H],
+  intro: [0, H, H, H, H, H, H, _, 0, H, H, H, H, H, _, 0],
+};
+const BRASS_T = {
+  stab: [1, _, _, 1, _, _, 1, _, _, _, 1, H, H, _, _, _],
+  stabB: [1, _, _, 1, _, _, 1, _, _, _, 1, H, H, _, 1, _],
+  swell: [1, H, H, H, H, H, _, _, 1, H, H, H, H, H, _, _],
+  off: [_, _, 1, _, _, _, 1, _, _, _, 1, _, _, _, 1, H],
+  sparse: [_, _, _, _, _, _, _, _, _, _, 1, _, 1, _, _, _],
+  build: [1, _, 1, _, 1, _, 1, _, 1, 1, 1, 1, 1, 1, 1, 1],
+  long: [1, H, H, H, H, H, H, H, H, H, H, H, H, H, H, H],
+};
+const Em = [64, 67, 71], Cmaj = [60, 64, 67], Dmaj = [62, 66, 69], Gmaj = [67, 71, 74], Am = [57, 60, 64], Bmaj = [59, 63, 66];
+const PROG = {
+  A: [[40, Em], [40, Em], [36, Cmaj], [38, Dmaj]],
+  B: [[40, Em], [43, Gmaj], [45, Am], [35, Bmaj]],
+  gala: [[40, Em], [40, Em], [45, Am], [35, Bmaj]],
+  credits: [[36, Cmaj], [38, Dmaj], [40, Em], [40, Em]],
+};
+const LEAD = {
+  hook1: [76, H, 79, H, 81, H, 83, H, 83, H, H, H, 86, H, 83, H],
+  hook2: [81, H, H, H, 79, H, H, H, 76, H, H, H, H, H, _, _],
+  hook3: [76, H, 79, H, 81, H, 83, H, 83, H, H, H, 86, H, 88, H],
+  hook4: [86, H, H, H, 83, H, H, H, 88, H, H, H, H, H, H, H],
+  aqua1: [76, H, H, H, H, H, H, H, 79, H, H, H, H, H, H, H],
+  aqua2: [83, H, H, H, H, H, H, H, H, H, H, H, 81, H, H, H],
+  aqua3: [79, H, H, H, H, H, 76, H, H, H, H, H, 74, H, H, H],
+  aqua4: [71, H, H, H, H, H, H, H, H, H, H, H, H, H, H, H],
+  cred1: [76, H, H, H, H, H, 79, H, H, H, H, H, 78, H, H, H],
+  cred2: [76, H, H, H, H, H, H, H, 74, H, H, H, H, H, H, H],
+  cred3: [72, H, H, H, H, H, 74, H, H, H, H, H, 76, H, H, H],
+  cred4: [71, H, H, H, H, H, H, H, H, H, H, H, H, H, H, H],
+};
+const arpOf = (triad) => {
+  const t = [triad[0], triad[1], triad[2], triad[0] + 12, triad[1] + 12, triad[2] + 12];
+  const seq = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0, 1, 2, 3, 2, 1];
+  return seq.map((k) => t[k]);
+};
+const bassFrom = (root, t) => t.map((v) => (v === H || v === _ ? v : root + v));
+const chordFrom = (triad, t, oct = 0) => t.map((v) => (v === 1 ? 1 : v));
+
+const buildSong = () => {
+  const tracks = { kick: [], snare: [], hat: [], clap: [], bass: [], brass: [], pad: [], lead: [], sfx: [] };
+  const chords = [];
+  const transpose = [];
+  const leadStyle = [];
+  const sfxBar = (events) => { const a = new Array(16).fill(0); for (const [s, t] of events) a[s] = t; return a; };
+  for (let bar = 0; bar < BARS; bar++) {
+    const scene = SCENE_BARS.findIndex((b, i) => bar >= b && bar < (SCENE_BARS[i + 1] ?? 999));
+    const local = bar - SCENE_BARS[scene];
+    const fill = bar % 8 === 7;
+    const fill4 = bar % 4 === 3;
+    let prog = PROG.A;
+    let tr = 0;
+    let kick = DR.kickRock, snare = DR.snareRock, hat = DR.hatRock, clap = DR.none;
+    let bassT = BASS_T.slap, brassT = BRASS_T.stab, padOn = false, lead = null, sfx = DR.none;
+    if (scene === 0) {
+      if (bar < 4) {
+        kick = DR.kickIntro; snare = bar < 2 ? DR.none : DR.snareRock; hat = DR.hatRock; bassT = bar < 2 ? BASS_T.intro : BASS_T.slap; brassT = null;
+        if (bar === 0) sfx = sfxBar([[0, 6]]);
+      } else {
+        prog = bar >= 8 ? PROG.B : PROG.A;
+        kick = fill ? DR.kickRockB : DR.kickRock;
+        bassT = fill4 ? BASS_T.slapB : BASS_T.slap;
+        brassT = bar % 4 === 3 ? BRASS_T.stabB : BRASS_T.stab;
+        if (bar === 4) hat = DR.hatCrash;
+      }
+    } else if (scene === 1) {
+      prog = PROG.gala;
+      kick = DR.kickRock; hat = local === 0 ? DR.hatCrash : DR.hatRock;
+      bassT = fill4 ? BASS_T.slapB : BASS_T.slap;
+      brassT = local % 4 === 3 ? BRASS_T.stab : BRASS_T.swell;
+      padOn = true;
+      if (local === 0) sfx = sfxBar([[0, 1], [2, 2]]);
+      else if (local % 4 === 0) sfx = sfxBar([[0, 2], [10, 3]]);
+      else if (local % 2 === 1) sfx = sfxBar([[6, 3], [13, 3]]);
+      else sfx = sfxBar([[11, 3]]);
+    } else if (scene === 2) {
+      prog = local >= 8 ? PROG.B : PROG.A;
+      kick = DR.kickDisco; hat = local === 0 ? DR.hatCrashDisco : DR.hatDisco; clap = DR.clapDisco; snare = fill ? DR.snareFill : DR.snareRock;
+      bassT = BASS_T.disco;
+      brassT = local % 4 === 3 ? BRASS_T.stabB : BRASS_T.off;
+      padOn = true;
+      if (local === 0) sfx = sfxBar([[0, 1]]);
+      else if (local % 4 === 2) sfx = sfxBar([[8, 2]]);
+    } else if (scene === 3) {
+      prog = local >= 8 ? PROG.B : PROG.A;
+      kick = DR.kickArcade; hat = local === 0 ? DR.hatCrash : DR.hatArcade; snare = fill ? DR.snareFill : DR.snareRock;
+      bassT = BASS_T.arcade;
+      brassT = local % 4 === 3 ? BRASS_T.stab : BRASS_T.sparse;
+      lead = arpOf(prog[local % 4][1]);
+      if (local === 0) sfx = sfxBar([[0, 1], [4, 5]]);
+      else sfx = sfxBar([[2 + (local * 3) % 7, 5], [10 + (local * 5) % 5, 5]]);
+    } else if (scene === 4) {
+      prog = PROG.A;
+      kick = local >= 10 ? DR.kickBuild : DR.kickHalf; snare = local >= 10 ? DR.snareBuild : DR.snareHalf; hat = local >= 10 ? DR.hatArcade : DR.hatHalf;
+      bassT = local >= 10 ? BASS_T.slap : BASS_T.half;
+      brassT = local >= 10 ? BRASS_T.build : null;
+      padOn = true;
+      lead = [LEAD.aqua1, LEAD.aqua2, LEAD.aqua3, LEAD.aqua4][local % 4];
+      if (local >= 10) lead = null;
+      if (local === 0) sfx = sfxBar([[0, 1], [3, 4], [9, 4]]);
+      else sfx = sfxBar([[(local * 5) % 16, 4], [(local * 11 + 3) % 16, 4], [(local * 7 + 9) % 16, 4]]);
+    } else if (scene === 5) {
+      tr = 2;
+      prog = local >= 8 ? PROG.B : PROG.A;
+      kick = fill ? DR.kickRockB : DR.kickDisco; hat = local === 0 ? DR.hatCrash : DR.hatRock; clap = DR.clapDisco; snare = fill ? DR.snareRoll : DR.snareRock;
+      bassT = fill4 ? BASS_T.slapB : BASS_T.slap;
+      brassT = local % 4 === 3 ? BRASS_T.stabB : BRASS_T.stab;
+      padOn = true;
+      lead = [LEAD.hook1, LEAD.hook2, LEAD.hook3, LEAD.hook4][local % 4];
+      if (local === 0) sfx = sfxBar([[0, 1], [0, 7]]);
+      else if (local === 6) sfx = sfxBar([[0, 7]]);
+    } else {
+      tr = 2;
+      prog = PROG.credits;
+      kick = local < 6 ? DR.kickCredits : DR.none; snare = DR.none; hat = local < 6 ? DR.hatCredits : DR.none;
+      bassT = BASS_T.hold;
+      brassT = local < 4 ? BRASS_T.long : null;
+      padOn = true;
+      lead = [LEAD.cred1, LEAD.cred2, LEAD.cred3, LEAD.cred4][local % 4];
+      if (local === 0) sfx = sfxBar([[0, 2]]);
+    }
+    const [root, triad] = prog[bar % 4];
+    chords.push(triad);
+    transpose.push(tr);
+    leadStyle.push(scene === 3 ? 1 : scene === 5 ? 2 : 0);
+    tracks.kick.push(kick); tracks.snare.push(snare); tracks.hat.push(hat); tracks.clap.push(clap);
+    tracks.bass.push(bassFrom(root, bassT));
+    tracks.brass.push(brassT ? chordFrom(triad, brassT) : DR.none);
+    tracks.pad.push(padOn ? BRASS_T.long : DR.none);
+    tracks.lead.push(lead || DR.none);
+    tracks.sfx.push(sfx);
+  }
+  return { bpm: BPM, bars: BARS, steps: STEPS, tracks, chords, transpose, leadStyle };
+};
+const SONG = buildSong();
+const SONG_SECONDS = (BARS * 4 * 60) / BPM;
+const WORKLET_SOURCE = `
+const TWO_PI = Math.PI * 2;
+const midiHz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+const polyblep = (t, dt) => {
+  if (t < dt) { const x = t / dt; return x + x - x * x - 1; }
+  if (t > 1 - dt) { const x = (t - 1) / dt; return x * x + x + x + 1; }
+  return 0;
+};
+class Voice {
+  constructor() {
+    this.on = false; this.gate = false; this.t = 0; this.rel = 0; this.freq = 110; this.target = 110; this.vel = 0;
+    this.ph0 = 0; this.ph1 = 0; this.ph2 = 0; this.ph3 = 0;
+    this.low = 0; this.band = 0; this.amp = 0; this.age = 0; this.pan = 0; this.style = 0; this.type = 0;
+    this.a = 0; this.b = 0; this.c = 0;
+  }
+}
+class NakedSynth extends AudioWorkletProcessor {
+  constructor(options) {
+    super();
+    const song = options.processorOptions.song;
+    this.song = song;
+    this.sr = sampleRate;
+    this.inv = 1 / sampleRate;
+    this.stepLen = (60 / song.bpm / 4) * sampleRate;
+    this.totalSteps = song.bars * song.steps;
+    this.playing = false;
+    this.pendingStart = false;
+    this.ended = false;
+    this.sample = 0;
+    this.stepIndex = 0;
+    this.rng = 123456789;
+    this.kick = new Voice(); this.kick.t = 100;
+    this.snare = new Voice(); this.snare.t = 100;
+    this.hat = new Voice(); this.hat.t = 100;
+    this.clap = new Voice(); this.clap.t = 100;
+    this.bass = new Voice();
+    this.brass = [new Voice(), new Voice(), new Voice(), new Voice(), new Voice(), new Voice()];
+    this.pad = [new Voice(), new Voice(), new Voice(), new Voice(), new Voice(), new Voice(), new Voice(), new Voice()];
+    this.lead = [new Voice(), new Voice()];
+    this.sfx = [new Voice(), new Voice(), new Voice(), new Voice()];
+    for (const v of this.sfx) v.t = 100;
+    this.hpx = 0; this.hpy = 0; this.snx = 0; this.sny = 0; this.clx = 0; this.cly = 0;
+    const dl = Math.ceil(sampleRate * 1.0);
+    this.delayL = new Float32Array(dl);
+    this.delayR = new Float32Array(dl);
+    this.delayLen = Math.floor((60 / song.bpm) * 0.75 * sampleRate);
+    this.delayPos = 0;
+    const sc = sampleRate / 44100;
+    this.combLen = [1116, 1188, 1277, 1356].map((n) => Math.floor(n * sc));
+    this.combs = this.combLen.map((n) => new Float32Array(n));
+    this.combPos = [0, 0, 0, 0];
+    this.combStore = [0, 0, 0, 0];
+    this.apLen = [556, 441].map((n) => Math.floor(n * sc));
+    this.aps = this.apLen.map((n) => new Float32Array(n));
+    this.apPos = [0, 0];
+    this.kickEnv = 0;
+    this.port.onmessage = (e) => {
+      if (e.data === "start") { this.pendingStart = true; }
+    };
+  }
+  rand() {
+    let x = this.rng;
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+    this.rng = x | 0;
+    return ((x >>> 0) / 4294967296) * 2 - 1;
+  }
+  noteOn(pool, note, vel, style) {
+    let v = null, oldest = pool[0];
+    for (const c of pool) {
+      if (!c.on) { v = c; break; }
+      if (c.age > oldest.age) oldest = c;
+    }
+    if (!v) v = oldest;
+    v.on = true; v.gate = true; v.t = 0; v.rel = 0; v.age = 0; v.vel = vel; v.style = style;
+    v.target = midiHz(note); v.freq = v.target * 0.94; v.low = 0; v.band = 0;
+    v.a = this.rand(); v.b = this.rand(); v.c = this.rand();
+    return v;
+  }
+  gateOff(pool) { for (const v of pool) if (v.on) v.gate = false; }
+  trigger(step) {
+    const song = this.song, bar = Math.floor(step / song.steps), s = step % song.steps;
+    const tr = song.transpose[bar];
+    const T = song.tracks;
+    const k = T.kick[bar][s]; if (k > 0) { this.kick.t = 0; this.kick.ph0 = 0; this.kick.vel = k / 9; this.kickEnv = 1; }
+    const sn = T.snare[bar][s]; if (sn > 0) { this.snare.t = 0; this.snare.vel = sn / 9; }
+    const h = T.hat[bar][s]; if (h > 0) { this.hat.t = 0; this.hat.vel = Math.min(h, 9) / 9; this.hat.style = h >= 14 ? 2 : h >= 12 ? 1 : 0; }
+    const cl = T.clap[bar][s]; if (cl > 0) { this.clap.t = 0; this.clap.vel = cl / 9; }
+    const b = T.bass[bar][s];
+    if (b > 0) {
+      const v = this.bass; v.on = true; v.gate = true; v.t = 0; v.rel = 0; v.vel = 1; v.target = midiHz(b + tr); v.freq = v.target; v.a = this.rand();
+    } else if (b === 0 && this.bass.gate) { this.bass.gate = false; }
+    const br = T.brass[bar][s];
+    if (br > 0) {
+      this.gateOff(this.brass);
+      const ch = song.chords[bar];
+      const oct = bar >= 60 && bar < 72 ? 12 : 0;
+      for (let i = 0; i < 3; i++) { const v = this.noteOn(this.brass, ch[i] + tr + oct, 1, 0); v.pan = (i - 1) * 0.5; }
+    } else if (br === 0) { this.gateOff(this.brass); }
+    const pd = T.pad[bar][s];
+    if (pd > 0) {
+      this.gateOff(this.pad);
+      const ch = song.chords[bar];
+      for (let i = 0; i < 3; i++) { const v = this.noteOn(this.pad, ch[i] + tr - 12, 1, 0); v.pan = (i - 1) * 0.7; }
+      const v = this.noteOn(this.pad, ch[0] + tr - 24, 1, 0); v.pan = 0;
+    } else if (pd === 0) { this.gateOff(this.pad); }
+    const ld = T.lead[bar][s];
+    if (ld > 0) {
+      this.gateOff(this.lead);
+      const v = this.noteOn(this.lead, ld + tr, 1, song.leadStyle[bar]);
+      v.freq = v.target;
+    } else if (ld === 0) { this.gateOff(this.lead); }
+    const fx = T.sfx[bar][s];
+    if (fx > 0) {
+      let v = this.sfx[0];
+      for (const c of this.sfx) if (c.t > v.t) v = c;
+      v.t = 0; v.type = fx; v.ph0 = 0; v.ph1 = 0; v.a = this.rand(); v.b = this.rand(); v.c = this.rand();
+    }
+  }
+  process(inputs, outputs) {
+    const out = outputs[0];
+    const L = out[0], R = out[1] || out[0];
+    const n = L.length;
+    const sr = this.sr, inv = this.inv;
+    if (this.pendingStart) {
+      this.pendingStart = false;
+      this.playing = true;
+      this.sample = 0;
+      this.stepIndex = 0;
+      this.port.postMessage({ t0: currentTime });
+    }
+    const songSamples = this.totalSteps * this.stepLen;
+    for (let i = 0; i < n; i++) {
+      let l = 0, r = 0, dry = 0, dsend = 0, rsend = 0;
+      if (this.playing) {
+        while (this.stepIndex < this.totalSteps && this.sample >= this.stepIndex * this.stepLen) {
+          this.trigger(this.stepIndex);
+          this.stepIndex++;
+        }
+        this.sample++;
+        if (this.sample > songSamples + sr * 3) { this.playing = false; if (!this.ended) { this.ended = true; this.port.postMessage("ended"); } }
+      }
+      const fade = Math.max(0, Math.min(1, (songSamples - this.sample) / (this.stepLen * 32)));
+      this.kickEnv *= 0.9996;
+      let kick = 0;
+      const kv = this.kick;
+      if (kv.t < 0.6) {
+        const f = 48 + 135 * Math.exp(-kv.t * 38);
+        kv.ph0 += f * inv;
+        kick = (Math.sin(TWO_PI * kv.ph0) * Math.exp(-kv.t * 9.5) + this.rand() * Math.exp(-kv.t * 320) * 0.6) * kv.vel;
+        kv.t += inv;
+      }
+      let snare = 0;
+      const sv = this.snare;
+      if (sv.t < 0.45) {
+        const nz = this.rand();
+        this.sny = nz - this.snx + 0.985 * this.sny; this.snx = nz;
+        const body = Math.sin(TWO_PI * 188 * sv.t) * Math.exp(-sv.t * 24) * 0.7;
+        const gated = sv.t < 0.19 ? 0.4 : 0.0;
+        snare = (this.sny * (Math.exp(-sv.t * 13) * 0.9 + gated * Math.exp(-sv.t * 3)) + body) * sv.vel;
+        sv.t += inv;
+      }
+      let hat = 0;
+      const hv = this.hat;
+      if (hv.t < 2.5) {
+        const nz = this.rand();
+        this.hpy = nz - this.hpx + 0.92 * this.hpy; this.hpx = nz;
+        const dec = hv.style === 2 ? 1.8 : hv.style === 1 ? 7 : 55;
+        hat = this.hpy * Math.exp(-hv.t * dec) * hv.vel * (hv.style === 2 ? 0.8 : 0.45);
+        hv.t += inv;
+      }
+      let clap = 0;
+      const cv = this.clap;
+      if (cv.t < 0.4) {
+        const nz = this.rand();
+        this.cly = nz - this.clx + 0.96 * this.cly; this.clx = nz;
+        let env = 0;
+        for (let k = 0; k < 3; k++) { const tt = cv.t - k * 0.011; if (tt > 0) env += Math.exp(-tt * 90); }
+        env += Math.exp(-cv.t * 9) * 0.5;
+        clap = this.cly * env * cv.vel * 0.7;
+        cv.t += inv;
+      }
+      let bass = 0;
+      const bv = this.bass;
+      if (bv.on) {
+        const dph = bv.freq * inv;
+        bv.ph0 += dph; if (bv.ph0 >= 1) bv.ph0 -= 1;
+        bv.ph1 += dph * 1.004; if (bv.ph1 >= 1) bv.ph1 -= 1;
+        bv.ph2 += dph * 0.5; if (bv.ph2 >= 1) bv.ph2 -= 1;
+        const saw = (2 * bv.ph0 - 1 - polyblep(bv.ph0, dph)) + (2 * bv.ph1 - 1 - polyblep(bv.ph1, dph)) * 0.5;
+        const sub = (2 * bv.ph2 - 1 - polyblep(bv.ph2, dph * 0.5)) - (2 * ((bv.ph2 + 0.5) % 1) - 1 - polyblep((bv.ph2 + 0.5) % 1, dph * 0.5));
+        const x = saw * 0.55 + sub * 0.2 + this.rand() * Math.exp(-bv.t * 180) * 0.5;
+        const cut = 70 + bv.freq * 1.5 + 2600 * Math.exp(-bv.t * 15);
+        const f = Math.min(0.85, 2 * Math.sin(Math.PI * cut * inv));
+        bv.low += f * bv.band; const high = x - bv.low - 0.45 * bv.band; bv.band += f * high;
+        let amp = Math.exp(-bv.t * 3.2) * 0.65 + 0.35;
+        if (!bv.gate) { bv.rel += inv; amp *= Math.max(0, 1 - bv.rel * 28); if (amp <= 0.0001) bv.on = false; }
+        bass = bv.low * amp * 0.62;
+        bv.t += inv;
+      }
+      let brassL = 0, brassR = 0;
+      for (let vi = 0; vi < 6; vi++) {
+        const v = this.brass[vi];
+        if (!v.on) continue;
+        v.freq += (v.target - v.freq) * 0.0025;
+        const dph = v.freq * inv;
+        v.ph0 += dph; if (v.ph0 >= 1) v.ph0 -= 1;
+        v.ph1 += dph * 1.006; if (v.ph1 >= 1) v.ph1 -= 1;
+        v.ph2 += dph * 0.994; if (v.ph2 >= 1) v.ph2 -= 1;
+        const x = (2 * v.ph0 - 1 - polyblep(v.ph0, dph)) + (2 * v.ph1 - 1 - polyblep(v.ph1, dph)) * 0.7 + (2 * v.ph2 - 1 - polyblep(v.ph2, dph)) * 0.7;
+        const fenv = Math.min(1, v.t / 0.028) * (0.5 + 0.5 * Math.exp(-Math.max(0, v.t - 0.028) * 7));
+        const cut = 260 + v.freq * 0.8 + 3400 * fenv;
+        const f = Math.min(0.85, 2 * Math.sin(Math.PI * cut * inv));
+        v.low += f * v.band; const high = x - v.low - 0.7 * v.band; v.band += f * high;
+        let amp = Math.min(1, v.t / 0.014);
+        if (!v.gate) { v.rel += inv; amp *= Math.max(0, 1 - v.rel * 14); if (amp <= 0.0001) v.on = false; }
+        const o = v.low * amp * 0.3 * v.vel;
+        brassL += o * (1 - Math.max(0, v.pan)); brassR += o * (1 + Math.min(0, v.pan));
+        v.t += inv; v.age++;
+      }
+      let padL = 0, padR = 0;
+      for (let vi = 0; vi < 8; vi++) {
+        const v = this.pad[vi];
+        if (!v.on) continue;
+        const lfo = Math.sin(v.t * 0.9 + v.a * 3);
+        const dph = v.target * (1 + lfo * 0.0012) * inv;
+        v.ph0 += dph; if (v.ph0 >= 1) v.ph0 -= 1;
+        v.ph1 += dph * 1.007; if (v.ph1 >= 1) v.ph1 -= 1;
+        v.ph2 += dph * 0.993; if (v.ph2 >= 1) v.ph2 -= 1;
+        const x = (2 * v.ph0 - 1 - polyblep(v.ph0, dph)) + (2 * v.ph1 - 1 - polyblep(v.ph1, dph)) + (2 * v.ph2 - 1 - polyblep(v.ph2, dph));
+        const cut = 420 + 500 * (0.5 + 0.5 * Math.sin(v.t * 0.5 + v.b)) + v.target * 1.2;
+        const f = Math.min(0.85, 2 * Math.sin(Math.PI * cut * inv));
+        v.low += f * v.band; const high = x - v.low - 1.1 * v.band; v.band += f * high;
+        let amp = Math.min(1, v.t / 0.3);
+        if (!v.gate) { v.rel += inv; amp *= Math.max(0, 1 - v.rel * 1.6); if (amp <= 0.0001) v.on = false; }
+        const o = v.low * amp * 0.075;
+        padL += o * (1 - Math.max(0, v.pan)); padR += o * (1 + Math.min(0, v.pan));
+        v.t += inv; v.age++;
+      }
+      let lead = 0;
+      for (let vi = 0; vi < 2; vi++) {
+        const v = this.lead[vi];
+        if (!v.on) continue;
+        const vib = 1 + 0.004 * Math.sin(v.t * 6.0 * TWO_PI) * Math.min(1, v.t * 2);
+        const dph = v.target * vib * inv;
+        v.ph0 += dph; if (v.ph0 >= 1) v.ph0 -= 1;
+        v.ph1 += dph * 2; if (v.ph1 >= 1) v.ph1 -= 1;
+        let x = 0, amp = 0;
+        if (v.style === 1) {
+          const p2 = (v.ph0 + 0.5) % 1;
+          x = (2 * v.ph0 - 1 - polyblep(v.ph0, dph)) - (2 * p2 - 1 - polyblep(p2, dph));
+          amp = Math.exp(-v.t * 9) * 0.8 + 0.2;
+          if (!v.gate) { v.rel += inv; amp *= Math.max(0, 1 - v.rel * 40); if (amp <= 0.0001) v.on = false; }
+          x *= 0.5;
+        } else if (v.style === 2) {
+          const idx = 1.2 + 2.0 * Math.exp(-v.t * 4);
+          x = Math.sin(TWO_PI * v.ph0 + idx * Math.sin(TWO_PI * v.ph1)) + 0.4 * (2 * v.ph0 - 1 - polyblep(v.ph0, dph));
+          amp = Math.min(1, v.t / 0.01) * (0.7 + 0.3 * Math.exp(-v.t * 3));
+          if (!v.gate) { v.rel += inv; amp *= Math.max(0, 1 - v.rel * 6); if (amp <= 0.0001) v.on = false; }
+          x *= 0.7;
+        } else {
+          const idx = 3.5 * Math.exp(-v.t * 2.2);
+          v.ph2 += dph * 3.52; if (v.ph2 >= 1) v.ph2 -= 1;
+          x = Math.sin(TWO_PI * v.ph0 + idx * Math.sin(TWO_PI * v.ph2));
+          amp = Math.exp(-v.t * 1.6);
+          if (!v.gate) { v.rel += inv; amp *= Math.max(0, 1 - v.rel * 0.8); }
+          if (amp <= 0.0005) v.on = false;
+          x *= 0.8;
+        }
+        lead += x * amp * 0.3 * v.vel;
+        v.t += inv; v.age++;
+      }
+      let fxL = 0, fxR = 0, fxRev = 0;
+      for (let vi = 0; vi < 4; vi++) {
+        const v = this.sfx[vi];
+        if (v.t >= 3) continue;
+        let x = 0;
+        const t = v.t;
+        if (v.type === 1) {
+          if (t < 0.75) {
+            const fr = 2300 - 1200 * Math.min(1, t * 1.6) + 60 * Math.sin(t * 70);
+            v.ph0 += fr * inv;
+            const env = Math.min(1, t / 0.03) * Math.exp(-t * 4.5);
+            x = (Math.sin(TWO_PI * v.ph0) * 0.6 + Math.sin(TWO_PI * v.ph0 * 2.02) * 0.25 + this.rand() * 0.25) * env * 0.5;
+          } else v.t = 3;
+        } else if (v.type === 2) {
+          if (t < 2.5) {
+            const fr = 1760 * (1 + v.a * 0.01);
+            v.ph0 += fr * inv; v.ph1 += fr * 3.01 * inv;
+            x = Math.sin(TWO_PI * v.ph0 + 4 * Math.exp(-t * 3) * Math.sin(TWO_PI * v.ph1)) * Math.exp(-t * 2.6) * 0.35;
+          } else v.t = 3;
+        } else if (v.type === 3) {
+          if (t < 0.9) {
+            const nz = this.rand();
+            x = nz * Math.exp(-t * 45) * 0.5;
+            x += (Math.sin(TWO_PI * (3300 + v.a * 400) * t) + Math.sin(TWO_PI * (5200 + v.b * 500) * t) * 0.6 + Math.sin(TWO_PI * (7400 + v.c * 600) * t) * 0.4) * Math.exp(-t * 7) * 0.12;
+          } else v.t = 3;
+        } else if (v.type === 4) {
+          if (t < 0.16) {
+            const fr = 500 + 1300 * Math.min(1, t * 14);
+            v.ph0 += fr * inv;
+            x = Math.sin(TWO_PI * v.ph0) * Math.exp(-t * 26) * 0.35;
+          } else v.t = 3;
+        } else if (v.type === 5) {
+          if (t < 0.3) {
+            const fr = 1900 * Math.exp(-t * 9) + 120;
+            v.ph0 += fr * inv;
+            const p2 = (v.ph0 + 0.5) % 1;
+            x = ((v.ph0 % 1) * 2 - 1 - (p2 * 2 - 1)) * Math.exp(-t * 11) * 0.22;
+          } else v.t = 3;
+        } else if (v.type === 6) {
+          if (t < 1.8) {
+            const fr = 720 + 420 * Math.sin(TWO_PI * 1.1 * t - 1.5);
+            v.ph0 += fr * inv;
+            const env = Math.min(1, t * 4) * Math.min(1, (1.8 - t) * 2);
+            x = (Math.sin(TWO_PI * v.ph0) + 0.3 * Math.sin(TWO_PI * v.ph0 * 2)) * env * 0.22;
+          } else v.t = 3;
+        } else if (v.type === 7) {
+          if (t < 2.6) {
+            const nz = this.rand();
+            v.ph0 = nz - v.ph1 + 0.7 * v.ph0; v.ph1 = nz;
+            x = v.ph0 * Math.exp(-t * 1.9) * 0.4;
+          } else v.t = 3;
+        }
+        const pan = v.a * 0.6;
+        fxL += x * (1 - Math.max(0, pan)); fxR += x * (1 + Math.min(0, pan));
+        fxRev += x * (v.type === 2 || v.type === 7 ? 0.5 : 0.2);
+        v.t += inv;
+      }
+      const duck = 1 - this.kickEnv * 0.45;
+      l = kick * 0.9 + snare * 0.72 + hat * 0.62 + clap * 0.55 + bass * duck + brassL + padL * duck + lead * 1.0 + fxL;
+      r = kick * 0.9 + snare * 0.72 + hat * 0.62 + clap * 0.55 + bass * duck + brassR + padR * duck + lead * 1.0 + fxR;
+      dsend = (brassL + brassR) * 0.14 + lead * 0.3 + (fxL + fxR) * 0.12 + snare * 0.05;
+      rsend = snare * 0.3 + clap * 0.3 + (brassL + brassR) * 0.08 + (padL + padR) * 0.25 + lead * 0.18 + fxRev;
+      const dp = this.delayPos;
+      const dr = (dp - this.delayLen + this.delayL.length) % this.delayL.length;
+      const dlo = this.delayL[dr], dro = this.delayR[dr];
+      this.delayL[dp] = dsend + dro * 0.38;
+      this.delayR[dp] = dlo * 0.38 + dsend * 0.2;
+      this.delayPos = (dp + 1) % this.delayL.length;
+      let rev = 0;
+      for (let k = 0; k < 4; k++) {
+        const buf = this.combs[k];
+        const p = this.combPos[k];
+        const y = buf[p];
+        this.combStore[k] = y * 0.78 + this.combStore[k] * 0.22;
+        buf[p] = rsend + this.combStore[k] * 0.83;
+        this.combPos[k] = (p + 1) % buf.length;
+        rev += y;
+      }
+      rev *= 0.25;
+      for (let k = 0; k < 2; k++) {
+        const buf = this.aps[k];
+        const p = this.apPos[k];
+        const y = buf[p];
+        const x = rev + y * 0.5;
+        buf[p] = x;
+        rev = y - x * 0.5;
+        this.apPos[k] = (p + 1) % buf.length;
+      }
+      l += dlo * 0.8 + rev * 0.5;
+      r += dro * 0.8 + rev * 0.5;
+      const g = 0.9 * fade;
+      l *= g; r *= g;
+      L[i] = l / (1 + Math.abs(l));
+      R[i] = r / (1 + Math.abs(r));
+    }
+    return true;
+  }
+}
+registerProcessor("naked-synth", NakedSynth);
+`;
+const BAR_SEC = (4 * 60) / BPM;
+const SCENES = [
+  {
+    name: "NEON HIGHWAY", bar: 0, speed: 42, wrap: 560, back: 40, sway: 2.0,
+    fog: [0.03, 0.01, 0.08, 0.011], skyTop: [0.01, 0.0, 0.05], skyBot: [0.35, 0.03, 0.3],
+    sunDir: [0.2, -0.3, 1, 0.0], sunColor: [1, 0.5, 0.3], sunDisc: [1, 0.3, 0.6, 0.999], stripes: 0, stars: 0,
+    ambient: 0.35, envInt: 1.0, terrain: [0.06, 0.09, 0.08, 0.7], pmode: 1, psize: 0.06, pspawn: 0.5, deform: 0.0,
+    ground: TEX.ASPHALT, groundScale: 1 / 16, groundMat: [0, 0.0, 0.5], exposure: 0.85,
+  },
+  {
+    name: "HIGH-SOCIETY GALA", bar: 12, speed: 46, wrap: 640, back: 40, sway: 1.2,
+    fog: [0.12, 0.02, 0.03, 0.009], skyTop: [0.05, 0.0, 0.02], skyBot: [0.45, 0.15, 0.05],
+    sunDir: [0, -0.5, 1, 0.0], sunColor: [1, 0.7, 0.4], sunDisc: [1, 0.6, 0.2, 0.9995], stripes: 0, stars: 0,
+    ambient: 0.4, envInt: 0.9, terrain: [0.3, 0.05, 0.14, 0.33], pmode: 2, psize: 0.1, pspawn: 0.18, deform: 0.8,
+    ground: TEX.VELVET, groundScale: 1 / 20, groundMat: [0, 0.0, 0.5], exposure: 0.85,
+  },
+  {
+    name: "ROLLER DISCO", bar: 24, speed: 40, wrap: 600, back: 40, sway: 2.4,
+    fog: [0.08, 0.0, 0.12, 0.010], skyTop: [0.02, 0.0, 0.05], skyBot: [0.3, 0.02, 0.35],
+    sunDir: [0, -0.4, 1, 0.0], sunColor: [1, 0.5, 0.8], sunDisc: [1, 0.2, 0.6, 0.9995], stripes: 0, stars: 0,
+    ambient: 0.3, envInt: 1.2, terrain: [0.04, 0.12, 0.05, 0.9], pmode: 3, psize: 0.12, pspawn: 0.25, deform: 0.5,
+    ground: TEX.DISCO, groundScale: 1 / 8, groundMat: [0.9, 0.0, 0.5], exposure: 0.8,
+  },
+  {
+    name: "ARCADE CIRCUIT", bar: 36, speed: 44, wrap: 600, back: 40, sway: 1.5,
+    fog: [0.0, 0.05, 0.03, 0.013], skyTop: [0.0, 0.01, 0.01], skyBot: [0.05, 0.35, 0.15],
+    sunDir: [0, -0.4, 1, 0.0], sunColor: [0.5, 1, 0.5], sunDisc: [0.4, 1, 0.5, 0.9995], stripes: 0, stars: 0,
+    ambient: 0.3, envInt: 0.8, terrain: [0.05, 0.08, 0.12, 0.55], pmode: 4, psize: 0.18, pspawn: 0.05, deform: 1.4,
+    ground: TEX.PCB, groundScale: 1 / 24, groundMat: [1.1, 0.3, 0.5], exposure: 0.85,
+  },
+  {
+    name: "SYNTH AQUARIUM", bar: 48, speed: 32, wrap: 560, back: 40, sway: 2.0,
+    fog: [0.0, 0.22, 0.32, 0.020], skyTop: [0.0, 0.08, 0.25], skyBot: [0.9, 0.3, 0.55],
+    sunDir: [0.1, 0.16, 1, 0.5], sunColor: [1, 0.55, 0.7], sunDisc: [1, 0.35, 0.6, 0.994], stripes: 1, stars: 0,
+    ambient: 0.5, envInt: 0.6, terrain: [0.25, 0.07, 0.1, 0.4], pmode: 5, psize: 0.11, pspawn: 0.3, deform: 0.6,
+    ground: TEX.SAND, groundScale: 1 / 14, groundMat: [0.8, 0.0, 0.5], exposure: 0.85,
+  },
+  {
+    name: "GRAND FINALE", bar: 60, speed: 54, wrap: 800, back: 40, sway: 0.8,
+    fog: [0.08, 0.0, 0.12, 0.004], skyTop: [0.0, 0.0, 0.03], skyBot: [0.9, 0.25, 0.45],
+    sunDir: [0, 0.08, 1, 0.3], sunColor: [1, 0.4, 0.6], sunDisc: [1, 0.3, 0.55, 0.99], stripes: 1, stars: 1,
+    ambient: 0.25, envInt: 1.0, terrain: [0.0, 0.1, 0.0, 0.5], pmode: 6, psize: 0.18, pspawn: 0.6, deform: 0.6,
+    ground: TEX.GRID, groundScale: 1 / 16, groundMat: [1.4, 0.0, 0.5], exposure: 0.8,
+  },
+  {
+    name: "CREDITS", bar: 72, speed: 46, wrap: 4000, back: 40, sway: 0.3,
+    fog: [0.04, 0.0, 0.08, 0.0025], skyTop: [0.0, 0.0, 0.02], skyBot: [0.7, 0.2, 0.4],
+    sunDir: [0, 0.08, 1, 0.2], sunColor: [1, 0.4, 0.6], sunDisc: [1, 0.3, 0.55, 0.99], stripes: 1, stars: 1,
+    ambient: 0.25, envInt: 1.0, terrain: [0.0, 0.1, 0.0, 0.5], pmode: 6, psize: 0.18, pspawn: 0.6, deform: 0.6,
+    ground: TEX.GRID, groundScale: 1 / 16, groundMat: [1.4, 0.0, 0.5], exposure: 0.8,
+  },
+];
+const LAUNCH_BAR = 66;
+for (let i = 0; i < SCENES.length; i++) {
+  const s = SCENES[i];
+  s.endBar = i + 1 < SCENES.length ? SCENES[i + 1].bar : BARS;
+  s.startZ = i === 0 ? 0 : SCENES[i - 1].startZ + SCENES[i - 1].speed * (SCENES[i - 1].endBar - SCENES[i - 1].bar) * BAR_SEC;
+}
+const sceneAtBar = (bar) => { let s = SCENES[0]; for (const c of SCENES) if (bar >= c.bar) s = c; return s; };
+const carZAtBar = (bar) => { const s = sceneAtBar(bar); return s.startZ + (bar - s.bar) * BAR_SEC * s.speed; };
+const flightAlt = (tl) => (tl <= 0 ? 0 : 12 + 9 * tl + 0.5 * tl * tl);
+const altAtBar = (bar) => flightAlt((bar - LAUNCH_BAR) * BAR_SEC);
+
+const buildScenes = () => {
+  const out = [];
+  for (let si = 0; si < SCENES.length; si++) {
+    const sc = SCENES[si];
+    const rnd = mulberry(1000 + si * 77);
+    const op = new InstanceList();
+    const gl = new InstanceList();
+    const W = sc.wrap;
+    const groundMat = [sc.groundMat[0], sc.groundMat[1], sc.groundMat[2], sc.ground + MODE_GROUND];
+    op.add(PROPS.ground, xf(0, 0, 300), [1, 1, 1, -sc.groundScale], groundMat);
+    const side = () => (rnd() < 0.5 ? -1 : 1);
+    if (si === 0) {
+      for (let z = 0; z < W; z += 28) {
+        const sgn = (z / 28) % 2 === 0 ? 1 : -1;
+        op.add(PROPS.lampPost, xf(sgn * 10.5, 0, z, 0, sgn > 0 ? Math.PI : 0), COL.white, matOf(TEX.FLAT, 0, 0.3, 0.5));
+      }
+      for (let z = 14; z < W; z += 44) {
+        op.add(PROPS.palm, xf(-12.5 - rnd() * 2, -0.2, z, 0, rnd() * 6.28, 0, 1.3), COL.white, matOf(TEX.FLAT, 0, 0, 0.8));
+        op.add(PROPS.palm, xf(12.5 + rnd() * 2, -0.2, z + 22, 0, rnd() * 6.28, 0, 1.3), COL.white, matOf(TEX.FLAT, 0, 0, 0.8));
+      }
+      for (let k = 0; k < 110; k++) {
+        const sgn = side();
+        const w = 10 + rnd() * 18, d = 10 + rnd() * 18, h = 25 + rnd() * 110;
+        const x = sgn * (24 + rnd() * 80), z = rnd() * W;
+        op.add(PROPS.skyscraper, xf(x, -1, z, 0, 0, 0, w, h, d), COL.white, matOf(TEX.FACADE, 0.9, 0.1, 0.5));
+        if (rnd() < 0.55) {
+          const bw = 8 + rnd() * 10, bh = bw * 0.5;
+          op.add(PROPS.billboard, xf(x - sgn * (w / 2 + 0.3), 8 + rnd() * 30, z, 0, sgn > 0 ? -Math.PI / 2 : Math.PI / 2, 0, bw, bh, 1), COL.white, matOf(TEX.BILLBOARD, 1.6, 0, 0.5));
+        }
+      }
+      for (let z = 60; z < W; z += 186) {
+        op.add(PROPS.unitBox, xf(-9.6, 4, z, 0, 0, 0, 0.5, 8, 0.5), [0.3, 0.3, 0.33, 0], matOf(TEX.FLAT, 0, 0.5, 0.4));
+        op.add(PROPS.unitBox, xf(9.6, 4, z, 0, 0, 0, 0.5, 8, 0.5), [0.3, 0.3, 0.33, 0], matOf(TEX.FLAT, 0, 0.5, 0.4));
+        op.add(PROPS.unitBox, xf(0, 8, z, 0, 0, 0, 20, 0.5, 0.5), [0.3, 0.3, 0.33, 0], matOf(TEX.FLAT, 0, 0.5, 0.4));
+        op.add(PROPS.billboard, xf(0, 10.2, z, 0, 0, 0, 23, 3.2, 1), [0.06, 0.35, 0.14, 0], matOf(TEX.FLAT, 0, 0, 0.6));
+        textInstances(op, "POLICE SQUAD", -4.6, 9.4, z - 0.3, 1.2, [1, 1, 1, 0], 1.8, 0, false, MODE_WRAP);
+        textInstances(op, "EXIT 88", 7.2, 9.4, z - 0.3, 1.2, [1, 0.45, 0.2, 0], 1.8, 0, false, MODE_WRAP);
+      }
+      for (let z = 0; z < W; z += 28) {
+        const sgn = (z / 28) % 2 === 0 ? 1 : -1;
+        gl.add(PROPS.cone, xf(sgn * 8.75, 8.7, z, Math.PI, 0, 0, 3.5, 8.7, 3.5), [1, 0.7, 0.4, 0], matOf(TEX.FLAT, 0.15, 1.0, 0.5));
+      }
+      for (let z = 5; z < W; z += 7) {
+        gl.add(PROPS.unitBox, xf(8.4, 0.05, z, 0, 0, 0, 0.3, 0.05, 3.5), [1, 0.2, 0.6, 0], matOf(TEX.FLAT, 2.5, 0, 0.5));
+        gl.add(PROPS.unitBox, xf(-8.4, 0.05, z, 0, 0, 0, 0.3, 0.05, 3.5), [0.2, 0.8, 1, 0], matOf(TEX.FLAT, 2.5, 0, 0.5));
+      }
+    } else if (si === 1) {
+      for (let z = 0; z < W; z += 70) {
+        op.add(PROPS.candelabra, xf(14, 0, z + 20, 0, 0, 0, 1.2), COL.white, matOf(TEX.FLAT, 0, 0.9, 0.25));
+        op.add(PROPS.candelabra, xf(-14, 0, z + 55, 0, 0, 0, 1.2), COL.white, matOf(TEX.FLAT, 0, 0.9, 0.25));
+      }
+      for (let k = 0; k < 60; k++) {
+        const sgn = side();
+        const x = sgn * (10 + rnd() * 24), z = rnd() * W;
+        const t = rnd();
+        if (t < 0.35) op.add(PROPS.flute, xf(x, 0, z, 0, rnd() * 6, 0, 1.3 + rnd() * 0.6), COL.white, matOf(TEX.FLAT, 0.08, 0.9, 0.08));
+        else if (t < 0.55) op.add(PROPS.bottle, xf(x, 0, z, 0, rnd() * 6, 0, 1.0 + rnd() * 0.4), COL.white, matOf(TEX.FLAT, 0, 0.3, 0.15));
+        else if (t < 0.8) op.add(PROPS.lobsterPlatter, xf(x, 0, z, 0, rnd() * 6, 0, 1.2 + rnd() * 0.6), COL.white, matOf(TEX.FLAT, 0, 0.1, 0.35));
+        else op.add(PROPS.fork, xf(x, 0, z, 0, rnd() * 6, 0, 1.0), COL.chrome, matOf(TEX.FLAT, 0, 1.0, 0.1));
+      }
+      for (let k = 0; k < 24; k++) {
+        const x = (rnd() - 0.5) * 50, z = rnd() * W, y = 5 + rnd() * 9;
+        const sc_ = 1.2 + rnd() * 0.6;
+        op.add(PROPS.lobsterPlatter, xf(x, y, z, (rnd() - 0.5) * 1.2, rnd() * 6, (rnd() - 0.5) * 1.6, sc_), [1, 1, 1, 0.6 + rnd() * 0.6], matOf(TEX.FLAT, 0, 0.1, 0.35));
+      }
+      for (let k = 0; k < 24; k++) {
+        const x = (rnd() - 0.5) * 50, z = rnd() * W, y = 4 + rnd() * 10;
+        op.add(PROPS.flute, xf(x, y, z, (rnd() - 0.5) * 2.5, rnd() * 6, (rnd() - 0.5) * 2.5, 0.9 + rnd() * 0.5), [1, 1, 1, 0.8 + rnd() * 0.6], matOf(TEX.FLAT, 0.08, 0.9, 0.08));
+      }
+      for (let z = 30; z < W; z += 110) {
+        op.add(PROPS.cake, xf(-22 + rnd() * 6, 0, z, 0, 0, 0, 2.5), COL.white, matOf(TEX.FLAT, 0, 0, 0.5));
+        op.add(PROPS.chair, xf(44, 8, z + 40, 0, -Math.PI / 2, 0, 7), COL.white, matOf(TEX.VELVET, 0, 0, 0.5));
+        op.add(PROPS.chair, xf(-44, 8, z + 90, 0, Math.PI / 2, 0, 7), COL.white, matOf(TEX.VELVET, 0, 0, 0.5));
+      }
+      for (let z = 0; z < W; z += 80) {
+        op.add(PROPS.torus, xf(0, 34, z + 40, 0, 0, 0, 9, 9, 9), COL.gold, matOf(TEX.FLAT, 0, 1, 0.2));
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          op.add(PROPS.flute, xf(Math.cos(a) * 9, 30, z + 40 + Math.sin(a) * 9, Math.PI, 0, 0, 0.5), COL.white, matOf(TEX.FLAT, 0.4, 0.9, 0.08));
+          gl.add(PROPS.sphere, xf(Math.cos(a) * 9, 29.5, z + 40 + Math.sin(a) * 9, 0, 0, 0, 0.9), [1, 0.7, 0.3, 0], matOf(TEX.FLAT, 1.2, 1.0, 0.5));
+        }
+        gl.add(PROPS.cone, xf(0, 30, z + 40, Math.PI, 0, 0, 20, 30, 20), [1, 0.7, 0.35, 0], matOf(TEX.FLAT, 0.18, 1.0, 0.5));
+      }
+      for (let z = 0; z < W; z += 70) {
+        gl.add(PROPS.sphere, xf(14, 10.5, z + 20, 0, 0, 0, 1.6), [1, 0.6, 0.2, 0], matOf(TEX.FLAT, 0.9, 1.0, 0.5));
+        gl.add(PROPS.sphere, xf(-14, 10.5, z + 55, 0, 0, 0, 1.6), [1, 0.6, 0.2, 0], matOf(TEX.FLAT, 0.9, 1.0, 0.5));
+      }
+    } else if (si === 2) {
+      for (let z = 0; z < W; z += 60) {
+        op.add(PROPS.discoBall, xf(0, 13, z + 30, 0, 0, 0, 2.4), COL.white, matOf(TEX.FLAT, 0.05, 1.0, 0.08));
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * Math.PI * 2 + z * 0.01;
+          const hueCol = [0.5 + 0.5 * Math.sin(a), 0.5 + 0.5 * Math.sin(a + 2.1), 0.5 + 0.5 * Math.sin(a + 4.2), 0];
+          gl.add(PROPS.cone, xf(0, 13, z + 30, Math.PI + 0.9 * Math.cos(a), 0, 0.9 * Math.sin(a), 1.6, 26, 1.6), hueCol, matOf(TEX.FLAT, 0.25, 1.0, 0.5));
+        }
+        gl.add(PROPS.sphere, xf(0, 13, z + 30, 0, 0, 0, 2.9), [1, 1, 1, 0], matOf(TEX.FLAT, 0.5, 1.0, 0.5));
+      }
+      for (let z = 15; z < W; z += 30) {
+        const c = (z / 30) % 2 === 0 ? [1, 0.15, 0.75, 0] : [0.15, 0.9, 1, 0];
+        op.add(PROPS.arch, xf(0, 0, z, -Math.PI / 2, 0, 0, 12, 12, 12), c, matOf(TEX.FLAT, 3, 0, 0.5));
+        gl.add(PROPS.arch, xf(0, 0, z, -Math.PI / 2, 0, 0, 12, 12, 12), c, matOf(TEX.FLAT, 0.5, 0.7, 0.5));
+      }
+      for (let z = 0; z < W; z += 45) {
+        op.add(PROPS.speaker, xf(16, 0, z + 10, 0, -0.4, 0, 2.2), COL.white, matOf(TEX.SYNTH, 1.4, 0.2, 0.5));
+        op.add(PROPS.speaker, xf(-16, 0, z + 32, 0, 0.4, 0, 2.2), COL.white, matOf(TEX.SYNTH, 1.4, 0.2, 0.5));
+      }
+      for (let k = 0; k < 40; k++) {
+        const x = (rnd() - 0.5) * 36, z = rnd() * W, y = 2 + rnd() * 10;
+        const hueCol = [[1, 0.3, 0.8], [1, 0.9, 0.2], [0.3, 1, 0.9], [0.8, 0.3, 1]][k % 4];
+        op.add(PROPS.skate, xf(x, y, z, (rnd() - 0.5) * 1.5, rnd() * 6, (rnd() - 0.5) * 2, 1.8 + rnd()), [hueCol[0], hueCol[1], hueCol[2], 0.8 + rnd() * 0.8], matOf(TEX.FLAT, 0, 0.1, 0.4));
+      }
+      for (let k = 0; k < 30; k++) {
+        const sgn = side();
+        op.add(PROPS.unitBox, xf(sgn * (11 + rnd() * 25), 6, rnd() * W, 0, 0, 0, 1.4, 12, 1.4), COL.white, matOf(TEX.CHROME, 0, 1.0, 0.1));
+      }
+      for (let z = 0; z < W; z += 120) {
+        textInstances(op, "ROLLER DISCO", 0, 18, z + 60, 4, [1, 0.2, 0.7, 0], 2.5, 0, false, MODE_WRAP);
+        textInstances(op, "SKATE OR DIE", 24, 10, z + 100, 2.5, [0.3, 1, 1, 0], 2.5, Math.PI / 2, false, MODE_WRAP);
+        textInstances(op, "ALL NIGHT", -24, 10, z + 20, 2.5, [1, 0.9, 0.3, 0], 2.5, -Math.PI / 2, false, MODE_WRAP);
+      }
+      for (let z = 8; z < W; z += 60) {
+        op.add(PROPS.palm, xf(-20, -0.2, z, 0, rnd() * 6, 0, 1.6), [0.3, 1, 0.8, 0], matOf(TEX.FLAT, 0.6, 0, 0.8));
+        op.add(PROPS.palm, xf(20, -0.2, z + 30, 0, rnd() * 6, 0, 1.6), [1, 0.4, 0.9, 0], matOf(TEX.FLAT, 0.6, 0, 0.8));
+      }
+    } else if (si === 3) {
+      for (let k = 0; k < 70; k++) {
+        const sgn = side();
+        const x = sgn * (10 + rnd() * 30), z = rnd() * W;
+        const t = rnd();
+        if (t < 0.25) op.add(PROPS.chip, xf(x, 0, z, 0, rnd() < 0.5 ? 0 : Math.PI / 2, 0, 1.2 + rnd()), COL.white, matOf(TEX.FLAT, 0, 0.2, 0.5));
+        else if (t < 0.5) op.add(PROPS.capacitor, xf(x, 0, z, 0, 0, 0, 0.9 + rnd() * 0.7), COL.white, matOf(TEX.FLAT, 0, 0.4, 0.3));
+        else if (t < 0.7) op.add(PROPS.resistor, xf(x, 0, z, 0, rnd() * 3, 0, 1.0 + rnd() * 0.6), COL.white, matOf(TEX.FLAT, 0, 0.1, 0.6));
+        else if (t < 0.88) op.add(PROPS.tube, xf(x, 0, z, 0, 0, 0, 1.1 + rnd() * 0.6), COL.white, matOf(TEX.FLAT, 0, 0.5, 0.15));
+        else op.add(PROPS.joystick, xf(x, 0, z, 0, 0, 0, 1.2 + rnd() * 0.5), COL.white, matOf(TEX.FLAT, 0, 0.3, 0.3));
+      }
+      for (let z = 0; z < W; z += 50) {
+        op.add(PROPS.cabinet, xf(48, 0, z + 10, 0, -Math.PI / 2 + 0.2, 0, 2.6), COL.white, matOf(TEX.SYNTH, 1.5, 0.2, 0.5));
+        op.add(PROPS.cabinet, xf(-48, 0, z + 35, 0, Math.PI / 2 - 0.2, 0, 2.6), COL.white, matOf(TEX.SYNTH, 1.5, 0.2, 0.5));
+      }
+      for (let k = 0; k < 50; k++) {
+        const x = (rnd() - 0.5) * 40, z = rnd() * W;
+        const c = [[0.2, 1, 1], [1, 0.2, 1], [1, 1, 0.2], [0.3, 1, 0.3]][k % 4];
+        const s = 0.8 + rnd() * 1.6;
+        op.add(PROPS.pixelCube, xf(x, 1 + rnd() * 6, z, 0, rnd() * 3, 0, s), [c[0], c[1], c[2], 0.8 + rnd() * 0.8], matOf(TEX.FLAT, 0, 0, 0.5));
+      }
+      for (let z = 0; z < W; z += 45) {
+        const sgn = (z / 45) % 2 === 0 ? 1 : -1;
+        gl.add(PROPS.sphere, xf(sgn * 7.5, 6, z + 20, 0, 0, 0, 2.2), [1, 0.5, 0.15, 0], matOf(TEX.FLAT, 0.5, 1.0, 0.5));
+      }
+      for (let z = 0; z < W; z += 150) {
+        textInstances(op, "HIGH SCORE", 0, 22, z + 75, 4.5, [1, 1, 0.3, 0], 2.5, 0, false, MODE_WRAP);
+        textInstances(op, "1988", 0, 16, z + 75, 4.5, [0.3, 1, 1, 0], 2.5, 0, false, MODE_WRAP);
+        textInstances(op, "INSERT COIN", -26, 9, z + 20, 2.6, [1, 0.3, 0.3, 0], 2.5, -Math.PI / 2, false, MODE_WRAP);
+        textInstances(op, "PLAYER 1 READY", 26, 9, z + 110, 2.6, [0.3, 1, 0.5, 0], 2.5, Math.PI / 2, false, MODE_WRAP);
+      }
+    } else if (si === 4) {
+      for (let k = 0; k < 90; k++) {
+        const sgn = side();
+        const x = sgn * (9 + rnd() * 34), z = rnd() * W;
+        const t = rnd();
+        const cc = [[1, 0.25, 0.6], [1, 0.55, 0.15], [1, 0.9, 0.3], [0.5, 0.3, 1]][k % 4];
+        if (t < 0.4) op.add(PROPS.coral, xf(x, -0.5, z, 0, rnd() * 6, 0, 1 + rnd() * 1.5), [cc[0], cc[1], cc[2], 0], matOf(TEX.FLAT, 0.1, 0, 0.7));
+        else if (t < 0.75) {
+          const n = 3 + Math.floor(rnd() * 4);
+          for (let j = 0; j < n; j++) op.add(PROPS.unitBox, xf(x + rnd() * 3, 8, z + rnd() * 3, 0, rnd() * 6, 0, 0.4, 16 + rnd() * 10, 0.08), [0.1, 0.7, 0.3, 1.0 + rnd()], matOf(TEX.FLAT, 0.15, 0, 0.7));
+        } else if (t < 0.9) op.add(PROPS.urchin, xf(x, 0.6, z, 0, rnd() * 6, 0, 1.2 + rnd()), [0.2, 0.05, 0.3, 0], matOf(TEX.FLAT, 0, 0.1, 0.6));
+        else op.add(PROPS.vhs, xf(x, 0.0, z, (rnd() - 0.5) * 0.6, rnd() * 6, (rnd() - 0.5) * 0.6, 1.4 + rnd()), COL.white, matOf(TEX.FLAT, 0, 0.1, 0.5));
+      }
+      for (let k = 0; k < 70; k++) {
+        const x = (rnd() - 0.5) * 50, z = rnd() * W, y = 3 + rnd() * 16;
+        const cc = [[1, 0.6, 0.1], [0.2, 0.6, 1], [1, 0.3, 0.5], [0.9, 0.9, 0.3]][k % 4];
+        op.add(PROPS.fish, xf(x, y, z, 0, rnd() < 0.5 ? 0 : Math.PI, Math.PI / 2, 0.8 + rnd()), [cc[0], cc[1], cc[2], 0.4 + rnd() * 0.5], matOf(TEX.FLAT, 0.1, 0.4, 0.3));
+      }
+      for (let z = 20; z < W; z += 140) {
+        op.add(PROPS.chest, xf(-14, 0, z, 0, 0.5, 0, 1.6), COL.white, matOf(TEX.FLAT, 0, 0.2, 0.6));
+        gl.add(PROPS.sphere, xf(-14, 3, z, 0, 0, 0, 2.5), [1, 0.8, 0.3, 0], matOf(TEX.FLAT, 0.5, 1.0, 0.5));
+      }
+      for (let z = 0; z < W; z += 24) {
+        const x = (rnd() - 0.5) * 40;
+        gl.add(PROPS.cone, xf(x, 42, z, Math.PI, 0.25 * (rnd() - 0.5), 0.1, 4 + rnd() * 3, 42, 4 + rnd() * 3), [0.6, 0.95, 1, 0], matOf(TEX.FLAT, 0.12, 1.0, 0.5));
+      }
+      for (let z = 40; z < W; z += 180) {
+        textInstances(op, "BE KIND REWIND", 0, 20, z, 3.5, [1, 0.5, 0.8, 0], 2.0, 0, false, MODE_WRAP);
+      }
+    } else if (si === 5) {
+      for (let z = 0; z < W; z += 20) {
+        const c = (z / 20) % 2 === 0 ? [1, 0.15, 0.75, 0] : [0.15, 0.9, 1, 0];
+        op.add(PROPS.pylon, xf(10, 0, z, 0, 0, 0, 0.5, 6 + (z % 60) / 6, 0.5), c, matOf(TEX.FLAT, 2.5, 0, 0.5));
+        op.add(PROPS.pylon, xf(-10, 0, z, 0, 0, 0, 0.5, 6 + (z % 60) / 6, 0.5), c, matOf(TEX.FLAT, 2.5, 0, 0.5));
+      }
+      for (let z = 10; z < W; z += 50) {
+        op.add(PROPS.palm, xf(-16, -0.2, z, 0, rnd() * 6, 0, 1.8), [1, 0.2, 0.7, 0], matOf(TEX.FLAT, 1.2, 0, 0.8));
+        op.add(PROPS.palm, xf(16, -0.2, z + 25, 0, rnd() * 6, 0, 1.8), [0.2, 0.9, 1, 0], matOf(TEX.FLAT, 1.2, 0, 0.8));
+      }
+      for (let k = 0; k < 60; k++) {
+        const x = (rnd() - 0.5) * 120, z = rnd() * W, y = 20 + rnd() * 90;
+        const c = [[1, 0.2, 0.7], [0.2, 0.9, 1], [1, 0.7, 0.2]][k % 3];
+        const t = rnd();
+        if (t < 0.4) op.add(PROPS.torus, xf(x, y, z, rnd() * 3, rnd() * 3, 0, 4 + rnd() * 6), [c[0], c[1], c[2], 0.3], matOf(TEX.FLAT, 1.5 + rnd(), 0, 0.5));
+        else if (t < 0.7) op.add(PROPS.pixelCube, xf(x, y, z, rnd() * 3, rnd() * 3, rnd() * 3, 3 + rnd() * 4), [c[0], c[1], c[2], 0.3], matOf(TEX.FLAT, 0.5 + rnd(), 0, 0.5));
+        else op.add(PROPS.cone, xf(x, y, z, rnd() * 3, rnd() * 3, 0, 4, 8, 4), [c[0], c[1], c[2], 0.3], matOf(TEX.FLAT, 1.0 + rnd(), 0, 0.5));
+      }
+      const rampZ = carZAtBar(LAUNCH_BAR) - 30;
+      op.add(PROPS.slab, xf(0, 0, rampZ + 15, -0.26, 0, 0, 9, 1, 60), [0.05, 0.0, 0.1, 0], matOf(TEX.GRID, 2.5, 0, 0.5, MODE_STATIC));
+      op.add(PROPS.unitBox, xmul(xf(0, 0, rampZ + 15, -0.26, 0, 0), xf(9, 0.3, 0, 0, 0, 0, 0.4, 0.5, 60)), [1, 0.2, 0.75, 0], matOf(TEX.FLAT, 3, 0, 0.5, MODE_STATIC));
+      op.add(PROPS.unitBox, xmul(xf(0, 0, rampZ + 15, -0.26, 0, 0), xf(-9, 0.3, 0, 0, 0, 0, 0.4, 0.5, 60)), [0.2, 0.9, 1, 0], matOf(TEX.FLAT, 3, 0, 0.5, MODE_STATIC));
+      op.add(PROPS.unitBox, xmul(xf(0, 0, rampZ + 15, -0.26, 0, 0), xf(0, 0.3, 30, 0, 0, 0, 18, 0.5, 0.5)), [1, 1, 1, 0], matOf(TEX.FLAT, 3, 0, 0.5, MODE_STATIC));
+      for (let i = 0; i < 12; i++) {
+        const zz = rampZ - 50 - i * 12;
+        const c = i % 2 ? [1, 0.15, 0.75, 0] : [0.15, 0.9, 1, 0];
+        op.add(PROPS.unitBox, xf(0, 0.2, zz, 0, 0, 0, 24 - i, 0.3, 1.2), c, matOf(TEX.FLAT, 3.5, 0, 0.5, MODE_STATIC));
+      }
+      textInstances(op, "LAUNCH", 0, 14, rampZ - 80, 5, [1, 0.3, 0.8, 0], 3.0, 0, false, MODE_STATIC);
+      textInstances(op, "NO LIMIT", 0, 8, rampZ - 80, 3, [0.3, 1, 1, 0], 3.0, 0, false, MODE_STATIC);
+    } else {
+      const credits = [
+        ["THE NAKED ENGINE", 0.5, 10, 0], ["1988", 1.0, 6, 0],
+        ["STARRING", 2.0, 4, -1], ["A 1980 PLYMOUTH GRAN FURY", 2.5, 5, -1],
+        ["MUSIC", 3.4, 4, 1], ["THE SLAP BASS ORCHESTRA", 3.9, 5, 1],
+        ["TEXTURES", 4.8, 4, -1], ["WGSL COMPUTE AT 60HZ", 5.3, 5, -1],
+        ["NO FILES WERE HARMED", 6.2, 5, 1], ["EVERYTHING IS CODE", 6.7, 5, 1],
+        ["THANKS FOR WATCHING", 7.6, 6, 0],
+      ];
+      for (const [txt, barOff, size, sideSel] of credits) {
+        const bar = SCENES[6].bar + barOff;
+        const z = carZAtBar(bar) + 90;
+        const y = altAtBar(bar + 90 / 46 / BAR_SEC) + 2;
+        if (sideSel === 0) textInstances(op, txt, 0, y + 6, z, size, [1, 0.9, 0.6, 0], 2.2, 0, false, MODE_STATIC);
+        else textInstances(op, txt, sideSel * 26, y + 4, z, size, sideSel > 0 ? [0.3, 1, 1, 0] : [1, 0.3, 0.8, 0], 2.2, sideSel > 0 ? Math.PI / 2 : -Math.PI / 2, false, MODE_STATIC);
+      }
+      const bz = carZAtBar(SCENES[6].bar + 0.5) + 90;
+      const by = altAtBar(SCENES[6].bar + 0.5 + 90 / 46 / BAR_SEC) + 2;
+      op.add(PROPS.badge, xf(0, by + 26, bz + 2, 0, 0, 0, 14), [1, 0.78, 0.25, 0], matOf(TEX.FLAT, 0.3, 1.0, 0.25, MODE_STATIC));
+      gl.add(PROPS.sphere, xf(0, by + 26, bz + 2, 0, 0, 0, 20), [1, 0.7, 0.3, 0], matOf(TEX.FLAT, 0.12, 1.0, 0.5, MODE_STATIC));
+      for (let k = 0; k < 80; k++) {
+        const bar = SCENES[6].bar + rnd() * 8;
+        const z = carZAtBar(bar) + (rnd() - 0.5) * 100;
+        const y = altAtBar(bar) + (rnd() - 0.5) * 120;
+        const x = (rnd() - 0.5) * 160;
+        const c = [[1, 0.2, 0.7], [0.2, 0.9, 1], [1, 0.7, 0.2]][k % 3];
+        const t = rnd();
+        if (t < 0.5) op.add(PROPS.torus, xf(x, y, z, rnd() * 3, rnd() * 3, 0, 4 + rnd() * 6), [c[0], c[1], c[2], 0], matOf(TEX.FLAT, 1.5 + rnd(), 0, 0.5, MODE_STATIC));
+        else op.add(PROPS.pixelCube, xf(x, y, z, rnd() * 3, rnd() * 3, rnd() * 3, 3 + rnd() * 4), [c[0], c[1], c[2], 0], matOf(TEX.FLAT, 0.5 + rnd(), 0, 0.5, MODE_STATIC));
+      }
+    }
+    out.push({ op, gl });
+  }
+  return out;
+};
+const canvas = document.getElementById("gpu");
+const LOAD_LINES = ["CALIBRATING LIGHTBAR", "TUNING SLAP BASS", "WAXING THE GRAN FURY", "WETTING ASPHALT", "SHATTERING STEMWARE", "LACING SKATES", "SOLDERING CIRCUITS", "FILLING AQUARIUM", "CHARGING LAUNCHPAD", "POLISHING BADGE"];
+const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
+let loadStep = 0;
+const drawLoader = (progress, text) => {
+  clearUI();
+  drawScanBackdrop();
+  const cx = innerWidth / 2, cy = innerHeight / 2;
+  drawVectorText("THE NAKED ENGINE", cx, cy - 60, Math.min(42, innerWidth / 18), "#ff2a6d", "center", true);
+  drawVectorText("1988", cx, cy - 20, Math.min(18, innerWidth / 40), "#2de2ff", "center", true);
+  const bw = Math.min(520, innerWidth * 0.7), bh = 14;
+  uictx.strokeStyle = "#2de2ff";
+  uictx.lineWidth = 2;
+  uictx.strokeRect(cx - bw / 2, cy + 20, bw, bh);
+  uictx.fillStyle = "#ff2a6d";
+  uictx.shadowBlur = 18;
+  uictx.shadowColor = "#ff2a6d";
+  uictx.fillRect(cx - bw / 2 + 3, cy + 23, (bw - 6) * progress, bh - 6);
+  uictx.shadowBlur = 0;
+  drawVectorText(text + "...", cx, cy + 68, Math.min(16, innerWidth / 44), "#b8b8c8", "center", false);
+};
+const stepLoader = async (i) => {
+  drawLoader((i + 1) / (LOAD_LINES.length + 1), LOAD_LINES[Math.min(i, LOAD_LINES.length - 1)]);
+  await nextFrame();
+  await nextFrame();
+};
+
+const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+if (!adapter) { drawOffline(); throw new Error("no adapter"); }
+const device = await adapter.requestDevice();
+const context = canvas.getContext("webgpu");
+const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+context.configure({ device, format: canvasFormat, alphaMode: "opaque" });
+device.lost.then((info) => { console.warn("device lost", info.message); });
+
+await stepLoader(0);
+
+const TEX_SIZE = 512;
+const ENV_W = 512;
+const SHADOW_SIZE = 2048;
+const PARTICLE_COUNT = 32768;
+const mipCount = (w, h) => 1 + Math.floor(Math.log2(Math.max(w, h)));
+
+const shaderMesh = device.createShaderModule({ code: WGSL_MESH });
+const shaderSky = device.createShaderModule({ code: WGSL_SKY });
+const shaderPartSim = device.createShaderModule({ code: WGSL_PARTICLES });
+const shaderPartDraw = device.createShaderModule({ code: WGSL_PARTICLES_DRAW });
+const shaderPost = device.createShaderModule({ code: WGSL_POST });
+const shaderTex = device.createShaderModule({ code: WGSL_TEXGEN });
+const shaderMipArr = device.createShaderModule({ code: wgslMip(true, "rgba8unorm") });
+const shaderMipEnv = device.createShaderModule({ code: wgslMip(false, "rgba16float") });
+for (const [name, mod] of [["mesh", shaderMesh], ["sky", shaderSky], ["psim", shaderPartSim], ["pdraw", shaderPartDraw], ["post", shaderPost], ["tex", shaderTex], ["mipA", shaderMipArr], ["mipE", shaderMipEnv]]) {
+  const info = await mod.getCompilationInfo();
+  for (const m of info.messages) if (m.type === "error") console.error(name, m.lineNum, m.linePos, m.message);
+}
+
+const GLOBALS_FLOATS = 256;
+const globalsData = new Float32Array(GLOBALS_FLOATS);
+const globalsBuffer = device.createBuffer({ size: GLOBALS_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+const G = { view: 0, proj: 16, viewProj: 32, invVP: 48, shadowVP: 64, car: 80, camPos: 96, sunDir: 100, sunColor: 104, fog: 108, skyTop: 112, skyBot: 116, sunDisc: 120, scroll: 124, fx: 128, post: 132, env: 136, terrain: 140, pfx: 144, lights: 148 };
+const setV4 = (o, a, b, c, d) => { globalsData[o] = a; globalsData[o + 1] = b; globalsData[o + 2] = c; globalsData[o + 3] = d; };
+const setLight = (i, x, y, z, range, r, g, b, inten, dx, dy, dz, cone) => {
+  const o = G.lights + i * 12;
+  setV4(o, x, y, z, range); setV4(o + 4, r, g, b, inten); setV4(o + 8, dx, dy, dz, cone);
+};
+
+await stepLoader(1);
+
+const albedoTex = device.createTexture({ size: [TEX_SIZE, TEX_SIZE, TEX_COUNT], format: "rgba8unorm", mipLevelCount: mipCount(TEX_SIZE, TEX_SIZE), usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+const normalTex = device.createTexture({ size: [TEX_SIZE, TEX_SIZE, TEX_COUNT], format: "rgba8unorm", mipLevelCount: mipCount(TEX_SIZE, TEX_SIZE), usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+const heightTex = device.createTexture({ size: [TEX_SIZE, TEX_SIZE, TEX_COUNT], format: "rg32float", usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+const envTex = device.createTexture({ size: [ENV_W, ENV_W / 2], format: "rgba16float", mipLevelCount: mipCount(ENV_W, ENV_W / 2), usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+{
+  const genPipe = device.createComputePipeline({ layout: "auto", compute: { module: shaderTex, entryPoint: "csGen" } });
+  const nrmPipe = device.createComputePipeline({ layout: "auto", compute: { module: shaderTex, entryPoint: "csNormal" } });
+  const envPipe = device.createComputePipeline({ layout: "auto", compute: { module: shaderTex, entryPoint: "csEnv" } });
+  const mipArrPipe = device.createComputePipeline({ layout: "auto", compute: { module: shaderMipArr, entryPoint: "csMip" } });
+  const mipEnvPipe = device.createComputePipeline({ layout: "auto", compute: { module: shaderMipEnv, entryPoint: "csMip" } });
+  const texUniform = (kind, size, seed) => {
+    const b = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const d = new ArrayBuffer(16); const u = new Uint32Array(d); const f = new Float32Array(d);
+    u[0] = kind; u[1] = size; f[2] = seed; f[3] = 0;
+    device.queue.writeBuffer(b, 0, d);
+    return b;
+  };
+  const albedoL0 = albedoTex.createView({ dimension: "2d-array", baseMipLevel: 0, mipLevelCount: 1 });
+  const normalL0 = normalTex.createView({ dimension: "2d-array", baseMipLevel: 0, mipLevelCount: 1 });
+  const heightView = heightTex.createView({ dimension: "2d-array" });
+  const enc = device.createCommandEncoder();
+  const pass = enc.beginComputePass();
+  const groups = Math.ceil(TEX_SIZE / 8);
+  const normalStrength = [5, 6, 8, 10, 12, 8, 4, 10, 6, 10, 6, 1, 3];
+  for (let k = 0; k < TEX_COUNT; k++) {
+    const ub = texUniform(k, TEX_SIZE, 0.37 * k + 1.1);
+    const bg = device.createBindGroup({ layout: genPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: ub } }, { binding: 1, resource: albedoL0 }, { binding: 2, resource: heightView }] });
+    pass.setPipeline(genPipe); pass.setBindGroup(0, bg); pass.dispatchWorkgroups(groups, groups);
+  }
+  for (let k = 0; k < TEX_COUNT; k++) {
+    const ub = texUniform(k, TEX_SIZE, normalStrength[k]);
+    const bg = device.createBindGroup({ layout: nrmPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: ub } }, { binding: 3, resource: heightView }, { binding: 4, resource: normalL0 }] });
+    pass.setPipeline(nrmPipe); pass.setBindGroup(0, bg); pass.dispatchWorkgroups(groups, groups);
+  }
+  {
+    const ub = texUniform(0, ENV_W, 0);
+    const bg = device.createBindGroup({ layout: envPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: ub } }, { binding: 5, resource: envTex.createView({ baseMipLevel: 0, mipLevelCount: 1 }) }] });
+    pass.setPipeline(envPipe); pass.setBindGroup(0, bg); pass.dispatchWorkgroups(Math.ceil(ENV_W / 8), Math.ceil(ENV_W / 16));
+  }
+  pass.setPipeline(mipArrPipe);
+  for (const tex of [albedoTex, normalTex]) {
+    for (let L = 1; L < tex.mipLevelCount; L++) {
+      const bg = device.createBindGroup({ layout: mipArrPipe.getBindGroupLayout(0), entries: [
+        { binding: 0, resource: tex.createView({ dimension: "2d-array", baseMipLevel: L - 1, mipLevelCount: 1 }) },
+        { binding: 1, resource: tex.createView({ dimension: "2d-array", baseMipLevel: L, mipLevelCount: 1 }) },
+      ] });
+      const sz = Math.max(1, TEX_SIZE >> L);
+      pass.setBindGroup(0, bg); pass.dispatchWorkgroups(Math.ceil(sz / 8), Math.ceil(sz / 8), TEX_COUNT);
+    }
+  }
+  pass.setPipeline(mipEnvPipe);
+  for (let L = 1; L < envTex.mipLevelCount; L++) {
+    const bg = device.createBindGroup({ layout: mipEnvPipe.getBindGroupLayout(0), entries: [
+      { binding: 0, resource: envTex.createView({ baseMipLevel: L - 1, mipLevelCount: 1 }) },
+      { binding: 1, resource: envTex.createView({ baseMipLevel: L, mipLevelCount: 1 }) },
+    ] });
+    const w = Math.max(1, ENV_W >> L), h = Math.max(1, (ENV_W / 2) >> L);
+    pass.setBindGroup(0, bg); pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8));
+  }
+  pass.end();
+  device.queue.submit([enc.finish()]);
+}
+
+await stepLoader(2);
+buildProps();
+await stepLoader(3);
+const sceneLists = buildScenes();
+await stepLoader(4);
+
+const vertexBuffer = device.createBuffer({ size: poolVerts * VERT_BYTES, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+device.queue.writeBuffer(vertexBuffer, 0, vertexPool, 0, poolVerts * VERT_FLOATS);
+const indexBuffer = device.createBuffer({ size: poolIndices * 4, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+device.queue.writeBuffer(indexBuffer, 0, indexPool, 0, poolIndices);
+
+const CAR_INST = 3;
+let totalInst = CAR_INST;
+const sceneDraws = [];
+for (const s of sceneLists) {
+  const opBase = totalInst;
+  totalInst += s.op.data.length / INST_FLOATS;
+  const glBase = totalInst;
+  totalInst += s.gl.data.length / INST_FLOATS;
+  sceneDraws.push({
+    op: s.op.draws.map((d) => ({ mesh: meshTable[d.mesh], first: d.first + opBase, count: d.count })),
+    gl: s.gl.draws.map((d) => ({ mesh: meshTable[d.mesh], first: d.first + glBase, count: d.count })),
+  });
+}
+const instanceData = new Float32Array(totalInst * INST_FLOATS);
+{
+  let off = CAR_INST * INST_FLOATS;
+  for (const s of sceneLists) {
+    instanceData.set(s.op.data, off); off += s.op.data.length;
+    instanceData.set(s.gl.data, off); off += s.gl.data.length;
+  }
+}
+const instanceBuffer = device.createBuffer({ size: instanceData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+device.queue.writeBuffer(instanceBuffer, 0, instanceData);
+const carInstData = new Float32Array(CAR_INST * INST_FLOATS);
+const carDraws = [
+  { mesh: meshTable[PROPS.car], first: 0, count: 1 },
+  { mesh: meshTable[PROPS.dome], first: 1, count: 2 },
+];
+{
+  const m = xf(0, 0, 0);
+  carInstData.set(m, 0); carInstData.set([1, 1, 1, 0, 0, 0.35, 0.4, TEX.FLAT + MODE_CAR], 16);
+  const d0 = xf(-0.36, 1.72, 0.3), d1 = xf(0.36, 1.72, 0.3);
+  carInstData.set(d0, 24); carInstData.set([1, 0.05, 0.05, 0, 0.5, 0.0, 0.2, TEX.FLAT + MODE_CAR], 40);
+  carInstData.set(d1, 48); carInstData.set([1, 0.05, 0.05, 0, 0.5, 0.0, 0.2, TEX.FLAT + MODE_CAR], 64);
+}
+
+await stepLoader(5);
+
+const linSampler = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", maxAnisotropy: 8 });
+const clampSampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
+const shadowSampler = device.createSampler({ compare: "less", magFilter: "linear", minFilter: "linear" });
+const shadowTex = device.createTexture({ size: [SHADOW_SIZE, SHADOW_SIZE], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+const shadowView = shadowTex.createView();
+
+const VIS_VF = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT;
+const meshBGL = device.createBindGroupLayout({ entries: [
+  { binding: 0, visibility: VIS_VF, buffer: { type: "uniform" } },
+  { binding: 1, visibility: VIS_VF, buffer: { type: "read-only-storage" } },
+  { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float", viewDimension: "2d-array" } },
+  { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float", viewDimension: "2d-array" } },
+  { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+  { binding: 5, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+  { binding: 6, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+  { binding: 7, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "comparison" } },
+] });
+const meshLayout = device.createPipelineLayout({ bindGroupLayouts: [meshBGL] });
+const shadowBGL = device.createBindGroupLayout({ entries: [
+  { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: "uniform" } },
+  { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: "read-only-storage" } },
+] });
+const shadowLayout = device.createPipelineLayout({ bindGroupLayouts: [shadowBGL] });
+const shadowBindGroup = device.createBindGroup({ layout: shadowBGL, entries: [
+  { binding: 0, resource: { buffer: globalsBuffer } },
+  { binding: 1, resource: { buffer: instanceBuffer } },
+] });
+const meshBindGroup = device.createBindGroup({ layout: meshBGL, entries: [
+  { binding: 0, resource: { buffer: globalsBuffer } },
+  { binding: 1, resource: { buffer: instanceBuffer } },
+  { binding: 2, resource: albedoTex.createView({ dimension: "2d-array" }) },
+  { binding: 3, resource: normalTex.createView({ dimension: "2d-array" }) },
+  { binding: 4, resource: envTex.createView() },
+  { binding: 5, resource: linSampler },
+  { binding: 6, resource: shadowView },
+  { binding: 7, resource: shadowSampler },
+] });
+const vertexLayout = [{ arrayStride: VERT_BYTES, attributes: [
+  { shaderLocation: 0, offset: 0, format: "float32x3" },
+  { shaderLocation: 1, offset: 12, format: "float32x3" },
+  { shaderLocation: 2, offset: 24, format: "float32x2" },
+  { shaderLocation: 3, offset: 32, format: "float32x4" },
+] }];
+const HDR = "rgba16float";
+const opaquePipeline = device.createRenderPipeline({
+  layout: meshLayout,
+  vertex: { module: shaderMesh, entryPoint: "vsMain", buffers: vertexLayout },
+  fragment: { module: shaderMesh, entryPoint: "fsMain", targets: [{ format: HDR }] },
+  primitive: { topology: "triangle-list", cullMode: "none" },
+  depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" },
+});
+const glowPipeline = device.createRenderPipeline({
+  layout: meshLayout,
+  vertex: { module: shaderMesh, entryPoint: "vsMain", buffers: vertexLayout },
+  fragment: { module: shaderMesh, entryPoint: "fsGlow", targets: [{ format: HDR, blend: { color: { srcFactor: "one", dstFactor: "one", operation: "add" }, alpha: { srcFactor: "one", dstFactor: "one", operation: "add" } } }] },
+  primitive: { topology: "triangle-list", cullMode: "none" },
+  depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "less" },
+});
+const shadowPipeline = device.createRenderPipeline({
+  layout: shadowLayout,
+  vertex: { module: shaderMesh, entryPoint: "vsShadow", buffers: vertexLayout },
+  primitive: { topology: "triangle-list", cullMode: "none" },
+  depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "less", depthBias: 2, depthBiasSlopeScale: 2.5 },
+});
+const skyBGL = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] });
+const skyPipeline = device.createRenderPipeline({
+  layout: device.createPipelineLayout({ bindGroupLayouts: [skyBGL] }),
+  vertex: { module: shaderSky, entryPoint: "vsFull" },
+  fragment: { module: shaderSky, entryPoint: "fsSky", targets: [{ format: HDR }] },
+  primitive: { topology: "triangle-list" },
+  depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "always" },
+});
+const skyBindGroup = device.createBindGroup({ layout: skyBGL, entries: [{ binding: 0, resource: { buffer: globalsBuffer } }] });
+
+const particleBuffer = device.createBuffer({ size: PARTICLE_COUNT * 32, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+const aliveBuffer = device.createBuffer({ size: PARTICLE_COUNT * 4, usage: GPUBufferUsage.STORAGE });
+const indirectBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST });
+const indirectReset = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+device.queue.writeBuffer(indirectReset, 0, new Uint32Array([6, 0, 0, 0]));
+device.queue.writeBuffer(particleBuffer, 0, new Float32Array(PARTICLE_COUNT * 8));
+const partSimPipeline = device.createComputePipeline({ layout: "auto", compute: { module: shaderPartSim, entryPoint: "csSim" } });
+const partSimBindGroup = device.createBindGroup({ layout: partSimPipeline.getBindGroupLayout(0), entries: [
+  { binding: 0, resource: { buffer: globalsBuffer } },
+  { binding: 1, resource: { buffer: particleBuffer } },
+  { binding: 2, resource: { buffer: aliveBuffer } },
+  { binding: 3, resource: { buffer: indirectBuffer } },
+] });
+const partDrawPipeline = device.createRenderPipeline({
+  layout: "auto",
+  vertex: { module: shaderPartDraw, entryPoint: "vsPart" },
+  fragment: { module: shaderPartDraw, entryPoint: "fsPart", targets: [{ format: HDR, blend: { color: { srcFactor: "one", dstFactor: "one", operation: "add" }, alpha: { srcFactor: "one", dstFactor: "one", operation: "add" } } }] },
+  primitive: { topology: "triangle-list", cullMode: "none" },
+  depthStencil: { format: "depth24plus", depthWriteEnabled: false, depthCompare: "less" },
+});
+const partDrawBindGroup = device.createBindGroup({ layout: partDrawPipeline.getBindGroupLayout(0), entries: [
+  { binding: 0, resource: { buffer: globalsBuffer } },
+  { binding: 1, resource: { buffer: particleBuffer } },
+  { binding: 2, resource: { buffer: aliveBuffer } },
+] });
+
+await stepLoader(6);
+
+const postBGL = device.createBindGroupLayout({ entries: [
+  { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+  { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+  { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+  { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+  { binding: 4, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+  { binding: 5, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+] });
+const postLayout = device.createPipelineLayout({ bindGroupLayouts: [postBGL] });
+const makePost = (entry, format) => device.createRenderPipeline({
+  layout: postLayout,
+  vertex: { module: shaderPost, entryPoint: "vsFull" },
+  fragment: { module: shaderPost, entryPoint: entry, targets: [{ format }] },
+  primitive: { topology: "triangle-list" },
+});
+const brightPipeline = makePost("fsBright", HDR);
+const downPipeline = makePost("fsDown", HDR);
+const upPipeline = makePost("fsUp", HDR);
+const anaPipeline = makePost("fsAnamorph", HDR);
+const compositePipeline = makePost("fsComposite", canvasFormat);
+
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+let VW = 0, VH = 0;
+const RT = {};
+const postPasses = [];
+const postUniformData = new Float32Array(8);
+const makePostUniform = (tx, ty, p0, p1, p2, p3) => {
+  const b = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  postUniformData.set([tx, ty, 0, 0, p0, p1, p2, p3]);
+  device.queue.writeBuffer(b, 0, postUniformData);
+  return b;
+};
+const BLOOM_LEVELS = 5;
+const createTargets = () => {
+  VW = Math.max(8, Math.floor(innerWidth * dpr));
+  VH = Math.max(8, Math.floor(innerHeight * dpr));
+  canvas.width = VW; canvas.height = VH;
+  fitUI();
+  const mk = (w, h, format, usage) => device.createTexture({ size: [w, h], format, usage });
+  const RU = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
+  RT.hdr = mk(VW, VH, HDR, RU);
+  RT.depth = mk(VW, VH, "depth24plus", GPUTextureUsage.RENDER_ATTACHMENT);
+  RT.hdrView = RT.hdr.createView();
+  RT.depthView = RT.depth.createView();
+  RT.bloom = []; RT.up = [];
+  for (let i = 0; i < BLOOM_LEVELS; i++) {
+    const w = Math.max(1, VW >> (i + 1)), h = Math.max(1, VH >> (i + 1));
+    RT.bloom.push({ w, h, tex: mk(w, h, HDR, RU) });
+    RT.bloom[i].view = RT.bloom[i].tex.createView();
+    if (i < BLOOM_LEVELS - 1) { RT.up.push({ w, h, tex: mk(w, h, HDR, RU) }); RT.up[i].view = RT.up[i].tex.createView(); }
+  }
+  const aw = Math.max(1, VW >> 2), ah = Math.max(1, VH >> 2);
+  RT.ana = [0, 1].map(() => { const t = mk(aw, ah, HDR, RU); return { w: aw, h: ah, tex: t, view: t.createView() }; });
+  postPasses.length = 0;
+  const bg = (a, b, c, ub) => device.createBindGroup({ layout: postBGL, entries: [
+    { binding: 0, resource: clampSampler }, { binding: 1, resource: a }, { binding: 2, resource: b }, { binding: 3, resource: c },
+    { binding: 4, resource: { buffer: ub } }, { binding: 5, resource: { buffer: globalsBuffer } },
+  ] });
+  const rp = (view) => ({ colorAttachments: [{ view, loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
+  postPasses.push({ pipe: brightPipeline, bind: bg(RT.hdrView, RT.hdrView, RT.hdrView, makePostUniform(1 / VW, 1 / VH, 1.0, 0.7, 0, 0)), pass: rp(RT.bloom[0].view) });
+  for (let i = 1; i < BLOOM_LEVELS; i++) {
+    const src = RT.bloom[i - 1];
+    postPasses.push({ pipe: downPipeline, bind: bg(src.view, src.view, src.view, makePostUniform(1 / src.w, 1 / src.h, 0, 0, 0, 0)), pass: rp(RT.bloom[i].view) });
+  }
+  for (let i = BLOOM_LEVELS - 2; i >= 0; i--) {
+    const lower = i === BLOOM_LEVELS - 2 ? RT.bloom[i + 1] : RT.up[i + 1];
+    const same = RT.bloom[i];
+    postPasses.push({ pipe: upPipeline, bind: bg(lower.view, same.view, same.view, makePostUniform(1 / lower.w, 1 / lower.h, 1.5, 0.9, 0, 0)), pass: rp(RT.up[i].view) });
+  }
+  postPasses.push({ pipe: anaPipeline, bind: bg(RT.bloom[1].view, RT.bloom[1].view, RT.bloom[1].view, makePostUniform(1 / RT.bloom[1].w, 1 / RT.bloom[1].h, 1.6, 1.0, 0, 0)), pass: rp(RT.ana[0].view) });
+  postPasses.push({ pipe: anaPipeline, bind: bg(RT.ana[0].view, RT.ana[0].view, RT.ana[0].view, makePostUniform(1 / aw, 1 / ah, 5.0, 0.9, 0, 0)), pass: rp(RT.ana[1].view) });
+  RT.compositeBind = bg(RT.hdrView, RT.up[0].view, RT.ana[1].view, makePostUniform(1 / VW, 1 / VH, 0.32, 0.28, dpr >= 1.5 ? 0.5 : 1.0, 0));
+  RT.mainPass = {
+    colorAttachments: [{ view: RT.hdrView, loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 1 } }],
+    depthStencilAttachment: { view: RT.depthView, depthLoadOp: "clear", depthStoreOp: "store", depthClearValue: 1.0 },
+  };
+  RT.shadowPass = { colorAttachments: [], depthStencilAttachment: { view: shadowView, depthLoadOp: "clear", depthStoreOp: "store", depthClearValue: 1.0 } };
+  RT.compositePass = { colorAttachments: [{ view: null, loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 1 } }] };
+};
+createTargets();
+let resizePending = false;
+addEventListener("resize", () => { resizePending = true; });
+
+await stepLoader(7);
+
+const audioCtx = new AudioContext({ latencyHint: "interactive" });
+const workletURL = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: "application/javascript" }));
+await audioCtx.audioWorklet.addModule(workletURL);
+const synthNode = new AudioWorkletNode(audioCtx, "naked-synth", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2], processorOptions: { song: SONG } });
+const masterGain = audioCtx.createGain();
+masterGain.gain.value = 0.9;
+synthNode.connect(masterGain).connect(audioCtx.destination);
+let audioT0 = 0;
+let audioStarted = false;
+let songEnded = false;
+synthNode.port.onmessage = (e) => {
+  if (e.data && typeof e.data.t0 === "number") { audioT0 = e.data.t0; audioStarted = true; }
+  if (e.data === "ended") songEnded = true;
+};
+
+await stepLoader(8);
+
+const refreshSamples = [];
+let refreshHz = 60;
+{
+  let last = performance.now();
+  for (let i = 0; i < 24; i++) {
+    await nextFrame();
+    const now = performance.now();
+    if (i > 2) refreshSamples.push(now - last);
+    last = now;
+  }
+  refreshSamples.sort((a, b) => a - b);
+  const med = refreshSamples[Math.floor(refreshSamples.length / 2)] || 16.7;
+  refreshHz = med < 7 ? 144 : med < 10 ? 120 : med < 14 ? 90 : 60;
+}
+const framePeriodMs = 1000 / refreshHz;
+
+await stepLoader(9);
+
+const state = {
+  started: false, startWall: 0, t: 0, tPrev: 0, beat: 0, bar: 0, step: -1, sceneIndex: 0, sceneT: 0,
+  carX: 0, carY: 0, carZ: 0, heave: 0, vHeave: 0, pitch: 0, vPitch: 0, roll: 0, vRoll: 0, speed: 0,
+  beatPulse: 0, hitEnergy: 0, chroma: 0, flash: 0, fade: 0, renderScale: 1, ftEma: 8, lampAngle: 0,
+  launched: false, launchT: 0, flightPitch: 0, exposure: 1.0, telemetryIdx: 0, lastSceneLogged: -1, lastWall: 0,
+};
+const terrainParams = new Float32Array(4);
+const terrainH = (x, z) => {
+  const t = terrainParams;
+  const low = t[0] * Math.sin(z * t[1]) * Math.cos(x * t[1] * 0.63 + 1.7);
+  const b = Math.sin(z * t[3]) * Math.sin(x * t[3] * 1.31 + 0.5);
+  return low + t[2] * Math.max(b - 0.55, 0) * 2.2;
+};
+const mView = new Float32Array(16), mProj = new Float32Array(16), mVP = new Float32Array(16), mInvVP = new Float32Array(16);
+const mCar = new Float32Array(16), mTmp = new Float32Array(16), mTmp2 = new Float32Array(16), mShadowV = new Float32Array(16), mShadowP = new Float32Array(16), mShadowVP = new Float32Array(16);
+const v3a = new Float32Array(3), v3b = new Float32Array(3), v3c = new Float32Array(3), v3d = new Float32Array(3);
+const telemetry = new Float32Array(16384);
+const telemetrySorted = new Float32Array(16384);
+const logTelemetry = (name) => {
+  const n = state.telemetryIdx;
+  if (n < 10) { state.telemetryIdx = 0; return; }
+  telemetrySorted.set(telemetry.subarray(0, n));
+  const view = telemetrySorted.subarray(0, n);
+  view.sort();
+  const q = (p) => view[Math.min(n - 1, Math.floor(p * n))].toFixed(2);
+  console.log("[telemetry] " + name + "  frames=" + n + "  p50=" + q(0.5) + "ms  p95=" + q(0.95) + "ms  p99=" + q(0.99) + "ms  scale=" + state.renderScale.toFixed(2));
+  state.telemetryIdx = 0;
+};
+const hashf = (n) => { const s = Math.sin(n) * 43758.5453; return s - Math.floor(s); };
+let perBase = 0;
+const per = (p, off) => perBase - ((perBase - off) % p + p) % p + off;
+
+const updatePhysics = (dt) => {
+  const sc = SCENES[state.sceneIndex];
+  const z = state.carZ, x = state.carX;
+  const hFL = terrainH(x - 0.9, z + 1.6), hFR = terrainH(x + 0.9, z + 1.6), hRL = terrainH(x - 0.9, z - 1.6), hRR = terrainH(x + 0.9, z - 1.6);
+  const target = (hFL + hFR + hRL + hRR) * 0.25;
+  const tPitch = Math.atan2((hFL + hFR - hRL - hRR) * 0.5, 3.2);
+  const tRoll = Math.atan2((hFL + hRL - hFR - hRR) * 0.5, 1.8);
+  const steps = Math.max(1, Math.ceil(dt / (1 / 240)));
+  const h = dt / steps;
+  for (let i = 0; i < steps; i++) {
+    const aH = 70 * (target - state.heave) - 9 * state.vHeave;
+    const aP = 60 * (tPitch - state.pitch) - 8.5 * state.vPitch;
+    const aR = 55 * (tRoll - state.roll) - 8 * state.vRoll;
+    state.vHeave += aH * h; state.heave += state.vHeave * h;
+    state.vPitch += aP * h; state.pitch += state.vPitch * h;
+    state.vRoll += aR * h; state.roll += state.vRoll * h;
+  }
+  void sc;
+};
+
+const triggerVisualStep = (stepIdx) => {
+  const bar = Math.floor(stepIdx / 16), s = stepIdx % 16;
+  if (bar >= BARS) return;
+  const T = SONG.tracks;
+  if (T.kick[bar][s] > 0) { state.hitEnergy = Math.max(state.hitEnergy, 0.7); state.vHeave -= 0.6; }
+  if (T.snare[bar][s] > 0) { state.hitEnergy = Math.max(state.hitEnergy, 0.9); state.vRoll += (hashf(stepIdx * 1.7) - 0.5) * 0.9; }
+  if (T.brass[bar][s] > 0) { state.chroma = Math.max(state.chroma, 1.0); state.hitEnergy = 1.0; }
+  if (T.sfx[bar][s] === 1) { state.vPitch -= 1.4; state.flash = Math.max(state.flash, 0.5); }
+  if (T.sfx[bar][s] === 3) { state.vRoll += (hashf(stepIdx * 3.1) - 0.5) * 2.2; state.vHeave += 1.5; }
+  if (T.sfx[bar][s] === 5) { state.chroma = Math.max(state.chroma, 0.6); }
+  if (T.sfx[bar][s] === 7) { state.flash = Math.max(state.flash, 0.9); }
+};
+
+const renderFrame = (wallNow) => {
+  const frameStart = performance.now();
+  if (resizePending) { resizePending = false; createTargets(); }
+  const t = audioStarted ? Math.max(0, audioCtx.currentTime - audioT0) : 0;
+  let dt = t - state.tPrev;
+  if (dt < 0) dt = 0;
+  if (dt > 0.1) dt = 0.1;
+  state.tPrev = t;
+  state.t = t;
+  const beat = (t * BPM) / 60;
+  const bar = beat / 4;
+  state.beat = beat;
+  let sceneIndex = 0;
+  for (let i = 0; i < SCENES.length; i++) if (bar >= SCENES[i].bar) sceneIndex = i;
+  if (sceneIndex !== state.sceneIndex) {
+    logTelemetry(SCENES[state.sceneIndex].name);
+    state.sceneIndex = sceneIndex;
+  }
+  const sc = SCENES[sceneIndex];
+  state.sceneT = (bar - sc.bar) * BAR_SEC;
+  const stepNow = Math.floor(beat * 4);
+  if (stepNow > state.step) {
+    for (let s = Math.max(state.step + 1, stepNow - 8); s <= stepNow; s++) triggerVisualStep(s);
+    state.step = stepNow;
+  }
+  terrainParams.set(sc.terrain);
+  state.speed = sc.speed;
+  state.carZ = sc.startZ + state.sceneT * sc.speed;
+  state.carX = Math.sin(t * 0.31) * sc.sway + Math.sin(t * 0.73) * sc.sway * 0.3;
+  const launchBarT = (bar - LAUNCH_BAR) * BAR_SEC;
+  state.launched = launchBarT > 0;
+  state.launchT = Math.max(0, launchBarT);
+  const rampPhase = Math.min(1, Math.max(0, (launchBarT + 1.3) / 1.3));
+  const ramp = Math.sin(rampPhase * Math.PI) * 0.26;
+  const flightPitch = state.launched ? 0.32 * Math.exp(-state.launchT * 0.35) : 0;
+  const alt = flightAlt(state.launchT);
+  state.carY = alt + (state.launched ? 0 : (rampPhase > 0 ? Math.sin(rampPhase * Math.PI * 0.5) * 12 : 0));
+  if (!state.launched) updatePhysics(dt);
+  else { state.heave *= 0.98; state.pitch *= 0.98; state.roll *= 0.98; }
+  const vib = (state.launched ? 0.004 : 0.012) * (sc.speed / 40);
+  const vx = (hashf(t * 61.3) - 0.5) * vib, vy = (hashf(t * 53.7 + 9) - 0.5) * vib;
+  M4.trs(mCar, state.carX, state.carY + state.heave, state.carZ, state.pitch + ramp + flightPitch, 0, state.roll, 1, 1, 1);
+  M4.transformPoint(v3a, mCar, vx, 2.3 + vy, -1.6);
+  M4.transformDir(v3b, mCar, 0, -0.13, 1);
+  M4.transformDir(v3c, mCar, 0, 1, 0);
+  M4.lookAt(mView, v3a[0], v3a[1], v3a[2], v3a[0] + v3b[0], v3a[1] + v3b[1], v3a[2] + v3b[2], v3c[0], v3c[1], v3c[2]);
+  M4.perspective(mProj, 1.22, VW / VH, 0.1, 900);
+  M4.mul(mVP, mProj, mView);
+  M4.invert(mInvVP, mVP);
+  state.lampAngle = t * Math.PI * 2 * 1.6;
+  const la = state.lampAngle;
+  const d0x = Math.sin(la), d0z = Math.cos(la);
+  const fwd0 = d0z >= 0;
+  const sx = fwd0 ? -0.36 : 0.36;
+  const sdx = fwd0 ? d0x : -d0x, sdz = fwd0 ? d0z : -d0z;
+  M4.transformPoint(v3d, mCar, sx, 1.85, 0.3);
+  M4.transformDir(v3b, mCar, sdx, -0.12, sdz);
+  M4.lookAt(mShadowV, v3d[0], v3d[1], v3d[2], v3d[0] + v3b[0], v3d[1] + v3b[1], v3d[2] + v3b[2], 0, 1, 0);
+  M4.perspective(mShadowP, 1.8, 1, 0.6, 140);
+  M4.mul(mShadowVP, mShadowP, mShadowV);
+  state.beatPulse = Math.exp(-(beat - Math.floor(beat)) * 5.0);
+  state.hitEnergy *= Math.exp(-dt * 9);
+  state.chroma *= Math.exp(-dt * 7);
+  state.flash = Math.max(state.flash * Math.exp(-dt * 11), state.sceneT < 0.3 && sceneIndex > 0 ? 0.6 * Math.exp(-state.sceneT * 10) : 0);
+  const introFade = Math.min(1, t * 0.6);
+  const outroFade = songEnded ? Math.max(0, 1 - (t - SONG_SECONDS) * 0.5) : 1;
+  state.fade = Math.min(introFade, outroFade, t > SONG_SECONDS - 2 ? Math.max(0, (SONG_SECONDS + 2 - t) * 0.25) : 1);
+  if (state.ftEma > framePeriodMs * 1.15) state.renderScale = Math.max(0.75, state.renderScale - 0.004);
+  else if (state.ftEma < framePeriodMs * 1.03) state.renderScale = Math.min(1, state.renderScale + 0.002);
+  const rw = Math.max(8, Math.floor(VW * state.renderScale)), rh = Math.max(8, Math.floor(VH * state.renderScale));
+  globalsData.set(mView, G.view); globalsData.set(mProj, G.proj); globalsData.set(mVP, G.viewProj); globalsData.set(mInvVP, G.invVP);
+  globalsData.set(mShadowVP, G.shadowVP); globalsData.set(mCar, G.car);
+  setV4(G.camPos, v3a[0], v3a[1], v3a[2], sc.exposure);
+  setV4(G.sunDir, sc.sunDir[0], sc.sunDir[1], sc.sunDir[2], sc.sunDir[3]);
+  setV4(G.sunColor, sc.sunColor[0], sc.sunColor[1], sc.sunColor[2], 0);
+  const fogD = state.launched ? sc.fog[3] * Math.max(0.15, 1 - state.launchT * 0.15) : sc.fog[3];
+  setV4(G.fog, sc.fog[0], sc.fog[1], sc.fog[2], fogD);
+  setV4(G.skyTop, sc.skyTop[0], sc.skyTop[1], sc.skyTop[2], 0);
+  setV4(G.skyBot, sc.skyBot[0], sc.skyBot[1], sc.skyBot[2], 0);
+  setV4(G.sunDisc, sc.sunDisc[0], sc.sunDisc[1], sc.sunDisc[2], sc.sunDisc[3]);
+  setV4(G.scroll, state.carZ, sc.wrap, sc.back, t);
+  setV4(G.fx, state.beatPulse, state.hitEnergy, sc.deform, state.flash);
+  setV4(G.post, rw / VW, rh / VH, state.chroma, state.fade);
+  setV4(G.env, sc.ambient, sc.envInt, sc.stripes, sc.stars);
+  setV4(G.terrain, sc.terrain[0], sc.terrain[1], sc.terrain[2], sc.terrain[3]);
+  setV4(G.pfx, dt, sc.pmode, sc.psize, sc.pspawn);
+  const sirenI = 2.0;
+  const cone = 0.64;
+  M4.transformPoint(v3d, mCar, sx, 1.85, 0.3);
+  M4.transformDir(v3b, mCar, sdx, -0.12, sdz);
+  setLight(0, v3d[0], v3d[1], v3d[2], 90, 1, 0.07, 0.04, sirenI, v3b[0], v3b[1], v3b[2], cone);
+  M4.transformPoint(v3d, mCar, -sx, 1.85, 0.3);
+  M4.transformDir(v3b, mCar, -sdx, -0.12, -sdz);
+  setLight(1, v3d[0], v3d[1], v3d[2], 90, 1, 0.07, 0.04, sirenI, v3b[0], v3b[1], v3b[2], cone);
+  M4.transformPoint(v3d, mCar, 0, 0.85, 2.9);
+  M4.transformDir(v3b, mCar, 0, -0.1, 1);
+  const strobe = 1 + 2.2 * Math.pow(state.beatPulse, 3);
+  setLight(2, v3d[0], v3d[1], v3d[2], 110, 1, 0.92, 0.75, 1.1 * strobe, v3b[0], v3b[1], v3b[2], 0.80);
+  const cz = state.carZ;
+  perBase = cz;
+  if (sceneIndex === 0) {
+    for (let k = 0; k < 4; k++) {
+      const z = per(28, 0) + 28 * k;
+      const sgn = (Math.round(z / 28) % 2 + 2) % 2 === 0 ? 1 : -1;
+      setLight(3 + k, sgn * 8.75, 8.6, z, 34, 1, 0.68, 0.38, 2.4, 0, -1, 0, 0);
+    }
+    setLight(7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  } else if (sceneIndex === 1) {
+    for (let k = 0; k < 2; k++) {
+      const z1 = per(70, 20) + 70 * k, z2 = per(70, 55) + 70 * k;
+      const fl1 = 0.85 + 0.15 * Math.sin(t * 23 + k), fl2 = 0.85 + 0.15 * Math.sin(t * 19 + 3 + k);
+      setLight(3 + k * 2, 14, 10.6, z1, 48, 1, 0.6, 0.25, 3.2 * fl1, 0, 0, 0, 0);
+      setLight(4 + k * 2, -14, 10.6, z2, 48, 1, 0.6, 0.25, 3.2 * fl2, 0, 0, 0, 0);
+    }
+    setLight(7, 0, 32, per(80, 40), 70, 1, 0.75, 0.4, 3.0, 0, -1, 0, 0.3);
+  } else if (sceneIndex === 2) {
+    const hue = (beat * 0.25) % 1;
+    const r = 0.5 + 0.5 * Math.sin(hue * 6.283), g = 0.5 + 0.5 * Math.sin(hue * 6.283 + 2.1), b = 0.5 + 0.5 * Math.sin(hue * 6.283 + 4.2);
+    for (let k = 0; k < 2; k++) setLight(3 + k, 0, 12, per(60, 30) + 60 * k, 60, r, g, b, 3.5 + 2 * state.beatPulse, 0, 0, 0, 0);
+    setLight(5, 9, 3, per(30, 15), 30, 1, 0.15, 0.75, 2.0, 0, 0, 0, 0);
+    setLight(6, -9, 3, per(30, 0), 30, 0.15, 0.9, 1, 2.0, 0, 0, 0, 0);
+    setLight(7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  } else if (sceneIndex === 3) {
+    for (let k = 0; k < 3; k++) {
+      const z = per(45, 20) + 45 * k;
+      const sgn = (Math.round((z - 20) / 45) % 2 + 2) % 2 === 0 ? 1 : -1;
+      setLight(3 + k, sgn * 7.5, 6, z, 30, 1, 0.5, 0.15, 2.6, 0, 0, 0, 0);
+    }
+    const phase = Math.floor(beat) % 3;
+    setLight(6, 0, 14, cz + 30, 80, phase === 0 ? 1 : 0.1, phase === 1 ? 1 : 0.1, phase === 2 ? 1 : 0.1, 2.5 * state.beatPulse + 0.5, 0, 0, 0, 0);
+    setLight(7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  } else if (sceneIndex === 4) {
+    for (let k = 0; k < 4; k++) {
+      const z = per(30, k * 7) + 30 * k;
+      setLight(3 + k, Math.sin(t * 0.7 + k * 1.7) * 12, 14, z, 40, 0.3, 0.9, 1, 2.2 + 0.6 * Math.sin(t * 2 + k), 0, -1, 0, 0);
+    }
+    setLight(7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  } else {
+    for (let k = 0; k < 3; k++) {
+      const z = per(40, 0) + 40 * k;
+      setLight(3 + k, 0, 6, z, 40, k % 2 ? 1 : 0.2, k % 2 ? 0.2 : 0.9, k % 2 ? 0.75 : 1, state.launched ? 0 : 2.0, 0, 0, 0, 0);
+    }
+    setLight(6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    setLight(7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  }
+  device.queue.writeBuffer(globalsBuffer, 0, globalsData);
+  const face0 = Math.max(0, -d0z), face1 = Math.max(0, d0z);
+  carInstData[44] = 0.25 + 1.6 * face0 * face0;
+  carInstData[68] = 0.25 + 1.6 * face1 * face1;
+  device.queue.writeBuffer(instanceBuffer, 0, carInstData);
+
+  const draws = sceneDraws[sceneIndex];
+  const enc = device.createCommandEncoder();
+  enc.copyBufferToBuffer(indirectReset, 0, indirectBuffer, 0, 16);
+  {
+    const cp = enc.beginComputePass();
+    cp.setPipeline(partSimPipeline);
+    cp.setBindGroup(0, partSimBindGroup);
+    cp.dispatchWorkgroups(PARTICLE_COUNT / 256);
+    cp.end();
+  }
+  {
+    const sp = enc.beginRenderPass(RT.shadowPass);
+    sp.setPipeline(shadowPipeline);
+    sp.setBindGroup(0, shadowBindGroup);
+    sp.setVertexBuffer(0, vertexBuffer);
+    sp.setIndexBuffer(indexBuffer, "uint32");
+    for (const d of carDraws) sp.drawIndexed(d.mesh.count, d.count, d.mesh.first, 0, d.first);
+    for (const d of draws.op) sp.drawIndexed(d.mesh.count, d.count, d.mesh.first, 0, d.first);
+    sp.end();
+  }
+  {
+    const mp = enc.beginRenderPass(RT.mainPass);
+    mp.setViewport(0, 0, rw, rh, 0, 1);
+    mp.setScissorRect(0, 0, rw, rh);
+    mp.setPipeline(skyPipeline);
+    mp.setBindGroup(0, skyBindGroup);
+    mp.draw(3);
+    mp.setPipeline(opaquePipeline);
+    mp.setBindGroup(0, meshBindGroup);
+    mp.setVertexBuffer(0, vertexBuffer);
+    mp.setIndexBuffer(indexBuffer, "uint32");
+    for (const d of draws.op) mp.drawIndexed(d.mesh.count, d.count, d.mesh.first, 0, d.first);
+    for (const d of carDraws) mp.drawIndexed(d.mesh.count, d.count, d.mesh.first, 0, d.first);
+    mp.setPipeline(glowPipeline);
+    for (const d of draws.gl) mp.drawIndexed(d.mesh.count, d.count, d.mesh.first, 0, d.first);
+    mp.setPipeline(partDrawPipeline);
+    mp.setBindGroup(0, partDrawBindGroup);
+    mp.drawIndirect(indirectBuffer, 0);
+    mp.end();
+  }
+  for (const pp of postPasses) {
+    const p = enc.beginRenderPass(pp.pass);
+    p.setPipeline(pp.pipe);
+    p.setBindGroup(0, pp.bind);
+    p.draw(3);
+    p.end();
+  }
+  {
+    RT.compositePass.colorAttachments[0].view = context.getCurrentTexture().createView();
+    const p = enc.beginRenderPass(RT.compositePass);
+    p.setPipeline(compositePipeline);
+    p.setBindGroup(0, RT.compositeBind);
+    p.draw(3);
+    p.end();
+  }
+  device.queue.submit([enc.finish()]);
+  const ft = performance.now() - frameStart;
+  const frameInterval = state.lastWall ? wallNow - state.lastWall : ft;
+  state.lastWall = wallNow;
+  const cost = Math.min(Math.max(ft, frameInterval), 100);
+  state.ftEma += (cost - state.ftEma) * 0.08;
+  if (state.telemetryIdx < telemetry.length) telemetry[state.telemetryIdx++] = frameInterval;
+  if (songEnded && t > SONG_SECONDS + 5) {
+    logTelemetry(SCENES[state.sceneIndex].name);
+    clearUI();
+    drawScanBackdrop();
+    drawVectorText("END OF TRANSMISSION", innerWidth / 2, innerHeight / 2, Math.min(28, innerWidth / 36), "#ff2a6d", "center", true);
+    return;
+  }
+  requestAnimationFrame(renderFrame);
+};
+
+let gateBlink = 0;
+const drawGate = () => {
+  if (state.started) return;
+  clearUI();
+  drawScanBackdrop();
+  const cx = innerWidth / 2, cy = innerHeight / 2;
+  drawVectorText("THE NAKED ENGINE", cx, cy - 60, Math.min(42, innerWidth / 18), "#ff2a6d", "center", true);
+  drawVectorText("1988", cx, cy - 20, Math.min(18, innerWidth / 40), "#2de2ff", "center", true);
+  gateBlink += 0.05;
+  if (Math.sin(gateBlink) > -0.3) drawVectorText("PRESS ANY KEY TO ENGAGE", cx, cy + 40, Math.min(22, innerWidth / 34), "#ffffff", "center", true);
+  drawVectorText("ESC EXITS FULLSCREEN", cx, cy + 80, Math.min(12, innerWidth / 60), "#6a6a80", "center", false);
+  requestAnimationFrame(drawGate);
+};
+const engage = async () => {
+  if (state.started) return;
+  state.started = true;
+  removeEventListener("keydown", engage);
+  removeEventListener("pointerdown", engage);
+  clearUI();
+  try { await document.documentElement.requestFullscreen({ navigationUI: "hide" }); } catch (e) { void e; }
+  await audioCtx.resume();
+  synthNode.port.postMessage("start");
+  state.startWall = performance.now();
+  requestAnimationFrame(renderFrame);
+};
+addEventListener("keydown", engage);
+addEventListener("pointerdown", engage);
+addEventListener("keydown", (e) => { if (e.key === "Escape" && document.fullscreenElement) document.exitFullscreen().catch(() => {}); });
+drawGate();
+</script>
+</body>
+</html>
