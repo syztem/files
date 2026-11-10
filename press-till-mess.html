@@ -81,8 +81,9 @@
     background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.025));
     -webkit-backdrop-filter: blur(20px) saturate(140%); backdrop-filter: blur(20px) saturate(140%);
     box-shadow: 0 30px 80px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.06);
-    max-width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px); overflow-x: auto; scrollbar-width: none;
   }
+  .dock::-webkit-scrollbar { display: none; }
   .grp { display: flex; gap: 3px; }
   .sep { width: 1px; height: 32px; background: var(--line); margin: 0 7px; flex: none; }
   .tb {
@@ -111,7 +112,7 @@
   #cursor.orbit { width: 34px; height: 34px; margin: -17px 0 0 -17px; border-style: dotted; }
   #cursor.ui { width: 12px; height: 12px; margin: -6px 0 0 -6px; background: #fff; }
   #cursor.grab { width: 66px; height: 66px; margin: -33px 0 0 -33px; background: rgba(255,255,255,.95); border-color: transparent; border-style: solid; }
-  @media (hover: none), (pointer: coarse) { #cursor { display: none; } body, .pour, .tb { cursor: auto; } }
+  @media (hover: none), (pointer: coarse) { #cursor { display: none; } body, .pour, .tb, .seg button, .chip, .sl input { cursor: auto; } }
 
   /* ───────────── misc ───────────── */
   #veil { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: grid; place-items: center; transition: opacity .9s ease .1s, visibility 0s linear 1.1s; font: italic 400 22px/1 var(--serif); color: #6b6872; letter-spacing: .01em; }
@@ -125,8 +126,40 @@
   #slowTag::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 9px; animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: .2; } }
 
-  @media (max-width: 1240px) {
-    .tb { width: 46px; height: 46px; gap: 0; } .tb span, .tb kbd { display: none; } .sep { margin: 0 4px; }
+  .tb.obj { width: 40px; height: 44px; border-radius: 13px; } .tb.obj span, .tb.obj kbd { display: none; } .tb.obj svg { width: 21px; height: 21px; }
+  #objBtns { gap: 1px; }
+
+  /* ───────────── look panel ───────────── */
+  .look {
+    position: fixed; z-index: 7; left: clamp(14px, 3vw, 48px); bottom: 104px; width: 296px; max-height: min(calc(100vh - 430px), 540px); min-height: 220px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent;
+    padding: 18px 18px 14px; border-radius: 24px; border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(20,20,26,.72), rgba(12,12,16,.62));
+    -webkit-backdrop-filter: blur(20px) saturate(140%); backdrop-filter: blur(20px) saturate(140%);
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .look[hidden] { display: none; }
+  .sub { transition: opacity .25s; } body.look-open .sub { opacity: 0; }
+  .look .card-h em { font: 600 10px/1 var(--mono); letter-spacing: 0; text-transform: none; color: #8f8c96; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin: 14px 0 12px; padding: 3px; border-radius: 14px; background: rgba(255,255,255,.06); }
+  .seg button { border: 0; border-radius: 11px; padding: 9px 0; background: transparent; color: #bdb9c4; font: 600 11.5px/1 var(--sans); letter-spacing: .02em; cursor: none; outline: none; transition: background .2s, color .2s; }
+  .seg button:hover { color: #fff; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: #0b0b0e; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; background: transparent; color: #8f8c96; font: 600 10.5px/1 var(--sans); letter-spacing: .03em; cursor: none; outline: none; transition: background .2s, color .2s, border-color .2s; }
+  .chip:hover { color: #fff; border-color: rgba(255,255,255,.3); }
+  .chip[aria-pressed="true"] { background: rgba(255,255,255,.14); color: #fff; border-color: transparent; }
+  .sl { display: grid; grid-template-columns: 1fr auto; align-items: baseline; row-gap: 2px; margin: 0 0 7px; font: 500 11px/1.2 var(--sans); color: #a5a2ac; }
+  .sl output { font: 600 10px/1 var(--mono); color: #77747e; }
+  .sl input { grid-column: 1 / 3; width: 100%; height: 16px; margin: 0; background: transparent; cursor: none; -webkit-appearance: none; appearance: none; outline: none; }
+  .sl input::-webkit-slider-runnable-track { height: 2px; background: rgba(255,255,255,.16); border-radius: 2px; }
+  .sl input::-moz-range-track { height: 2px; background: rgba(255,255,255,.16); border-radius: 2px; }
+  .sl input::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -5px; border-radius: 50%; background: var(--ink); border: 0; }
+  .sl input::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--ink); border: 0; }
+  .look.off .chips, .look.off .sliders { opacity: .32; pointer-events: none; }
+  .look .hint { margin: 8px 0 0; }
+
+  @media (max-width: 1500px) {
+    .tb:not(.obj) { width: 46px; height: 46px; gap: 0; } .tb span, .tb kbd { display: none; } .sep { margin: 0 4px; }
   }
   @media (max-width: 860px) {
     .card { top: auto; bottom: 74px; right: 14px; left: 14px; transform: none; width: auto; max-height: none; overflow: visible; padding: 14px 16px 12px; border-radius: 22px; }
@@ -137,7 +170,8 @@
     .hero { max-width: 92vw; } .sub { display: none; }
     .pour { padding: 12px 14px 12px 20px; }
     .dock { bottom: 10px; padding: 6px 8px; overflow-x: auto; scrollbar-width: none; justify-content: flex-start; } .dock::-webkit-scrollbar { display: none; }
-    .tb { width: 42px; height: 42px; border-radius: 13px; }
+    .tb, .tb.obj, .tb:not(.obj) { width: 42px; height: 42px; border-radius: 13px; }
+    .look { left: 14px; right: 14px; width: auto; bottom: 68px; max-height: 58vh; } body.look-open .card { display: none; }
     #toast { bottom: 70px; } #slowTag { bottom: auto; top: 14px; left: auto; right: 16px; }
   }
   @media (max-height: 720px) and (min-width: 861px) { .hint { display: none; } .obj-blurb { min-height: 0; margin-bottom: 10px; } #trace { height: 38px; } }
@@ -155,11 +189,11 @@
 <header class="hero">
   <div class="eyebrow"><span>Hydraulic study</span><i></i><span>150 tonnes</span></div>
   <h1><span class="l1">Press till</span><span class="l2">Mess<b>.</b></span></h1>
-  <p class="sub">Six things that didn’t ask for this. Hold the lever, watch the gauge, wait for it to let go.</p>
+  <p class="sub">Sixteen things that didn’t ask for this. Hold the lever, watch the gauge, wait for it to let go.</p>
 </header>
 
 <aside class="card" id="card" aria-label="Press controls">
-  <div class="card-h"><span>On the anvil</span><em id="objIdx">1 / 6</em></div>
+  <div class="card-h"><span>On the anvil</span><em id="objIdx">1 / 16</em></div>
   <div class="obj-name" id="objName">—</div>
   <p class="obj-blurb" id="objBlurb"></p>
   <div class="meters">
@@ -174,7 +208,7 @@
     <div><span>Crushed</span><b id="mCount">0</b></div>
   </div>
   <button class="pour" id="press" type="button"><span>Hold to press</span><i>↓</i></button>
-  <p class="hint">Hold the button or Space · let go to retract · drag to orbit, scroll to zoom</p>
+  <p class="hint">Hold the button or Space · let go to retract · drag to orbit, scroll to zoom · ← → to change what’s on the anvil</p>
 </aside>
 
 <nav class="dock" id="dock" aria-label="Objects and options">
@@ -187,10 +221,20 @@
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Slow-mo</span></button>
     <button class="tb" type="button" id="tSound" aria-pressed="true" title="Sound (M)"><kbd>M</kbd>
       <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/><path class="slash" d="M3 3l18 18"/></svg><span>Sound</span></button>
+    <button class="tb" type="button" id="tLook" aria-pressed="false" title="Look: original, cinematic or ultra, with every effect on its own switch (L)"><kbd>L</kbd>
+      <svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg><span>Look</span></button>
     <button class="tb" type="button" id="tSweep" title="Sweep the anvil and reload (C)"><kbd>C</kbd>
       <svg viewBox="0 0 24 24"><path d="M14 4 20 10"/><path d="M17 7 9.5 14.5"/><path d="M9.5 14.5c-2.2-.6-4.4.2-6.5 2.5l4 4c2.3-2.1 3.1-4.3 2.5-6.5z"/></svg><span>Sweep</span></button>
   </div>
 </nav>
+
+<aside class="look off" id="look" aria-label="Look and effects" hidden>
+  <div class="card-h"><span>Look</span><em id="lookStat">—</em></div>
+  <div class="seg" role="group" aria-label="Preset"><button type="button" data-look="original" aria-pressed="true">Original</button><button type="button" data-look="cinematic" aria-pressed="false">Cinematic</button><button type="button" data-look="ultra" aria-pressed="false">Ultra</button></div>
+  <div class="chips" id="lookToggles"></div>
+  <div class="sliders" id="lookSliders"></div>
+  <p class="hint" id="lookNote"></p>
+</aside>
 
 <div id="slowTag">High-speed camera</div>
 <div id="toast"></div>
@@ -272,7 +316,7 @@ const Press = (() => {
     const ca = Math.cos(0.37), sa = Math.sin(0.37);
     const P = ico.V.map((q) => { const x = q[0] * ca - q[1] * sa, y = q[0] * sa + q[1] * ca; return [x * R, R + y * R, q[2] * R]; });
     for (const f of ico.F) polys.push(orientOut({ v: [P[f[0]], P[f[1]], P[f[2]]], ext: true, part: 0 }, c));
-    return { polys, R, H0: 2 * R, center: c, shape: 'sphere' };
+    return { polys, R, H0: 2 * R, center: c, shape: 'sphere', ax: [R, R, R] };
   }
 
   function cylinderHull(R, H, seg, bev) {
@@ -549,6 +593,225 @@ const Press = (() => {
     hull.planes = hull.polys.map((p) => { const n = polyNormal(p.v), q = p.v[0]; return [n[0], n[1], n[2], n[0] * q[0] + n[1] * q[1] + n[2] * q[2]]; });
     return hull;
   }
+
+  /* ============================================================================
+     PART 1b — MORE SHAPES
+     Ellipsoids (fruit), and thin-walled solids of revolution (bottle, mug, can, egg, balloon)
+     whose shards are Voronoi cells in the unrolled (angle, arc-length) plane.
+     ========================================================================== */
+  function ellipsoidHull(a, b, c, sub) {
+    const h = sphereHull(1, sub);
+    for (const p of h.polys) p.v = p.v.map((q) => [q[0] * a, (q[1] - 1) * b + b, q[2] * c]);
+    h.R = Math.max(a, c); h.H0 = 2 * b; h.center = [0, b, 0]; h.ax = [a, b, c];
+    return h;
+  }
+
+  /** 2D Voronoi on a strip that wraps around in u (period W) and spans [0,S] in v; each edge remembers its neighbour seed (or <0 for a border) */
+  function voronoi2D(seeds, W, S) {
+    const cells = [];
+    for (let i = 0; i < seeds.length; i++) {
+      const si = seeds[i], order = [];
+      for (let j = 0; j < seeds.length; j++) if (j !== i) { let dx = seeds[j][0] - si[0]; dx -= W * Math.round(dx / W); const dy = seeds[j][1] - si[1]; order.push([dx * dx + dy * dy, j, si[0] + dx]); }
+      order.sort((a, b) => a[0] - b[0]);
+      let poly = [[si[0] - W / 2, 0], [si[0] + W / 2, 0], [si[0] + W / 2, S], [si[0] - W / 2, S]], tags = [-1, -2, -3, -4];
+      const rmax = () => { let m = 0; for (const p of poly) { const d = (p[0] - si[0]) ** 2 + (p[1] - si[1]) ** 2; if (d > m) m = d; } return m; };
+      let r2 = rmax();
+      for (const [d2, j, sjx] of order) {
+        if (d2 > 4 * r2) break;
+        const sjy = seeds[j][1], l = Math.sqrt(d2), nx = (sjx - si[0]) / l, ny = (sjy - si[1]) / l, d = nx * (si[0] + sjx) * 0.5 + ny * (si[1] + sjy) * 0.5;
+        const np = [], nt = [];
+        let changed = false;
+        for (let k = 0; k < poly.length; k++) {
+          const a = poly[k], b = poly[(k + 1) % poly.length], da = nx * a[0] + ny * a[1] - d, db = nx * b[0] + ny * b[1] - d;
+          if (da <= 0) {
+            np.push(a); nt.push(tags[k]);
+            if (db > 0) { const t = da / (da - db); np.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); nt.push(j); changed = true; }
+          } else if (db <= 0) { const t = da / (da - db); np.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); nt.push(tags[k]); changed = true; }
+          else changed = true;
+        }
+        if (changed) { poly = np; tags = nt; r2 = rmax(); }
+        if (poly.length < 3) break;
+      }
+      if (poly.length < 3) continue;
+      let A = 0, cx = 0, cy = 0;
+      for (let k = 0; k < poly.length; k++) { const a = poly[k], b = poly[(k + 1) % poly.length], cr = a[0] * b[1] - b[0] * a[1]; A += cr; cx += (a[0] + b[0]) * cr; cy += (a[1] + b[1]) * cr; }
+      if (!(A > 1e-12)) continue;
+      cells.push({ seed: i, poly, tags, c: [cx / (3 * A), cy / (3 * A)] });
+    }
+    return cells;
+  }
+
+  /**
+   * prof: outer profile [[r, y], ...] running from the bottom of the axis upward (y starts at 0); t: wall thickness.
+   * opt: { lmax, lie (lay it on its side), handle: { r, pts: [[x, y], ...] } }
+   */
+  function buildShell(prof, t, nCells, rng, opt) {
+    opt = opt || {};
+    const n = prof.length, sl = [0];
+    let Rmax = 0, ymax = 0;
+    for (let i = 0; i < n; i++) { if (i) sl.push(sl[i - 1] + Math.hypot(prof[i][0] - prof[i - 1][0], prof[i][1] - prof[i - 1][1])); Rmax = Math.max(Rmax, prof[i][0]); ymax = Math.max(ymax, prof[i][1]); }
+    const S = sl[n - 1], W = TAU0 * Rmax, del = S * 0.004, Lmax = opt.lmax || Rmax * 0.17;
+    const at = (s) => {
+      s = s < 0 ? 0 : s > S ? S : s;
+      let k = 1; while (k < n - 1 && sl[k] < s) k++;
+      const u = (s - sl[k - 1]) / Math.max(sl[k] - sl[k - 1], 1e-12);
+      return [prof[k - 1][0] + (prof[k][0] - prof[k - 1][0]) * u, prof[k - 1][1] + (prof[k][1] - prof[k - 1][1]) * u];
+    };
+    // surface frame at (u, v): outer point, outward normal, the two tangents
+    // neighbouring shards compute their shared corners separately; snapping the parameters to a fine grid makes the 3D points bit-identical,
+    // which is what the rasteriser needs to draw the seam without pinholes
+    const QK = 4194304, wi = Math.min(0.15 * t, 0.003);
+    const frame = (u, v) => {
+      const uvx = u / W;
+      u -= W * Math.floor(u / W); u = Math.round(u * QK) / QK; if (u >= W - 0.5 / QK) u = 0;
+      v = Math.round(v * QK) / QK;
+      const th = u / Rmax, q = at(v), a = at(v - del), b = at(v + del);
+      let tr = b[0] - a[0], ty = b[1] - a[1];
+      const l = Math.hypot(tr, ty) || 1; tr /= l; ty /= l;
+      const c = Math.cos(th), sn = Math.sin(th);
+      return { p: [q[0] * c, q[1], q[0] * sn], n: [ty * c, -tr, ty * sn], r: q[0], tu: [-sn, 0, c], tv: [tr * c, ty, tr * sn], uv: [uvx, v / S] };
+    };
+    const rw = (v) => Math.max(at(v)[0], 0.06 * Rmax) / Rmax;
+    // where the outline turns sharply (a rim, a bevel) the skin is cut exactly on the corner, so no triangle spans it and chamfers it off.
+    // the rule only looks at the edge itself, and splits it at the same point from either side, so neighbouring shards still agree
+    const corners = [];
+    for (let i = 1; i < n - 1; i++) {
+      const ax = prof[i][0] - prof[i - 1][0], ay = prof[i][1] - prof[i - 1][1], bx = prof[i + 1][0] - prof[i][0], by = prof[i + 1][1] - prof[i][1];
+      if ((ax * bx + ay * by) / ((Math.hypot(ax, ay) * Math.hypot(bx, by)) || 1) < 0.97) corners.push(sl[i]);
+    }
+    const crossAt = (a, b) => { const lo = Math.min(a[1], b[1]) + 1e-9, hi = Math.max(a[1], b[1]) - 1e-9; for (let i = 0; i < corners.length; i++) if (corners[i] > lo && corners[i] < hi) return corners[i]; return -1; };
+    const need = (a, b) => { if (crossAt(a, b) >= 0) return true; const k = Math.max(rw(a[1]), rw(b[1])), du = (a[0] - b[0]) * k, dv = (a[1] - b[1]) * 0.62; return du * du + dv * dv > Lmax * Lmax; };
+    const mid = (a, b) => {
+      const c = crossAt(a, b);
+      if (c < 0) return [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+      const p = a[1] < b[1] ? a : b, q = a[1] < b[1] ? b : a;
+      return [p[0] + (q[0] - p[0]) * ((c - p[1]) / (q[1] - p[1])), c];
+    };
+
+    // seeds: uniform on the surface (weight by radius), kept apart
+    const seeds = [];
+    let tries = 0, dmin = Math.sqrt(W * S * 0.45 / nCells) * 0.62;
+    while (seeds.length < nCells && tries++ < nCells * 600) {
+      const v = rng() * S, u = rng() * W;
+      if (rng() > rw(v) + 0.05) continue;
+      let ok = true;
+      for (const q of seeds) { let du = q[0] - u; du -= W * Math.round(du / W); du *= rw(v); const dv = q[1] - v; if (du * du + dv * dv < dmin * dmin) { ok = false; break; } }
+      if (ok) seeds.push([u, v]);
+      if (tries % (nCells * 60) === 0) dmin *= 0.8;
+    }
+    const cells2 = voronoi2D(seeds, W, S), seedToCell = new Map();
+    cells2.forEach((c, i) => seedToCell.set(c.seed, i));
+
+    const P = [], N = [], U = [], iE = [], iI = [], cells = [];
+    const push = (p, nn, uv, list) => { P.push(p[0], p[1], p[2]); N.push(nn[0], nn[1], nn[2]); U.push(uv[0], uv[1]); list.push(P.length / 3 - 1); };
+    for (const c2 of cells2) {
+      const v0 = P.length / 3, hv = [], nb = [];
+      let area = 0;
+      // skin: fan from the centroid, then split every edge that is too long (the rule only looks at the edge, so neighbours agree)
+      const tris = [];
+      const sub = (a, b, c, depth) => {
+        const sa = depth < 10 && need(a, b), sb = depth < 10 && need(b, c), sc = depth < 10 && need(c, a), cnt = (sa ? 1 : 0) + (sb ? 1 : 0) + (sc ? 1 : 0);
+        if (cnt === 0) { tris.push(a, b, c); return; }
+        const mab = sa ? mid(a, b) : null, mbc = sb ? mid(b, c) : null, mca = sc ? mid(c, a) : null, d = depth + 1;
+        if (cnt === 3) { sub(a, mab, mca, d); sub(mab, b, mbc, d); sub(mca, mbc, c, d); sub(mab, mbc, mca, d); }
+        else if (cnt === 1) { if (sa) { sub(a, mab, c, d); sub(mab, b, c, d); } else if (sb) { sub(a, b, mbc, d); sub(a, mbc, c, d); } else { sub(a, b, mca, d); sub(mca, b, c, d); } }
+        else if (!sc) { sub(mab, b, mbc, d); sub(a, mab, mbc, d); sub(a, mbc, c, d); }
+        else if (!sa) { sub(mbc, c, mca, d); sub(b, mbc, mca, d); sub(b, mca, a, d); }
+        else { sub(mca, a, mab, d); sub(c, mca, mab, d); sub(c, mab, b, d); }
+      };
+      const poly = c2.poly;
+      for (let k = 0; k < poly.length; k++) sub(c2.c, poly[k], poly[(k + 1) % poly.length], 0);
+      for (let i = 0; i < tris.length; i += 3) {
+        const fa = frame(tris[i][0], tris[i][1]), fb = frame(tris[i + 1][0], tris[i + 1][1]), fc = frame(tris[i + 2][0], tris[i + 2][1]);
+        // param-space CCW faces inward, so the outer skin takes the reverse order
+        push(fa.p, fa.n, fa.uv, iE); push(fc.p, fc.n, fc.uv, iE); push(fb.p, fb.n, fb.uv, iE);
+        const ia = [fa.p[0] - fa.n[0] * t, fa.p[1] - fa.n[1] * t, fa.p[2] - fa.n[2] * t], ib = [fb.p[0] - fb.n[0] * t, fb.p[1] - fb.n[1] * t, fb.p[2] - fb.n[2] * t], ic = [fc.p[0] - fc.n[0] * t, fc.p[1] - fc.n[1] * t, fc.p[2] - fc.n[2] * t];
+        push(ia, [-fa.n[0], -fa.n[1], -fa.n[2]], fa.uv, iE); push(ib, [-fb.n[0], -fb.n[1], -fb.n[2]], fb.uv, iE); push(ic, [-fc.n[0], -fc.n[1], -fc.n[2]], fc.uv, iE);
+        const ex = fb.p[0] - fa.p[0], ey = fb.p[1] - fa.p[1], ez = fb.p[2] - fa.p[2], gx = fc.p[0] - fa.p[0], gy = fc.p[1] - fa.p[1], gz = fc.p[2] - fa.p[2];
+        area += 0.5 * Math.hypot(ey * gz - ez * gy, ez * gx - ex * gz, ex * gy - ey * gx);
+      }
+      // walls: the fracture faces between the outer and inner skin
+      for (let k = 0; k < poly.length; k++) {
+        const a = poly[k], b = poly[(k + 1) % poly.length], tag = c2.tags[k];
+        if (tag >= 0) { const j = seedToCell.get(tag); if (j !== undefined && nb.indexOf(j) < 0) nb.push(j); }
+        const pts = [a];
+        const walk = (p, q, depth) => { if (depth < 10 && need(p, q)) { const m = mid(p, q); walk(p, m, depth + 1); walk(m, q, depth + 1); } else pts.push(q); };
+        walk(a, b, 0);
+        const du = b[0] - a[0], dv = b[1] - a[1];
+        for (let i = 0; i < pts.length - 1; i++) {
+          const f0 = frame(pts[i][0], pts[i][1]), f1 = frame(pts[i + 1][0], pts[i + 1][1]), k0 = f0.r / Rmax;
+          let wx = f0.tu[0] * dv * k0 - f0.tv[0] * du, wy = f0.tu[1] * dv * k0 - f0.tv[1] * du, wz = f0.tu[2] * dv * k0 - f0.tv[2] * du;
+          const wl = Math.hypot(wx, wy, wz);
+          if (wl < 1e-12) continue;
+          wx /= wl; wy /= wl; wz /= wl;
+          // the wall stops a hair short of both skins: an edge-on face that shares its edge with the skin wins depth ties here and there, and reads as a hairline
+          // (an open rim is different: that face is the real lip of the vessel, so it joins the skins exactly and belongs to the outside)
+          const lip = tag < 0, w0 = lip ? 0 : wi, w1 = t - w0, list = lip ? iE : iI;
+          const o0 = [f0.p[0] - f0.n[0] * w0, f0.p[1] - f0.n[1] * w0, f0.p[2] - f0.n[2] * w0], o1 = [f1.p[0] - f1.n[0] * w0, f1.p[1] - f1.n[1] * w0, f1.p[2] - f1.n[2] * w0];
+          const i0 = [f0.p[0] - f0.n[0] * w1, f0.p[1] - f0.n[1] * w1, f0.p[2] - f0.n[2] * w1], i1 = [f1.p[0] - f1.n[0] * w1, f1.p[1] - f1.n[1] * w1, f1.p[2] - f1.n[2] * w1];
+          const ex = o1[0] - o0[0], ey = o1[1] - o0[1], ez = o1[2] - o0[2], gx = i1[0] - o0[0], gy = i1[1] - o0[1], gz = i1[2] - o0[2];
+          const cxn = ey * gz - ez * gy, cyn = ez * gx - ex * gz, czn = ex * gy - ey * gx;
+          if (Math.hypot(cxn, cyn, czn) < 1e-12) continue;
+          const nw = [wx, wy, wz], uv0 = lip ? f0.uv : [0.5, f0.uv[1]], uv1 = lip ? f1.uv : [0.5, f1.uv[1]];
+          if (cxn * wx + cyn * wy + czn * wz > 0) { push(o0, nw, uv0, list); push(o1, nw, uv1, list); push(i1, nw, uv1, list); push(o0, nw, uv0, list); push(i1, nw, uv1, list); push(i0, nw, uv0, list); }
+          else { push(o0, nw, uv0, list); push(i1, nw, uv1, list); push(o1, nw, uv1, list); push(o0, nw, uv0, list); push(i0, nw, uv0, list); push(i1, nw, uv1, list); }
+          if (i === 0) { hv.push(o0, i0); }
+        }
+      }
+      const fc = frame(c2.c[0], c2.c[1]);
+      hv.push(fc.p);
+      cells.push({ seed: c2.seed, c: [fc.p[0] - fc.n[0] * t * 0.5, fc.p[1] - fc.n[1] * t * 0.5, fc.p[2] - fc.n[2] * t * 0.5], vol: Math.max(area * t, 1e-12), v0, v1: P.length / 3, nb, ext: true, hv });
+    }
+    // a handle: a bent tube in the x-y plane, in two pieces
+    if (opt.handle) {
+      const hp = opt.handle.pts, hr = opt.handle.r, m = hp.length, seg = 10, half = (m - 1) >> 1;
+      const ringAt = (k) => {
+        const a = hp[Math.max(0, k - 1)], b = hp[Math.min(m - 1, k + 1)];
+        let tx = b[0] - a[0], ty = b[1] - a[1]; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+        const out = [];
+        for (let s = 0; s < seg; s++) { const ph = s / seg * TAU0, cn = Math.cos(ph), sn = Math.sin(ph), nx = -ty * cn, ny = tx * cn, nz = sn; out.push({ p: [hp[k][0] + nx * hr, hp[k][1] + ny * hr, nz * hr], n: [nx, ny, nz] }); }
+        return out;
+      };
+      const tri = (a, b, c, list, flat) => {
+        const ex = b.p[0] - a.p[0], ey = b.p[1] - a.p[1], ez = b.p[2] - a.p[2], gx = c.p[0] - a.p[0], gy = c.p[1] - a.p[1], gz = c.p[2] - a.p[2];
+        const nx = ey * gz - ez * gy, ny = ez * gx - ex * gz, nz = ex * gy - ey * gx, ref = flat || a.n;
+        const fl = nx * ref[0] + ny * ref[1] + nz * ref[2] < 0, B = fl ? c : b, C = fl ? b : c;
+        push(a.p, flat || a.n, [0.5, 0.5], list); push(B.p, flat || B.n, [0.5, 0.5], list); push(C.p, flat || C.n, [0.5, 0.5], list);
+      };
+      for (const [k0, k1] of [[0, half], [half, m - 1]]) {
+        const v0 = P.length / 3, hv = [];
+        let len = 0;
+        for (let k = k0; k < k1; k++) {
+          const r0 = ringAt(k), r1 = ringAt(k + 1);
+          len += Math.hypot(hp[k + 1][0] - hp[k][0], hp[k + 1][1] - hp[k][1]);
+          for (let s = 0; s < seg; s++) { const s2 = (s + 1) % seg; tri(r0[s], r1[s], r1[s2], iE); tri(r0[s], r1[s2], r0[s2], iE); }
+          hv.push(r0[0].p, r0[seg >> 1].p);
+        }
+        for (const [k, sgn] of [[k0, -1], [k1, 1]]) {
+          const r = ringAt(k), a = hp[Math.max(0, k - 1)], b = hp[Math.min(m - 1, k + 1)];
+          let tx = (b[0] - a[0]) * sgn, ty = (b[1] - a[1]) * sgn; const l = Math.hypot(tx, ty) || 1;
+          const fl = [tx / l, ty / l, 0], ctr = { p: [hp[k][0], hp[k][1], 0], n: fl };
+          for (let s = 0; s < seg; s++) tri(ctr, r[s], r[(s + 1) % seg], iI, fl);
+          hv.push(r[0].p, r[seg >> 1].p);
+        }
+        const km = (k0 + k1) >> 1;
+        cells.push({ seed: -1, c: [hp[km][0], hp[km][1], 0], vol: Math.PI * hr * hr * len, v0, v1: P.length / 3, nb: [], ext: true, hv });
+      }
+      const last = cells.length - 1; cells[last].nb.push(last - 1); cells[last - 1].nb.push(last);
+    }
+    let H0 = ymax, R = Rmax;
+    if (opt.lie) {
+      // roll it onto its side: the axis becomes x, and the widest ring touches the ground
+      const rot = (a, i, sh) => { const x = a[i], y = a[i + 1]; a[i] = y - sh; a[i + 1] = -x; };
+      for (let i = 0; i < P.length; i += 3) { rot(P, i, ymax * 0.5); P[i + 1] += Rmax; rot(N, i, 0); }
+      for (const c of cells) { rot(c.c, 0, ymax * 0.5); c.c[1] += Rmax; c.hv = c.hv.map((q) => [q[1] - ymax * 0.5, -q[0] + Rmax, q[2]]); }
+      H0 = 2 * Rmax; R = Math.max(ymax * 0.5, Rmax);
+    } else if (opt.handle) for (const q of opt.handle.pts) R = Math.max(R, q[0] + opt.handle.r);
+    const idx = new Uint32Array(iE.length + iI.length);
+    idx.set(iE, 0); idx.set(iI, iE.length);
+    return { cells, H0, R, shape: 'shell', mesh: { pos0: new Float32Array(P), nrm0: new Float32Array(N), uv: new Float32Array(U), idx, nExt: iE.length, nInt: iI.length, nv: P.length / 3 } };
+  }
+  const TAU0 = Math.PI * 2;
 
   /* ============================================================================
      PART 2 — IMPLICIT SURFACE (gummy)
@@ -880,12 +1143,7 @@ const Press = (() => {
       ram: { y: 3, v: 0, yUp: 3, vPost: 0.6 }, ramR: RAM_R, anvR: ANV_R,
       objs: [], cur: null, removed: [], events: [],
       pinN: 0, pinTop: 0, impactCD: 0,
-      debris: {
-        cap: DC, n: 0, head: 0,
-        p: new Float32Array(DC * 3), v: new Float32Array(DC * 3), q: new Float32Array(DC * 4), w: new Float32Array(DC * 3), s: new Float32Array(DC * 3),
-        col: new Float32Array(DC * 3), st: new Uint8Array(DC), dr: new Float32Array(DC), e: new Float32Array(DC), hh: new Float32Array(DC),
-        mat: new Float32Array(DC * 16), dirty: true, colDirty: true,
-      },
+      debris: makePool(DC), drops: makePool(opts.dropCap || 1300),
       dust: {
         cap: UC, head: 0, live: 0,
         p: new Float32Array(UC * 3), v: new Float32Array(UC * 3), size: new Float32Array(UC), grow: new Float32Array(UC), a0: new Float32Array(UC),
@@ -902,8 +1160,9 @@ const Press = (() => {
   }
 
   /* ------------------------------------------------------------ particles */
-  function spawnDebris(w, x, y, z, vx, vy, vz, sx, sy, sz, r, g, b, drag, e) {
-    const d = w.debris, i = d.head;
+  function spawnDebris(w, x, y, z, vx, vy, vz, sx, sy, sz, r, g, b, drag, e) { spawnInto(w.debris, x, y, z, vx, vy, vz, sx, sy, sz, r, g, b, drag, e); }
+  function spawnInto(d, x, y, z, vx, vy, vz, sx, sy, sz, r, g, b, drag, e) {
+    const i = d.head;
     d.head = (d.head + 1) % d.cap; if (d.n < d.cap) d.n++;
     d.p[3 * i] = x; d.p[3 * i + 1] = y; d.p[3 * i + 2] = z;
     d.v[3 * i] = vx; d.v[3 * i + 1] = vy; d.v[3 * i + 2] = vz;
@@ -914,8 +1173,8 @@ const Press = (() => {
     d.w[3 * i] = (Math.random() - 0.5) * sc; d.w[3 * i + 1] = (Math.random() - 0.5) * sc; d.w[3 * i + 2] = (Math.random() - 0.5) * sc;
     d.s[3 * i] = sx; d.s[3 * i + 1] = sy; d.s[3 * i + 2] = sz;
     d.col[3 * i] = r; d.col[3 * i + 1] = g; d.col[3 * i + 2] = b;
-    d.st[i] = 1; d.dr[i] = drag; d.e[i] = e; d.hh[i] = Math.min(sx, sy, sz) * 0.5;
-    d.colDirty = true;
+    d.st[i] = 1; d.dr[i] = drag; d.e[i] = e; d.hh[i] = Math.min(sx, sy, sz) * 0.5; d.flat[i] = 0;
+    d.colDirty = true; d.dirty = true;
   }
   function spawnDust(w, x, y, z, vx, vy, vz, size, grow, alpha, life, c) {
     const d = w.dust, i = d.head;
@@ -943,8 +1202,8 @@ const Press = (() => {
     }
     d.live = live;
   }
-  function stepDebris(w, dt) {
-    const d = w.debris, ram = w.ram, P = d.p, V = d.v;
+  function stepPool(w, d, dt, wet) {
+    const ram = w.ram, P = d.p, V = d.v;
     const vth = 0.9;
     for (let i = 0; i < d.n; i++) {
       if (d.st[i] !== 1) {
@@ -971,6 +1230,15 @@ const Press = (() => {
       let grounded = false;
       if (y - hh < gy) {
         y = gy + hh; grounded = true;
+        if (wet && !d.flat[i]) {
+          // a droplet does not bounce: it splats into a little glossy disc and stays there
+          d.flat[i] = 1;
+          const s0 = d.s[3 * i], k = 1.6 + Math.random() * 1.3;
+          d.s[3 * i] = s0 * k; d.s[3 * i + 2] = s0 * k * (0.75 + 0.5 * Math.random()); d.s[3 * i + 1] = s0 * 0.14;
+          hh = s0 * 0.07; d.hh[i] = hh; y = gy + hh;
+          d.q[4 * i] = 0; d.q[4 * i + 1] = 0; d.q[4 * i + 2] = 0; d.q[4 * i + 3] = 1;
+          vx *= 0.12; vz *= 0.12; vy = 0;
+        }
         if (vy < 0) {
           const vi = -vy;
           vy = vi > vth ? vi * d.e[i] : 0;
@@ -1000,8 +1268,8 @@ const Press = (() => {
     }
   }
   /** per-instance matrices (column-major) for the renderer */
-  function writeDebris(w) {
-    const d = w.debris, M = d.mat;
+  function writePool(d) {
+    const M = d.mat;
     if (!d.dirty) return false;
     for (let i = 0; i < d.n; i++) {
       const o = 16 * i;
@@ -1038,12 +1306,16 @@ const Press = (() => {
     const R = hull.R, H = hull.H0, cy = Math.cos(-yaw), sy = Math.sin(-yaw);
     const loc = (p) => [p[0] * cy - p[2] * sy, p[1], p[0] * sy + p[2] * cy];          // back to the un-yawed frame
     const base = { lmax: size * 0.42, rough: size * 0.016, pole: null };
-    if (hull.shape === 'sphere') return Object.assign(base, {
-      nrm: (part, p) => { const x = p[0], y = p[1] - R, z = p[2], l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; },
-      uv: (part, p0) => { const p = loc(p0), x = p[0], y = p[1] - R, z = p[2], l = Math.hypot(x, y, z) || 1; return [Math.atan2(z, x) / TAU + 0.5, 0.5 + Math.asin(clamp(y / l, -1, 1)) / Math.PI]; },
-      wrap: () => true, pole: (p) => Math.abs(p[1] - R) > R * 0.9995,
-      uvInt: (p) => [Math.hypot(p[0], p[1] - R, p[2]) / R, hash3(p[0], p[1], p[2])],
-    });
+    if (hull.shape === 'sphere') {
+      const ea = hull.ax[0], eb = hull.ax[1], ec = hull.ax[2], cg = Math.cos(yaw), sg = Math.sin(yaw);
+      const un = (p0) => { const p = loc(p0); return [p[0] / ea, (p[1] - eb) / eb, p[2] / ec]; };       // onto the unit sphere
+      return Object.assign(base, {
+        nrm: (part, p) => { const q = un(p), x = q[0] / ea, y = q[1] / eb, z = q[2] / ec, l = Math.hypot(x, y, z) || 1; return [(x * cg - z * sg) / l, y / l, (x * sg + z * cg) / l]; },
+        uv: (part, p) => { const q = un(p), l = Math.hypot(q[0], q[1], q[2]) || 1; return [Math.atan2(q[2], q[0]) / TAU + 0.5, 0.5 + Math.asin(clamp(q[1] / l, -1, 1)) / Math.PI]; },
+        wrap: () => true, pole: (p) => { const q = un(p); return Math.abs(q[1]) > 0.9995 * Math.hypot(q[0], q[1], q[2]); },
+        uvInt: (p) => { const q = un(p); return [Math.hypot(q[0], q[1], q[2]), hash3(p[0], p[1], p[2])]; },
+      });
+    }
     if (hull.shape === 'cyl') return Object.assign(base, {
       nrm: (part, p, fn) => { if (part !== 0) return [fn[0], fn[1], fn[2]]; const l = Math.hypot(p[0], p[2]) || 1; return [p[0] / l, 0, p[2] / l]; },
       uv: (part, p) => part === 0 ? [Math.atan2(p[2], p[0]) / TAU + 0.5, 0.02 + 0.21 * p[1] / H] : [0.5 + 0.34 * p[0] / R, 0.64 + 0.34 * p[2] / R],
@@ -1062,7 +1334,7 @@ const Press = (() => {
     return Object.assign(base, { nrm: (part, p, fn) => [fn[0], fn[1], fn[2]], uv: () => [0.5, 0.5], wrap: () => false, uvInt: () => [0.5, 0.5], rough: 0 });
   }
 
-  function seedSampler(hull) {
+  function seedSampler(hull, yaw) {
     const R = hull.R, H = hull.H0;
     if (hull.shape === 'sphere') return (rng) => {
       let dx, dy, dz;
@@ -1073,8 +1345,8 @@ const Press = (() => {
         const u = rng() * 2 - 1, ph = rng() * TAU, s = Math.sqrt(1 - u * u);
         dx = s * Math.cos(ph); dy = u; dz = s * Math.sin(ph);
       }
-      const r = R * Math.pow(rng(), 1 / 2.3) * 0.97;
-      return [dx * r, R + dy * r, dz * r];
+      const r = Math.pow(rng(), 1 / 2.3) * 0.97, x = dx * r * hull.ax[0], z = dz * r * hull.ax[2], cg = Math.cos(yaw || 0), sg = Math.sin(yaw || 0);
+      return [x * cg - z * sg, hull.ax[1] + dy * r * hull.ax[1], x * sg + z * cg];
     };
     if (hull.shape === 'cyl') return (rng) => { const r = R * Math.pow(rng(), 0.42) * 0.97, a = rng() * TAU; return [Math.cos(a) * r, H * (0.04 + 0.92 * rng()), Math.sin(a) * r]; };
     let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
@@ -1085,13 +1357,17 @@ const Press = (() => {
 
   function buildPoly(o) {
     const sp = o.spec, m = sp.mat, rng = mulberry32(o.seed);
-    const hull = sp.hull(), yaw = rng() * TAU, cy = Math.cos(yaw), sy = Math.sin(yaw);
-    for (const p of hull.polys) p.v = p.v.map((q) => [q[0] * cy - q[2] * sy, q[1], q[0] * sy + q[2] * cy]);
-    hullPlanes(hull);
-    const smp = seedSampler(hull);
-    const seeds = sampleSeeds(rng, sp.cells, hull.shape === 'box' ? (r) => { const p = smp(r); if (!p) return null; return p; } : smp, sp.dmin * Math.max(hull.R, hull.H0 * 0.5));
-    const cells = voronoiCells(hull.polys, seeds, sp.ay, sp.size * 1e-7);
-    const mesh = assemble(cells, geoFor(hull, sp.size, yaw));
+    let hull, cells, mesh;
+    if (sp.shell) { hull = sp.shell(rng); cells = hull.cells; mesh = hull.mesh; }
+    else {
+      hull = sp.hull();
+      const yaw = rng() * TAU, cy = Math.cos(yaw), sy = Math.sin(yaw);
+      for (const p of hull.polys) p.v = p.v.map((q) => [q[0] * cy - q[2] * sy, q[1], q[0] * sy + q[2] * cy]);
+      hullPlanes(hull);
+      const seeds = sampleSeeds(rng, sp.cells, seedSampler(hull, yaw), sp.dmin * Math.max(hull.R, hull.H0 * 0.5));
+      cells = voronoiCells(hull.polys, seeds, sp.ay, sp.size * 1e-7);
+      mesh = assemble(cells, geoFor(hull, sp.size, yaw));
+    }
     o.H0 = hull.H0; o.R = hull.R; o.h = hull.H0;
     o.pos0 = mesh.pos0; o.nrm0 = mesh.nrm0; o.uv = mesh.uv; o.idx = mesh.idx; o.nExt = mesh.nExt; o.nInt = mesh.nInt; o.nv = mesh.nv;
     o.pos = new Float32Array(mesh.pos0); o.nrm = new Float32Array(mesh.nrm0);
@@ -1102,6 +1378,12 @@ const Press = (() => {
     for (let k = 0; k < K; k++) {
       const a = rng() * TAU, tilt = (rng() - 0.5) * 0.3, l = Math.hypot(1, tilt);
       const off = (rng() * 2 - 1) * m.crackOff * hull.R, b = a + Math.PI / 2;
+      if (m.rimCracks) {
+        // a tear that starts at the rim and works inward: a plane through the axis, active on one side only
+        const ar = (k + rng() * 0.7) / K * TAU;
+        o.cracks.push({ n: [-Math.sin(ar), 0, Math.cos(ar)], p: [0, hull.H0 / 2, 0], dir: [Math.cos(ar), Math.sin(ar)], rim: true, th: 0.1 + 0.8 * rng(), top: true, w: m.crackW * (0.5 + rng()), fired: false });
+        continue;
+      }
       o.cracks.push({ n: [Math.cos(a) / l, tilt / l, Math.sin(a) / l], p: [Math.cos(a) * off + Math.cos(b) * 0, hull.H0 / 2, Math.sin(a) * off], th: 0.04 + 0.82 * (k + rng() * 0.8) / K, top: rng() < 0.62, w: m.crackW * (0.55 + 0.7 * rng()), fired: false });
     }
     const vols = cells.map((c) => c.vol).sort((a, b) => a - b), med = vols[vols.length >> 1];
@@ -1111,7 +1393,7 @@ const Press = (() => {
       const side = new Int8Array(K);
       for (let k = 0; k < K; k++) { const cr = o.cracks[k]; side[k] = ((c.c[0] - cr.p[0]) * cr.n[0] + (c.c[1] - cr.p[1]) * cr.n[1] + (c.c[2] - cr.p[2]) * cr.n[2]) >= 0 ? 1 : -1; }
       o.vol += c.vol;
-      const zone = hull.shape === 'sphere' || hull.shape === 'gem' ? Math.abs(ty - 0.5) > 0.3 : rho > hull.R * 0.62;
+      const zone = hull.shape === 'sphere' || hull.shape === 'gem' || hull.shape === 'shell' ? Math.abs(ty - 0.5) > 0.3 : rho > hull.R * 0.62;
       if (c.ext && c.vol < med * 1.3 && zone) cand.push(i);
       return { c: c.c, vol: c.vol, v0: c.v0, v1: c.v1, nb: c.nb, ext: c.ext, hv: c.hv, ty, rho, side, chipAt: 9, rel: false, dead: false, frag: null };
     });
@@ -1121,10 +1403,11 @@ const Press = (() => {
   function buildGoo(o) {
     const sp = o.spec, S = sp.scale;
     let minY = 1e9, maxY = -1e9;
-    for (const p of BEAR_PTS) { minY = Math.min(minY, p[1] - p[4]); maxY = Math.max(maxY, p[1] + p[4]); }
-    o.H0 = (maxY - minY) * S; o.h = o.H0; o.R = 0.75 * S; o.vol = 1;
-    o.gPts = BEAR_PTS.map((p) => ({ x: p[0] * S, y: (p[1] - minY) * S, z: p[2] * S, m: p[3], r: p[4] * S }));
-    o.gStr = BEAR_STRANDS.map((s) => {
+    const T = o.gT = GOO_T[sp.template || 'bear'];
+    for (const p of T.pts) { minY = Math.min(minY, p[1] - p[4]); maxY = Math.max(maxY, p[1] + p[4]); }
+    o.H0 = (maxY - minY) * S; o.h = o.H0; o.R = (T.radius || 0.75) * S; o.vol = 1;
+    o.gPts = T.pts.map((p) => ({ x: p[0] * S, y: (p[1] - minY) * S, z: p[2] * S, m: p[3], r: p[4] * S }));
+    o.gStr = T.strands.map((s) => {
       const A = o.gPts[s.a], B = o.gPts[s.b];
       const ax = A.x + s.o[0] * S, ay = A.y + s.o[1] * S, az = A.z + s.o[2] * S;
       const len = Math.hypot(B.x - ax, B.y - ay, B.z - az), rm = (s.r0 + s.r1) * 0.5 * S;
@@ -1140,10 +1423,10 @@ const Press = (() => {
     const o = {
       id, spec, kind: spec.kind, H0: 1, R: 1, h: 1, hv: 0, yOff: spec.drop, yv: 0, air: true, c: 0, cmax: 0, set: 0, D: 0, F: 0, drop: 0, touch: false,
       shx: 0, shz: 0, svx: 0, svz: 0, intact: true, cFailRun: spec.mat.cFail * rnd(0.95, 1.06), frags: [], cells: [], cracks: [],
-      cakeV: 0, cakeR: 0, cakeH: 0, cakePress: 1e9, cakeSeed: Math.random() * 100, hBurst: 0, hidden: false, spawnAt: 0, awake: 0,
+      yielded: false, post: 0, shedAcc: 0, puddleR: 0, puddleT: 0, tint: (Math.random() * 4) | 0, cakeV: 0, cakeR: 0, cakeH: 0, cakePress: 1e9, cakeSeed: Math.random() * 100, hBurst: 0, hidden: false, spawnAt: 0, awake: 0,
       geoDirty: true, bufDirty: true, age: 0, burstAt: -1, seed: (Math.random() * 2147483647) | 0, flavor: (Math.random() * 5) | 0, settled: false,
     };
-    if (spec.kind === 'poly') buildPoly(o); else buildGoo(o);
+    if (spec.kind === 'poly') buildPoly(o); else { buildGoo(o); if (spec.template === 'ball') o.flavor = 5; }
     o.cmaxSet = 0;
     return o;
   }
@@ -1229,11 +1512,12 @@ const Press = (() => {
       f.crush = g; f.relax = true;
       applySq(f);
     }
+    if (m.shrink) { f.shr = 1; f.shrT = m.shrink * rnd(0.85, 1.2); }
     return f;
   }
 
   function applySq(f) {
-    const q = f.sq, g = q.g, a = 1 / Math.sqrt(g), d = g - a, u = q.u, B = q.B, A = f.A;
+    const q = f.sq, g = q.g, a = q.lat === undefined ? 1 / Math.sqrt(g) : Math.pow(g, -q.lat), d = g - a, u = q.u, B = q.B, A = f.A;
     const s0 = a + d * u[0] * u[0], s1 = d * u[0] * u[1], s2 = d * u[0] * u[2], s4 = a + d * u[1] * u[1], s5 = d * u[1] * u[2], s8 = a + d * u[2] * u[2];
     A[0] = s0 * B[0] + s1 * B[3] + s2 * B[6]; A[1] = s0 * B[1] + s1 * B[4] + s2 * B[7]; A[2] = s0 * B[2] + s1 * B[5] + s2 * B[8];
     A[3] = s1 * B[0] + s4 * B[3] + s5 * B[6]; A[4] = s1 * B[1] + s4 * B[4] + s5 * B[7]; A[5] = s1 * B[2] + s4 * B[5] + s5 * B[8];
@@ -1248,9 +1532,17 @@ const Press = (() => {
       const cr = o.cracks[k];
       if (D <= cr.th) continue;
       const g = (D - cr.th) / (1 - cr.th + 1e-6);
-      const front = Math.min(1, g * 3.2) * 1.2, depth = cr.top ? 1 - c.ty : c.ty;
-      const reach = clamp((front - depth) / 0.22, 0, 1);
-      const wd = cr.w * (0.25 + 0.75 * g) * reach * 0.5 * c.side[k];
+      let reach, wd;
+      if (cr.rim) {
+        if (c.c[0] * cr.dir[0] + c.c[2] * cr.dir[1] < 0) continue;
+        const front = Math.min(1, g * 2.5) * 0.5 + 0.35 * o.post;
+        reach = clamp((c.rho / o.R - (1 - front)) / 0.3, 0, 1);
+        wd = cr.w * (0.3 + 0.7 * g + 2.4 * o.post) * reach * 0.5 * c.side[k];
+      } else {
+        const front = Math.min(1, g * 3.2) * 1.2, depth = cr.top ? 1 - c.ty : c.ty;
+        reach = clamp((front - depth) / 0.22, 0, 1);
+        wd = cr.w * (0.25 + 0.75 * g) * reach * 0.5 * c.side[k];
+      }
       ox += cr.n[0] * wd; oy += cr.n[1] * wd; oz += cr.n[2] * wd;
     }
     _co[0] = ox; _co[1] = oy; _co[2] = oz;
@@ -1260,6 +1552,7 @@ const Press = (() => {
     const m = o.spec.mat, H0 = o.H0, h = o.h, lam = h / H0, kap = m.kappa, b0 = m.b0;
     const bul = Math.pow(lam, -m.nu) - 1, lo = (1 - lam) * 0.5, shx = o.shx * h, shz = o.shz * h, yOff = o.yOff;
     const p0 = o.pos0, n0 = o.nrm0, P = o.pos, N = o.nrm;
+    const wk = m.wrinkle, R0 = o.R, wr = wk ? Math.sqrt(clamp(1 - lam, 0, 1)) : 0;
     for (let ci = 0; ci < o.cells.length; ci++) {
       const c = o.cells[ci];
       if (c.rel) continue;
@@ -1274,11 +1567,35 @@ const Press = (() => {
           tt = (1 - kap) * t + kap * tc; dY = (1 - kap) * lam + kap * ins;
         }
         const s = 1 + bul * (b0 + (1 - b0) * 6 * tt * (1 - tt)), dsdy = bul * (1 - b0) * 6 * (1 - 2 * tt) * dY / h;
-        P[3 * vi] = x * s + shx * tt + ox; P[3 * vi + 1] = yOff + h * tt + oy; P[3 * vi + 2] = z * s + shz * tt + oz;
+        let px = x * s + shx * tt + ox, pz = z * s + shz * tt + oz;
+        if (wr > 0) {
+          // thin metal cannot shorten, so it buckles into a diamond pattern of dents (the rims stay round)
+          const rho = Math.sqrt(x * x + z * z);
+          if (rho > 1e-6) {
+            const wall = clamp((rho / R0 - 0.78) / 0.18, 0, 1), th = Math.atan2(z, x), te = Math.sqrt(Math.max(0, Math.sin(Math.PI * clamp(t, 0, 1))));
+            const f = Math.cos(wk.n * th + 1.6 * Math.sin(wk.m * Math.PI * t)) * Math.cos(wk.m * Math.PI * t + th * 0.5);
+            const dr = -wk.amp * R0 * wr * wall * te * (0.55 + 0.45 * f) / rho;
+            px += x * dr; pz += z * dr;
+          }
+        }
+        P[3 * vi] = px; P[3 * vi + 1] = yOff + h * tt + oy; P[3 * vi + 2] = pz;
         const nx = n0[3 * vi], ny = n0[3 * vi + 1], nz = n0[3 * vi + 2];
         let mx = dY * nx / s, my = ny - (x * dsdy * nx + z * dsdy * nz) / s, mz = dY * nz / s;
         const l = Math.sqrt(mx * mx + my * my + mz * mz);
         if (l > 1e-9) { N[3 * vi] = mx / l; N[3 * vi + 1] = my / l; N[3 * vi + 2] = mz / l; } else { N[3 * vi] = nx; N[3 * vi + 1] = ny; N[3 * vi + 2] = nz; }
+      }
+    }
+    if (wr > 0) {
+      // crumpled metal reads through its creases: blend toward per-triangle normals as it buckles
+      const ix = o.idx, wb = clamp((1 - lam) * 7, 0, 1);
+      for (let q = 0; q < ix.length; q += 3) {
+        const a = ix[q] * 3, b = ix[q + 1] * 3, c = ix[q + 2] * 3;
+        const ex = P[b] - P[a], ey = P[b + 1] - P[a + 1], ez = P[b + 2] - P[a + 2], gx = P[c] - P[a], gy = P[c + 1] - P[a + 1], gz = P[c + 2] - P[a + 2];
+        let nx = ey * gz - ez * gy, ny = ez * gx - ex * gz, nz = ex * gy - ey * gx;
+        const l = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (l < 1e-14) continue;
+        nx /= l; ny /= l; nz /= l;
+        for (const v of [a, b, c]) { const mx = N[v] * (1 - wb) + nx * wb, my = N[v + 1] * (1 - wb) + ny * wb, mz = N[v + 2] * (1 - wb) + nz * wb, ml = Math.sqrt(mx * mx + my * my + mz * mz) || 1; N[v] = mx / ml; N[v + 1] = my / ml; N[v + 2] = mz / ml; }
       }
     }
   }
@@ -1388,7 +1705,7 @@ const Press = (() => {
       k.q[0] = f.q[0]; k.q[1] = f.q[1]; k.q[2] = f.q[2]; k.q[3] = f.q[3];
       for (let i = 0; i < 9; i++) { k.A[i] = f.A[i]; k.T[i] = f.T[i]; }
       k.relax = f.relax; k.age = f.age; k.crush = f.crush; k.hold = f.hold;
-      if (f.sq) k.sq = { u: f.sq.u.slice(), g: f.sq.g, gMin: f.sq.gMin, gRest: f.sq.gRest, base: f.sq.base, B: new Float64Array(f.sq.B) };
+      if (f.sq) k.sq = { u: f.sq.u.slice(), g: f.sq.g, gMin: f.sq.gMin, gRest: f.sq.gRest, base: f.sq.base, B: new Float64Array(f.sq.B), lat: f.sq.lat };
       quatToMat(k.q, k.R); mul3(k.R, k.A, k.M);
       kids.push(k);
     }
@@ -1420,6 +1737,12 @@ const Press = (() => {
       const q = f.sq, dg = q.gRest - q.g;
       if (Math.abs(dg) < 1e-3) { q.g = q.gRest; f.relax = false; } else q.g += dg * (1 - Math.exp(-dt / Math.max(m.tau, 1e-4)));
       applySq(f);
+    }
+    if (f.shrT && f.shr > f.shrT) {
+      // stretched rubber, suddenly free: it snaps back to a fraction of the size it was inflated to
+      const ns = f.shrT + (f.shr - f.shrT) * Math.exp(-dt / 0.022), k = ns - f.shrT < 2e-3 ? f.shrT / f.shr : ns / f.shr;
+      f.shr *= k; f.rb *= k;
+      if (f.sq) { const B = f.sq.B; for (let i = 0; i < 9; i++) B[i] *= k; applySq(f); } else { const A = f.A; for (let i = 0; i < 9; i++) A[i] *= k; }
     }
     f.pinned = false;
     v[1] -= G * dt;
@@ -1518,9 +1841,9 @@ const Press = (() => {
     } else {
       const R = f.R;
       let q = f.sq;
-      if (!q || Math.abs(R[3] * q.u[0] + R[4] * q.u[1] + R[5] * q.u[2]) < 0.94) {
+      if (!q || (m.sqLat !== undefined && q.lat === undefined) || Math.abs(R[3] * q.u[0] + R[4] * q.u[1] + R[5] * q.u[2]) < 0.94) {
         // squeezed along a new direction: what it looks like now becomes its base shape
-        q = f.sq = { u: [R[3], R[4], R[5]], g: 1, gMin: 1, gRest: 1, base: f.crush, B: new Float64Array(f.A) };
+        q = f.sq = { u: [R[3], R[4], R[5]], g: 1, gMin: 1, gRest: 1, base: f.crush, B: new Float64Array(f.A), lat: m.sqLat };
       }
       q.g = Math.max(q.g * fac, 0.015);
       if (q.g < q.gMin) q.gMin = q.g;
@@ -1575,6 +1898,7 @@ const Press = (() => {
     const hold = under ? clamp((q - 0.35) / 0.5, 0, 1) : 1;                       // 0 at the core, 1 at the rim
     let sp = m.burstV * k * (0.1 + 0.9 * Math.pow(q, 0.9)) * (0.1 + 0.9 * hold) * rnd(0.5, 1.35) * Math.min(1.6, Math.pow(o.vol * 0.02 / f.m, 0.14));
     const d = dmap(o, f.c0[0], f.c0[1], f.c0[2]);
+    if (m.slowFrac && Math.random() < m.slowFrac) sp *= rnd(0.06, 0.3);                // not everything flies: a good part just falls where it stood
     f.v[0] = Math.cos(a) * sp; f.v[2] = Math.sin(a) * sp;
     f.v[1] = sp * rnd(-0.2, m.burstUp + 0.25) + (d.y > o.h * 0.6 + o.yOff ? w.ram.v : 0);
     const sw = Math.min(m.spin, sp / Math.max(f.rb, 1e-4) * 0.6) * rnd(0.3, 1);
@@ -1612,6 +1936,7 @@ const Press = (() => {
       const a = Math.random() * TAU, r = o.R * Math.sqrt(Math.random()) * 1.05, y = o.yOff + o.h * Math.random(), sp = m.burstV * rnd(0.08, 0.55);
       spawnDust(w, Math.cos(a) * r, y, Math.sin(a) * r, Math.cos(a) * sp, sp * rnd(-0.15, 0.5), Math.sin(a) * sp, m.dustSize * rnd(0.3, 0.7), m.dustSize * rnd(3, 7), rnd(0.1, 0.24), rnd(0.5, 1.9), m.dustCol);
     }
+    wetBurst(w, o);
   }
 
   function failObject(w, o) {
@@ -1701,13 +2026,14 @@ const Press = (() => {
       }
     }
     if (o.h !== h0 || o.yOff !== y0 || Math.abs(o.shx - sx0) + Math.abs(o.shz - sz0) > 1e-7 || o.D !== D0) o.geoDirty = true;
-    if (contact && c >= o.cFailRun) failObject(w, o);
+    if (m.ductile) { ductileStep(w, o, dt, contact); if (contact && c >= o.cFailRun) yieldObject(w, o); }
+    else if (contact && c >= o.cFailRun) failObject(w, o);
   }
 
   /* ---------------------------------------------------------------- gummy */
   function burstGoo(w, o, whole) {
     const sp = o.spec, m = sp.mat, pts = o.gPts;
-    const nChunk = whole ? 1 : 8, chunkOf = (i) => whole ? 0 : BEAR_CHUNK[i];
+    const T = o.gT, nChunk = whole ? 1 : T.nChunk, chunkOf = (i) => whole ? 0 : T.chunk[i];
     const frags = [];
     for (let c = 0; c < nChunk; c++) {
       let mm = 0, cx = 0, cy = 0, cz = 0;
@@ -1715,7 +2041,7 @@ const Press = (() => {
       cx /= mm; cy /= mm; cz /= mm;
       const blobs = [];
       let r2 = 0;
-      for (let i = 0; i < pts.length; i++) if (chunkOf(i) === c) { const p = pts[i]; blobs.push({ x: p.x - cx, y: p.y - cy, z: p.z - cz, r: p.r, head: i === B_HEAD }); r2 = Math.max(r2, (Math.hypot(p.x - cx, p.y - cy, p.z - cz) + p.r) ** 2); }
+      for (let i = 0; i < pts.length; i++) if (chunkOf(i) === c) { const p = pts[i]; blobs.push({ x: p.x - cx, y: p.y - cy, z: p.z - cz, r: p.r, head: i === T.head }); r2 = Math.max(r2, (Math.hypot(p.x - cx, p.y - cy, p.z - cz) + p.r) ** 2); }
       const d = dmap(o, cx, cy, cz);
       const f = {
         goo: true, blobs, c0: [cx, cy, cz], m: mm, invM: 1 / mm, invI: 1 / (0.4 * mm * r2), rb: Math.sqrt(r2), rb0: Math.sqrt(r2),
@@ -1742,7 +2068,7 @@ const Press = (() => {
       }
       // droplets squirt from the rim of the pancake
       const S = sp.scale, rim = o.R * Math.pow(o.h / o.H0, -0.5) * 0.8;
-      for (let k = 0; k < 11; k++) {
+      for (let k = 0; k < T.droplets; k++) {
         const a = Math.random() * TAU, r = S * rnd(0.05, 0.105), spd = m.burstV * rnd(0.7, 1.9);
         frags.push({
           goo: true, blobs: [{ x: 0, y: 0, z: 0, r, head: false }], c0: [0, 0, 0], m: r * r * r * 30, invM: 1 / (r * r * r * 30), invI: 1 / (0.4 * r * r * r * 30 * r * r), rb: r, rb0: r,
@@ -1858,10 +2184,12 @@ const Press = (() => {
       };
       for (const s of o.gStr) { const B = o.gPts[s.b]; for (let j = 1; j < s.ns; j++) { const t = j / s.ns; put(s.ax + (B.x - s.ax) * t, s.ay + (B.y - s.ay) * t, s.az + (B.z - s.az) * t, s.r0 + (s.r1 - s.r0) * t); } }
       for (const p of o.gPts) put(p.x, p.y, p.z, p.r);
-      const hp = o.gPts[B_HEAD], d = dmap(o, hp.x, hp.y, hp.z), dY = Math.max(d.dY, 0.04);
-      gm.facePos[0] = d.x; gm.facePos[1] = d.y; gm.facePos[2] = d.z;
-      gm.faceM.fill(0); gm.faceM[0] = 1 / (d.s * S); gm.faceM[4] = 1 / (dY * S); gm.faceM[8] = 1 / (d.s * S);
-      gm.headRot.fill(0); gm.headRot[0] = gm.headRot[4] = gm.headRot[8] = 1;
+      gm.faceM.fill(0); gm.headRot.fill(0); gm.headRot[0] = gm.headRot[4] = gm.headRot[8] = 1;
+      if (o.gT.head >= 0) {
+        const hp = o.gPts[o.gT.head], d = dmap(o, hp.x, hp.y, hp.z), dY = Math.max(d.dY, 0.04);
+        gm.facePos[0] = d.x; gm.facePos[1] = d.y; gm.facePos[2] = d.z;
+        gm.faceM[0] = 1 / (d.s * S); gm.faceM[4] = 1 / (dY * S); gm.faceM[8] = 1 / (d.s * S);
+      } else { gm.facePos[0] = 0; gm.facePos[1] = -99; gm.facePos[2] = 0; }
     } else {
       let hf = null, hb = null;
       for (const f of o.frags) {
@@ -1905,14 +2233,14 @@ const Press = (() => {
     if (o && o.intact) return o.yOff + o.h;
     return Math.max(w.pinTop, o ? o.cakeH : 0, 0);
   }
-  function stopGap(w) { const o = w.cur; return o && !o.intact ? o.spec.mat.cakeGap : 0.006; }
+  function stopGap(w) { const o = w.cur; return o && (!o.intact || o.spec.mat.ductile) ? o.spec.mat.cakeGap + (o.intact ? o.yOff : 0) : 0.006; }
 
   function stepRam(w, dt) {
     const ram = w.ram, o = w.cur;
     let target;
     if (w.pressing && !(o && o.intact && (o.air || o.hidden))) {
       const top = contactTop(w), gap = ram.y - top;
-      const vP = o && o.intact ? o.spec.mat.cFail * o.H0 / o.spec.mat.pressT : ram.vPost;
+      const vP = o && o.intact ? o.spec.mat.cFail * o.H0 / o.spec.mat.pressT * (o.yielded ? (o.spec.mat.postSpeed || 2) : 1) : ram.vPost;
       target = gap > 0 ? -Math.min(3.2, Math.max(vP, gap * 9)) : -vP;
       if (w.F >= F_MAX * 0.995) target = 0;
     } else target = ram.y < ram.yUp ? Math.min(2.6, Math.max(0.3, (ram.yUp - ram.y) * 6)) : 0;
@@ -1973,6 +2301,7 @@ const Press = (() => {
         stepCake(w, o);
       }
       o.awake = awake;
+      if (o.puddleT > o.puddleR) o.puddleR += (o.puddleT - o.puddleR) * (1 - Math.exp(-dt * 2.6));
     }
     stepDebris(w, dt);
     stepDust(w, dt);
@@ -2004,7 +2333,7 @@ const Press = (() => {
       for (const f of o.frags) if (f.dirty) { writeFrag(o, f); f.dirty = false; wrote = true; }
       if (wrote) o.bufDirty = true;
     }
-    return writeDebris(w);
+    return (writePool(w.debris) ? 1 : 0) | (writePool(w.drops) ? 2 : 0);
   }
 
   /** wipe the anvil: whatever is on it gets shoved off; the mess on the bed stays */
@@ -2012,7 +2341,7 @@ const Press = (() => {
     const base = Math.random() * TAU;
     for (const o of w.objs) {
       if (o.intact) {
-        if (o.kind === 'poly') { const list = []; for (let i = 0; i < o.cells.length; i++) if (!o.cells[i].rel) list.push(i); if (list.length) releaseCells(o, list); }
+        if (o.kind === 'poly') { if (o.cmax > 0.004) bakeIntact(o); const list = []; for (let i = 0; i < o.cells.length; i++) if (!o.cells[i].rel) list.push(i); if (list.length) releaseCells(o, list); }
         else burstGoo(w, o, true);
         o.intact = false; o.geoDirty = true;
       }
@@ -2029,6 +2358,9 @@ const Press = (() => {
         o.cakeV = 0; o.cakeR = 0; o.cakeH = 0; o.cakePress = 1e9; o.cakeDirty = true;
       }
     }
+    for (const o of w.objs) { o.puddleT = 0; o.puddleR = 0; }
+    const dr = w.drops;
+    for (let i = 0; i < dr.n; i++) if (dr.flat[i] && dr.p[3 * i + 1] > -0.1 && dr.p[3 * i] * dr.p[3 * i] + dr.p[3 * i + 2] * dr.p[3 * i + 2] < (ANV_R + 0.05) * (ANV_R + 0.05)) { dr.st[i] = 0; dr.dirty = true; }
     const d = w.debris;
     for (let i = 0; i < d.n; i++) {
       if (d.st[i] === 0 || d.p[3 * i + 1] < -0.1 || d.p[3 * i] * d.p[3 * i] + d.p[3 * i + 2] * d.p[3 * i + 2] > (ANV_R + 0.2) * (ANV_R + 0.2)) continue;
@@ -2053,6 +2385,204 @@ const Press = (() => {
     w.Fpeak = 0; w.stalled = false;
     return o;
   }
+
+  /* ============================================================================
+     PART 4 — MORE THINGS TO PRESS
+     Fruit (wet), thin shells (glass, ceramic, eggshell, a balloon), things that never
+     really explode (a can that crumples, clay, foam), and a gel-filled ball.
+     ========================================================================== */
+  function makePool(cap) {
+    return {
+      cap, n: 0, head: 0,
+      p: new Float32Array(cap * 3), v: new Float32Array(cap * 3), q: new Float32Array(cap * 4), w: new Float32Array(cap * 3), s: new Float32Array(cap * 3),
+      col: new Float32Array(cap * 3), st: new Uint8Array(cap), flat: new Uint8Array(cap), dr: new Float32Array(cap), e: new Float32Array(cap), hh: new Float32Array(cap),
+      mat: new Float32Array(cap * 16), dirty: true, colDirty: true,
+    };
+  }
+  function stepDebris(w, dt) { stepPool(w, w.debris, dt, false); stepPool(w, w.drops, dt, true); }
+  function spawnDrop(w, x, y, z, vx, vy, vz, s, c) {
+    const d = w.drops, i = d.head, j = 0.88 + Math.random() * 0.24;
+    spawnInto(d, x, y, z, vx, vy, vz, s, s, s, c[0] * j, c[1] * j, c[2] * j, 0.0003 / Math.max(s, 1e-4), 0);
+    d.w[3 * i] = d.w[3 * i + 1] = d.w[3 * i + 2] = 0; d.q[4 * i] = d.q[4 * i + 1] = d.q[4 * i + 2] = 0; d.q[4 * i + 3] = 1;
+  }
+  const pickCol = (list) => list[(Math.random() * list.length) | 0];
+
+  /** juice, water, egg: whatever was inside leaves as droplets, and a puddle spreads on the die */
+  function wetBurst(w, o) {
+    const m = o.spec.mat;
+    if (!m.dropN) return;
+    const R = o.R * Math.pow(Math.max(o.h / o.H0, 0.05), -m.nu) * 0.9;
+    for (let i = 0; i < m.dropN; i++) {
+      const a = Math.random() * TAU, r = R * Math.sqrt(Math.random()), sp = m.burstV * rnd(0.1, 1.1) * (0.35 + 0.65 * Math.random()), b = a + rnd(-0.45, 0.45);
+      spawnDrop(w, Math.cos(a) * r, o.yOff + o.h * Math.random(), Math.sin(a) * r, Math.cos(b) * sp, sp * rnd(-0.1, 0.85), Math.sin(b) * sp, m.dropSize * rnd(0.35, 1.3), pickCol(m.dropCol));
+    }
+    if (m.puddle) o.puddleT = Math.min(ANV_R * 0.96, o.R * m.puddle);
+  }
+  /** a pressurised can splits along one seam and sprays */
+  function sprayPop(w, o) {
+    const m = o.spec.mat, a = Math.random() * TAU, y = o.yOff + o.h * rnd(0.35, 0.7);
+    for (let i = 0; i < m.dropN; i++) {
+      const wide = Math.random() < 0.22, b = a + rnd(-0.5, 0.5) * (wide ? 5 : 1), sp = m.burstV * rnd(0.12, 1) * (wide ? 0.4 : 1);
+      spawnDrop(w, Math.cos(a) * o.R * 0.9, y + rnd(-0.08, 0.08), Math.sin(a) * o.R * 0.9, Math.cos(b) * sp, sp * rnd(-0.1, 0.75), Math.sin(b) * sp, m.dropSize * rnd(0.35, 1.25), pickCol(m.dropCol));
+    }
+    if (m.puddle) o.puddleT = Math.min(ANV_R * 0.96, o.R * m.puddle);
+    o.popAngle = a;
+  }
+
+  /** things that give way without flying apart: they keep being one object, pressed flatter and flatter */
+  function ductileStep(w, o, dt, contact) {
+    const m = o.spec.mat;
+    if (o.yielded) {
+      o.post = clamp((o.c - o.cFailRun) / Math.max(1e-6, 1 - o.cFailRun - m.cakeGap / o.H0), 0, 1);
+      if (contact || w.ram.y <= o.yOff + o.h + 1e-5) o.F = Math.max(m.Ffail * m.postF * (1 - o.drop), F_MAX * Math.min(1, Math.pow(m.cakeGap / Math.max(o.h, 1e-5), 3)));
+      if (o.post !== o.postDrawn) { o.postDrawn = o.post; o.geoDirty = true; }
+    }
+    if (m.shed && contact && w.ram.v < 0) {
+      o.shedAcc += m.shed * -w.ram.v / o.H0 * dt;
+      while (o.shedAcc >= 1) {
+        o.shedAcc -= 1;
+        const c = o.cells[(Math.random() * o.cells.length) | 0];
+        if (c.rel || c.rho < o.R * 0.4) continue;
+        const d = dmap(o, c.c[0], c.c[1], c.c[2]);
+        crumbs(w, o, d.x * 1.04, d.y, d.z * 1.04, 1, 4, 1);
+      }
+    }
+  }
+  function yieldObject(w, o) {
+    if (o.yielded) return;
+    const m = o.spec.mat;
+    o.yielded = true; w.crushed++; o.drop = Math.min(0.6, o.drop + 0.35);
+    if (m.pop) { sprayPop(w, o); ev(w, 'burst', m.power, o, 0, o.h * 0.5, 0); }
+    else ev(w, 'yield', m.power, o, 0, o.h * 0.5, 0);
+  }
+  /** freeze the squashed shape into the rest pose so it can be handed over to rigid-body motion as it is */
+  function bakeIntact(o) {
+    writeIntact(o);
+    o.pos0.set(o.pos); o.nrm0.set(o.nrm);
+    for (const c of o.cells) {
+      if (c.rel) continue;
+      const n = c.v1 - c.v0, st = Math.max(1, (n / 22) | 0), hv = [];
+      let x = 0, y = 0, z = 0;
+      for (let vi = c.v0; vi < c.v1; vi++) { x += o.pos[3 * vi]; y += o.pos[3 * vi + 1]; z += o.pos[3 * vi + 2]; if ((vi - c.v0) % st === 0) hv.push([o.pos[3 * vi], o.pos[3 * vi + 1], o.pos[3 * vi + 2]]); }
+      c.c = [x / n, y / n, z / n]; c.hv = hv;
+    }
+    o.H0 = Math.max(o.h, 1e-4); o.h = o.H0; o.yOff = 0; o.shx = o.shz = 0; o.D = 0; o.post = 0; o.cracks = []; o.baked = true;
+  }
+
+  const GOO_T = {
+    bear: { pts: BEAR_PTS, strands: BEAR_STRANDS, chunk: BEAR_CHUNK, nChunk: 8, head: B_HEAD, droplets: 11, radius: 0.75 },
+    ball: { pts: [[0, 0, 0, 4.5, 0.41]], strands: [], chunk: [0], nChunk: 1, head: -1, droplets: 20, radius: 0.41 },
+  };
+
+  const MAT0 = {
+    kappa: 0, nu: 0.3, b0: 0.3, cCrack: 0.1, cFail: 0.3, Ffail: 1, pExp: 1.5, plast: 0.9, omega: 40, zeta: 1, pressT: 3.6, tau: 0,
+    cracks: 3, crackW: 0.02, crackOff: 0.3, chips: 2, chipV: 10, merge: 0.4, maxCluster: 4, mode: 'brittle', crushMin: 0.45, eject: 0.3,
+    burstV: 40, burstUp: 0.3, spin: 40, e: 0.2, mu: 0.6, drag: 0.001, dropE: 0.1, squashK: 0,
+    dustN: 0, dustCol: [1, 1, 1], dustSize: 0.3, debrisN: 0, debrisCol: [[1, 1, 1]], debrisFlat: 1, debrisSize: 0.04, cakeGap: 0.04, cakeCol: [1, 1, 1], power: 0.7,
+    dropN: 0, dropCol: [[1, 1, 1]], dropSize: 0.05, puddle: 0, puddleCol: [1, 1, 1], wet: false, ductile: false, pop: false, postF: 0.6, postSpeed: 2, shed: 0, wrinkle: null, rimCracks: false, slowFrac: 0, shrink: 0, sqLat: undefined,
+  };
+  const mat = (o) => Object.assign({}, MAT0, o);
+  const curve = (n, f) => Array.from({ length: n + 1 }, (_, i) => f(i / n));
+
+  Object.assign(SPECS, {
+    watermelon: {
+      name: 'Watermelon', kind: 'poly', size: 1.3, frame: 2.6, el: 0.17, drop: 0.3, tool: [1.0, 1.15],
+      hull: () => ellipsoidHull(1.5, 1.12, 1.12, 3), cells: 90, ay: 1, dmin: 0.2,
+      mat: mat({
+        kappa: 0.55, nu: 0.3, b0: 0.3, cCrack: 0.05, cFail: 0.19, Ffail: 0.36, pExp: 1.2, plast: 0.6, omega: 30, zeta: 1, pressT: 3.6,
+        cracks: 5, crackW: 0.07, crackOff: 0.25, chips: 3, chipV: 8, merge: 0.5, maxCluster: 5, crushMin: 0.35, eject: 0.25,
+        burstV: 36, burstUp: 0.35, spin: 12, e: 0.06, mu: 0.9, drag: 0.0005, dropE: 0.08,
+        debrisN: 260, debrisCol: [[0.8, 0.05, 0.09], [0.92, 0.16, 0.2], [0.72, 0.03, 0.07], [0.03, 0.02, 0.02]], debrisFlat: 0.9, debrisSize: 0.06,
+        cakeGap: 0.06, cakeCol: [0.78, 0.06, 0.1], power: 0.95, dropN: 420, dropCol: [[0.8, 0.04, 0.09], [0.95, 0.2, 0.24]], dropSize: 0.065, puddle: 1.2, puddleCol: [0.7, 0.03, 0.07], wet: true,
+      }),
+    },
+    bottle: {
+      name: 'Glass bottle', kind: 'poly', size: 0.6, frame: 2.1, el: 0.15, drop: 0.25, tool: [0.8, 0.9],
+      shell: (rng) => buildShell([[0, 0], [0.36, 0], [0.4, 0.04], [0.4, 1.5]].concat(curve(9, (u) => [0.16 + 0.24 * (0.5 + 0.5 * Math.cos(Math.PI * u)), 1.5 + 0.9 * u]), [[0.16, 2.82], [0.176, 2.84], [0.176, 2.9], [0.15, 2.9]]), 0.03, 70, rng, { lmax: 0.1 }),
+      mat: mat({
+        kappa: 1, nu: 0, cCrack: 0.005, cFail: 0.016, Ffail: 0.55, pExp: 1.1, plast: 1, pressT: 3.0,
+        cracks: 4, crackW: 0.012, crackOff: 0.5, chips: 4, chipV: 22, merge: 0.5, maxCluster: 5, crushMin: 0.5, eject: 0.5,
+        burstV: 62, spin: 90, e: 0.3, mu: 0.4, drag: 0.003, slowFrac: 0.45,
+        debrisN: 240, debrisCol: [[0.75, 0.92, 0.8], [0.6, 0.85, 0.68], [0.9, 0.97, 0.92]], debrisFlat: 0.5, debrisSize: 0.03, dustN: 26, dustCol: [0.85, 0.92, 0.88], dustSize: 0.25,
+        cakeGap: 0.03, cakeCol: [0.7, 0.88, 0.76], power: 0.8,
+      }),
+    },
+    can: {
+      name: 'Aluminium can', kind: 'poly', size: 0.45, frame: 1.3, el: 0.2, drop: 0.3, tool: [0.8, 0.9],
+      shell: (rng) => buildShell([[0, 0.05], [0.27, 0.05], [0.3, 0], [0.37, 0], [0.41, 0.06], [0.41, 1.28], [0.36, 1.4], [0.36, 1.44], [0.33, 1.44], [0.32, 1.41], [0, 1.41]], 0.012, 40, rng, { lmax: 0.075 }),
+      mat: mat({
+        ductile: true, pop: true, kappa: 0, nu: 0.03, b0: 1, cCrack: 0.1, cFail: 0.3, Ffail: 0.13, pExp: 0.7, plast: 1, omega: 60, zeta: 1, pressT: 3.0,
+        cracks: 0, chips: 0, cakeGap: 0.075, postF: 0.45, postSpeed: 2.2, wrinkle: { n: 6, m: 3.5, amp: 0.36 },
+        burstV: 60, dropN: 240, dropCol: [[0.36, 0.2, 0.08], [0.85, 0.75, 0.6], [0.5, 0.3, 0.12]], dropSize: 0.04, puddle: 1.3, puddleCol: [0.3, 0.17, 0.07], wet: true, power: 0.55, dropE: 0.15,
+      }),
+    },
+    balloon: {
+      name: 'Water balloon', kind: 'poly', size: 0.6, frame: 1.3, el: 0.2, drop: 0.45, tool: [1.0, 1.15],
+      shell: (rng) => buildShell(curve(22, (u) => { const a = u * Math.PI * 0.965; return [0.62 * Math.sin(a) * (1 - 0.1 * u * u), 0.62 - 0.62 * Math.cos(a) * (1 + 0.07 * Math.max(0, -Math.cos(a)))]; }).concat([[0.05, 1.31], [0.075, 1.345], [0.03, 1.37], [0, 1.37]]), 0.012, 34, rng, { lmax: 0.09 }),
+      mat: mat({
+        mode: 'elastic', kappa: 0.05, nu: 0.5, b0: 0.5, cCrack: 0.5, cFail: 0.62, Ffail: 0.03, pExp: 2, plast: 0, omega: TAU * 3, zeta: 0.15, pressT: 3.4, tau: 0.01,
+        cracks: 0, chips: 0, merge: 0.5, eject: 0, burstV: 110, burstUp: 0.4, spin: 60, e: 0.05, mu: 0.9, drag: 0.03, squashK: 0.012, dropE: 0.3, shrink: 0.4, sqLat: 0.04, slowFrac: 0.25,
+        dropN: 560, dropCol: [[0.72, 0.86, 0.96], [0.85, 0.93, 0.99]], dropSize: 0.06, puddle: 9, puddleCol: [0.6, 0.75, 0.85], wet: true, cakeGap: 0.02, power: 0.6,
+      }),
+    },
+    playdoh: {
+      name: 'Play-Doh', kind: 'poly', size: 0.42, frame: 1.5, el: 0.22, drop: 0.3, tool: [1.45, 1.6],
+      hull: () => cylinderHull(0.42, 0.62, 48, 0.07), cells: 80, ay: 1, dmin: 0.1,
+      mat: mat({
+        ductile: true, kappa: 0, nu: 0.5, b0: 0.5, cCrack: 0.25, cFail: 0.5, Ffail: 0.05, pExp: 1.1, plast: 1, omega: 30, zeta: 1.2, pressT: 3.4,
+        cracks: 9, crackW: 0.05, rimCracks: true, chips: 0, cakeGap: 0.1, postF: 1, postSpeed: 1.8, power: 0.2, dropE: 0.02,
+      }),
+    },
+    mug: {
+      name: 'Ceramic mug', kind: 'poly', size: 0.5, frame: 1.25, el: 0.22, drop: 0.3, tool: [0.9, 1.0],
+      shell: (rng) => buildShell([[0, 0], [0.46, 0], [0.5, 0.04], [0.5, 1.13], [0.49, 1.15], [0.44, 1.15]], 0.06, 60, rng, { lmax: 0.1, handle: { r: 0.07, pts: curve(12, (u) => [0.47 + 0.36 * Math.sin(u * Math.PI), 0.6 + 0.36 * Math.cos(u * Math.PI)]) } }),
+      mat: mat({
+        kappa: 1, nu: 0, cCrack: 0.012, cFail: 0.034, Ffail: 1.3, pExp: 1.2, plast: 1, pressT: 3.2,
+        cracks: 4, crackW: 0.02, crackOff: 0.5, chips: 5, chipV: 18, merge: 0.5, maxCluster: 5, eject: 0.45,
+        burstV: 56, spin: 60, e: 0.3, mu: 0.5, drag: 0.001, slowFrac: 0.4,
+        debrisN: 240, debrisCol: [[0.95, 0.94, 0.9], [0.86, 0.84, 0.8]], debrisFlat: 0.6, debrisSize: 0.04, dustN: 70, dustCol: [0.9, 0.89, 0.86], dustSize: 0.4,
+        cakeGap: 0.04, cakeCol: [0.9, 0.89, 0.85], power: 0.85,
+      }),
+    },
+    orange: {
+      name: 'Orange', kind: 'poly', size: 0.47, frame: 1.05, el: 0.2, drop: 0.45, tool: [0.8, 0.9],
+      hull: () => sphereHull(0.47, 3), cells: 46, ay: 1, dmin: 0.2,
+      mat: mat({
+        kappa: 0.3, nu: 0.45, b0: 0.3, cCrack: 0.28, cFail: 0.5, Ffail: 0.06, pExp: 1.4, plast: 0.5, omega: 40, zeta: 0.9, pressT: 3.4,
+        cracks: 3, crackW: 0.03, chips: 2, chipV: 8, merge: 0.45, crushMin: 0.35, eject: 0.25, burstV: 30, spin: 20, e: 0.08, mu: 0.9, dropE: 0.25,
+        debrisN: 120, debrisCol: [[1, 0.5, 0.05], [1, 0.62, 0.1], [0.95, 0.4, 0.02]], debrisSize: 0.035,
+        cakeGap: 0.04, cakeCol: [0.95, 0.5, 0.06], power: 0.6, dropN: 170, dropCol: [[1, 0.55, 0.05], [1, 0.7, 0.15]], dropSize: 0.045, puddle: 1.5, puddleCol: [0.95, 0.5, 0.05], wet: true,
+      }),
+    },
+    stress: {
+      name: 'Stress ball', kind: 'goo', template: 'ball', size: 0.4, frame: 1.0, el: 0.2, drop: 0.5, scale: 0.9, tool: [1.0, 1.15],
+      mat: mat({
+        mode: 'elastic', kappa: 0, nu: 0.5, b0: 0.75, cCrack: 0.5, cFail: 0.74, Ffail: 0.09, pExp: 2, plast: 0.25, omega: TAU * 5, zeta: 0.25, pressT: 3.6, tau: 0.05,
+        cracks: 0, chips: 0, merge: 0, maxCluster: 1, eject: 0, burstV: 20, burstUp: 0.2, spin: 8, e: 0.15, mu: 1.2, drag: 0.0005, dropE: 0.35, squashK: 0.008,
+        cakeGap: 0.09, power: 0.45,
+      }),
+    },
+    egg: {
+      name: 'Egg', kind: 'poly', size: 0.3, frame: 0.72, el: 0.2, drop: 0.2, tool: [0.55, 0.62],
+      shell: (rng) => buildShell(curve(24, (u) => { const a = u * Math.PI; return [0.27 * Math.sin(a) * (1 + 0.2 * Math.cos(a)) * 0.92, 0.36 - 0.36 * Math.cos(a)]; }), 0.012, 46, rng, { lmax: 0.05, lie: true }),
+      mat: mat({
+        kappa: 1, nu: 0, cCrack: 0.02, cFail: 0.07, Ffail: 0.006, pExp: 1, plast: 1, pressT: 2.6,
+        cracks: 3, crackW: 0.006, crackOff: 0.3, chips: 3, chipV: 10, merge: 0.45, crushMin: 0.5, eject: 0.3, burstV: 22, spin: 70, e: 0.15, mu: 0.5, drag: 0.006, dropE: 0.05, slowFrac: 0.5,
+        debrisN: 50, debrisCol: [[0.96, 0.93, 0.86], [0.9, 0.85, 0.76]], debrisFlat: 0.3, debrisSize: 0.02,
+        cakeGap: 0.012, cakeCol: [0.95, 0.9, 0.8], power: 0.35, dropN: 46, dropCol: [[0.93, 0.93, 0.88], [0.93, 0.93, 0.88], [0.98, 0.72, 0.05]], dropSize: 0.06, puddle: 1.3, puddleCol: [0.9, 0.88, 0.75], wet: true,
+      }),
+    },
+    foam: {
+      name: 'Styrofoam', kind: 'poly', size: 0.6, frame: 1.45, el: 0.2, drop: 0.4, tool: [1.0, 1.15],
+      hull: () => boxHull(0.7, 0.9, 0.5), cells: 110, ay: 1, dmin: 0.085,
+      mat: mat({
+        ductile: true, kappa: 0, nu: 0.04, b0: 1, cCrack: 0.12, cFail: 0.45, Ffail: 0.03, pExp: 0.5, plast: 0.97, omega: 20, zeta: 1.5, pressT: 3.6,
+        cracks: 3, crackW: 0.012, crackOff: 0.7, chips: 16, chipV: 7, crushMin: 0.3, shed: 420, cakeGap: 0.07, postF: 1.2, postSpeed: 1.6,
+        debrisCol: [[0.97, 0.97, 0.96], [0.93, 0.93, 0.92]], debrisSize: 0.035, drag: 0.02, e: 0.25, spin: 30, cakeCol: [0.95, 0.95, 0.94], power: 0.2, dropE: 0.3,
+      }),
+    },
+  });
+  ORDER.push('watermelon', 'bottle', 'can', 'balloon', 'playdoh', 'mug', 'orange', 'stress', 'egg', 'foam');
 
   return {
     UNIT_M, G, RAM_BODY, ANV_H, BED_Y, BED_X, BED_Z, BED_T, FLOOR_Y, COLS, COL_R, F_MAX, SPECS, ORDER,
@@ -2097,6 +2627,16 @@ const INFO = {
   puck:    { short: 'Puck', blurb: 'Vulcanised rubber. Balloons into a barrel, tears at the rim, crumbles.', icon: '<path d="M4 10c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3z"/><path d="M4 10v4c0 1.7 3.6 3 8 3s8-1.3 8-3v-4"/>' },
   diamond: { short: 'Diamond', blurb: 'The hardest thing here, not the toughest. Nothing, nothing, nothing… then glitter.', icon: '<path d="M7 5h10l4 5-9 10L3 10z"/><path d="M3 10h18M9.5 5 8 10l4 10 4-10-1.5-5"/>' },
   gummy:   { short: 'Gummy', blurb: 'Pancakes flat, then head and limbs squirt out on strands that thin and snap.', icon: '<circle cx="12" cy="13" r="6.5"/><circle cx="6.8" cy="7.2" r="2.3"/><circle cx="17.2" cy="7.2" r="2.3"/><path d="M10 12.5h.01M14 12.5h.01M11 15.5c.6.5 1.4.5 2 0"/>' },
+  watermelon: { short: 'Melon', blurb: 'The rind creaks and splits along its stripes, then the whole thing lets go in one wet whoomp.', icon: '<ellipse cx="12" cy="12" rx="9" ry="6.5"/><path d="M7 7.2c1.4 3 1.4 6.6 0 9.6M12 5.5c1.6 4 1.6 9 0 13M17 7.2c-1.4 3-1.4 6.6 0 9.6"/>' },
+  bottle:  { short: 'Bottle', blurb: 'Glass takes the load without a word. A few ticks of warning, then it is everywhere.', icon: '<path d="M10 3h4v4.5l2 3V20a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-9.5l2-3z"/><path d="M8 13h8"/>' },
+  can:     { short: 'Can', blurb: 'Thin aluminium buckles into diamonds, pops a seam, and is folded flat.', icon: '<path d="M7 6.5c0-1.4 2.2-2.5 5-2.5s5 1.1 5 2.5v11c0 1.4-2.2 2.5-5 2.5s-5-1.1-5-2.5z"/><path d="M7 6.5c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5"/>' },
+  balloon: { short: 'Balloon', blurb: 'Spreads into a wobbling lens until the skin gives up and the water carries on without it.', icon: '<path d="M12 3c3.6 0 6.2 2.7 6.2 6.2 0 3.9-3.3 7.3-6.2 8.3-2.9-1-6.2-4.4-6.2-8.3C5.800 5.700 8.400 3 12 3z"/><path d="M11 17.500l-1 2.500h4l-1-2.500"/>' },
+  playdoh: { short: 'Dough', blurb: 'Never fails, only flows. Ends as a pancake with cracked edges.', icon: '<path d="M7 9c0-1.100 2.200-2 5-2s5 .900 5 2v6c0 1.100-2.200 2-5 2s-5-.900-5-2z"/><path d="M7 9c0 1.100 2.200 2 5 2s5-.900 5-2"/>' },
+  mug:     { short: 'Mug', blurb: 'Stiff, brittle, loud. The handle usually leaves first.', icon: '<path d="M5 6h10v10a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3z"/><path d="M15 8.500h1.500a2.500 2.500 0 0 1 0 5H15"/>' },
+  orange:  { short: 'Orange', blurb: 'Flattens, sprays, and leaves a medallion of pulp.', icon: '<circle cx="12" cy="13" r="7.500"/><path d="M12 5.500c.300-1.500 1.300-2.500 3-2.500"/><path d="M9.500 10.500h.010M13 9.500h.010M14.500 13.500h.010"/>' },
+  stress:  { short: 'Stress', blurb: 'Made for squeezing. Not for this much of it.', icon: '<circle cx="12" cy="12" r="8"/><path d="M9 10.500h.010M15 10.500h.010M9 15c1.800-1.400 4.200-1.400 6 0"/>' },
+  egg:     { short: 'Egg', blurb: 'Six kilograms is all it takes.', icon: '<path d="M12 3.500c3.300 0 6 5 6 9.500a6 6 0 0 1-12 0c0-4.500 2.700-9.500 6-9.500z"/>' },
+  foam:    { short: 'Foam', blurb: 'Crackles all the way down into a dense white wafer.', icon: '<path d="M4 9l8-4 8 4v7l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v7"/>' },
 };
 const FLAVORS = [
   { tint: [0.93, 0.026, 0.05], deep: [0.34, 0.0, 0.012], atten: [0.62, 0.012, 0.02], dist: 0.62, glow: 1.0,  base: [1.0, 0.62, 0.64] },
@@ -2104,6 +2644,7 @@ const FLAVORS = [
   { tint: [1.0, 0.72, 0.02],   deep: [0.62, 0.30, 0.0],  atten: [0.93, 0.66, 0.02],  dist: 0.75, glow: 1.0,  base: [1.0, 0.92, 0.62] },
   { tint: [0.22, 0.80, 0.04],  deep: [0.05, 0.34, 0.0],  atten: [0.28, 0.80, 0.03],  dist: 0.62, glow: 1.0,  base: [0.72, 1.0, 0.66] },
   { tint: [0.42, 0.05, 0.80],  deep: [0.15, 0.0, 0.34],  atten: [0.52, 0.07, 0.86],  dist: 0.62, glow: 1.0,  base: [0.82, 0.66, 1.0] },
+  { tint: [0.03, 0.78, 0.70],  deep: [0.0, 0.30, 0.30],  atten: [0.05, 0.82, 0.76],  dist: 0.60, glow: 1.0,  base: [0.62, 1.0, 0.95] },   // stress-ball gel
 ];
 
 const state = { auto: false, slow: true, sound: true, cur: 'bowling' };
@@ -2183,6 +2724,7 @@ function applySize() {
   renderer.setPixelRatio(dpr);
   renderer.setSize(W, H, false);
   if (composer) { composer.setPixelRatio(dpr); composer.setSize(W, H); }
+  if (typeof look !== 'undefined' && look.fx && look.name !== 'original') { try { const sz = renderer.getDrawingBufferSize(_v2); look.fx.resize(sz.x, sz.y); } catch (err) { lookFail(err); } }
   layoutCamera();
 }
 
@@ -2382,6 +2924,60 @@ function paperCore() {
   return c;
 }
 
+/** watermelon rind on an equirect map: stripes run around the long axis */
+function melonSkin() {
+  const Wd = 512, Hd = 256, c = mkCanvas(Wd, Hd), g = c.getContext('2d'), img = g.createImageData(Wd, Hd), d = img.data;
+  for (let y = 0; y < Hd; y++) {
+    const lat = (0.5 - (y + 0.5) / Hd) * Math.PI, cl = Math.cos(lat), sl = Math.sin(lat);
+    for (let x = 0; x < Wd; x++) {
+      const lon = ((x + 0.5) / Wd - 0.5) * Math.PI * 2, px = cl * Math.cos(lon), pz = cl * Math.sin(lon), py = sl;
+      const a = Math.atan2(pz, py), wob = fbm(px * 3 + 1, py * 3, pz * 3), s = Math.sin(a * 9 + (fbm(px * 2.2, py * 2.2 + 4, pz * 2.2) - 0.5) * 6);
+      const t = clamp((s + (wob - 0.5) * 1.6 + 0.15) * 1.6, 0, 1), m = 0.8 + 0.4 * fbm(px * 9, py * 9, pz * 9), i = 4 * (y * Wd + x);
+      d[i] = Math.pow((0.012 + 0.11 * t) * m, 1 / 2.2) * 255; d[i + 1] = Math.pow((0.075 + 0.26 * t) * m, 1 / 2.2) * 255; d[i + 2] = Math.pow((0.018 + 0.05 * t) * m, 1 / 2.2) * 255; d[i + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+/** fruit flesh lookup with seeds: same layout as radialBands */
+function fleshBands(bands, seeds) {
+  const c = radialBands(bands, 0.22), g = c.getContext('2d');
+  if (seeds) { g.fillStyle = 'rgba(14,8,6,.92)'; for (let i = 0; i < 46; i++) { g.beginPath(); g.ellipse(256 * rand(0.3, 0.8), 64 * Math.random(), 2.2, 1.2, Math.random() * 3, 0, 7); g.fill(); } }
+  return c;
+}
+/** printed can: bare metal at both ends, a painted body between (v runs along the outline, bottom to top) */
+function canLabel() {
+  const S = 512, c = mkCanvas(S, S), g = c.getContext('2d'), Y = (v) => S * (1 - v);
+  g.fillStyle = '#c9ccd1'; g.fillRect(0, 0, S, S);
+  g.fillStyle = '#0f8f8a'; g.fillRect(0, Y(0.735), S, Y(0.235) - Y(0.735));
+  g.fillStyle = '#f2ead8'; g.fillRect(0, Y(0.56), S, Y(0.44) - Y(0.56));
+  g.fillStyle = '#f08a1c'; for (let i = 0; i < 16; i++) { const x = i * S / 16; g.beginPath(); g.moveTo(x, Y(0.45)); g.lineTo(x + S / 32, Y(0.55)); g.lineTo(x + S / 16, Y(0.45)); g.closePath(); g.fill(); }
+  g.fillStyle = '#0a3f52'; g.fillRect(0, Y(0.60), S, 5); g.fillRect(0, Y(0.41), S, 5); g.fillRect(0, Y(0.70), S, 3); g.fillRect(0, Y(0.27), S, 3);
+  return c;
+}
+/** glazed mug: cream with a cobalt band under the rim */
+function mugSkin() {
+  const S = 256, c = mkCanvas(S, S), g = c.getContext('2d'), Y = (v) => S * (1 - v);
+  g.fillStyle = '#f3f0e6'; g.fillRect(0, 0, S, S);
+  g.fillStyle = '#27489a'; g.fillRect(0, Y(0.9), S, Y(0.84) - Y(0.9)); g.fillRect(0, Y(0.81), S, 2);
+  return c;
+}
+/** expanded-polystyrene beads as a height map */
+function foamBump() {
+  const S = 256, cell = 14, c = mkCanvas(S, S), g = c.getContext('2d'), img = g.createImageData(S, S), d = img.data, n = Math.ceil(S / cell);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const cx = Math.floor(x / cell), cy = Math.floor(y / cell); let best = 9;
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+      const gx = ((cx + i) % n + n) % n, gy = ((cy + j) % n + n) % n, fx2 = (cx + i + 0.15 + 0.7 * hashN(gx, gy, 1)) * cell, fy2 = (cy + j + 0.15 + 0.7 * hashN(gx, gy, 2)) * cell;
+      best = Math.min(best, Math.hypot(x - fx2, y - fy2) / cell);
+    }
+    const v = clamp(1 - best * best * 1.6, 0, 1) * 255, k = 4 * (y * S + x);
+    d[k] = v; d[k + 1] = v; d[k + 2] = v; d[k + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
 /* ─────────────────────────────────────────── candy material (injected) ── */
 const FACE_GLSL = `
 float moldH(vec3 p, out vec3 g) {
@@ -2511,13 +3107,15 @@ let shaderFailed = false;
 renderer.debug.onShaderError = (gl, program, vs, fs) => {
   const src = gl.getShaderSource(fs) || '';
   console.error('Shader compile error:', gl.getShaderInfoLog(fs) || gl.getProgramInfoLog(program));
-  shaderFailed = src.indexOf('uGlowK') >= 0 ? 'candy' : src.indexOf('vDust') >= 0 ? 'dust' : 'other';
+  shaderFailed = src.indexOf('SHADER_NAME fx-') >= 0 || src.indexOf('vUv') >= 0 && src.indexOf('out vec4 o;') >= 0 ? 'fx' : src.indexOf('uGlowK') >= 0 ? 'candy' : src.indexOf('vDust') >= 0 ? 'dust' : 'other';
 };
 
 /* ─────────────────────────────────────────────── materials per object ── */
 const matCache = {};
-function materialsFor(id) {
-  if (matCache[id]) return matCache[id];
+const TINTS = { balloon: [0xff3d7f, 0x2f9bff, 0xffc21a, 0x35d07f], playdoh: [0xf2c21b, 0xe23a3a, 0x2f7de0, 0x3cb55a] };
+function materialsFor(id, tint) {
+  const key = TINTS[id] ? id + (tint | 0) : id;
+  if (matCache[key]) return matCache[key];
   const off = { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2 };   // fracture faces lose depth ties against the skin
   let ext, int;
   if (id === 'bowling') {
@@ -2532,12 +3130,44 @@ function materialsFor(id) {
   } else if (id === 'paper') {
     ext = new THREE.MeshStandardMaterial({ map: texFrom(paperSkin(), true, false, false), roughness: 0.93, metalness: 0, envMapIntensity: 0.5 });
     int = new THREE.MeshStandardMaterial(Object.assign({ map: texFrom(paperCore(), true, true, false), roughness: 1, metalness: 0, envMapIntensity: 0.4 }, off));
+  } else if (id === 'watermelon') {
+    ext = new THREE.MeshPhysicalMaterial({ map: texFrom(melonSkin(), true, true, false), roughness: 0.34, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.3, envMapIntensity: 0.8 });
+    int = new THREE.MeshPhysicalMaterial(Object.assign({ map: texFrom(fleshBands([[0, 0.78, 0.035, 0.07], [0.86, 0.9, 0.86, 0.66], [0.94, 0.05, 0.2, 0.04]], true), true, false, true), roughness: 0.36, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.25, envMapIntensity: 0.9 }, off));
+  } else if (id === 'orange') {
+    ext = new THREE.MeshPhysicalMaterial({ color: 0xf5820f, roughness: 0.5, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4, bumpMap: texFrom(foamBump(), false, true, true), bumpScale: 0.6, envMapIntensity: 0.8 });
+    ext.bumpMap.repeat.set(7, 4);
+    int = new THREE.MeshPhysicalMaterial(Object.assign({ map: texFrom(fleshBands([[0, 1.0, 0.42, 0.03], [0.9, 0.96, 0.88, 0.7], [0.96, 0.92, 0.42, 0.02]], false), true, false, true), roughness: 0.4, metalness: 0, clearcoat: 0.4, clearcoatRoughness: 0.3 }, off));
+  } else if (id === 'bottle') {
+    const glass = { color: 0xbff0d2, roughness: 0.03, metalness: 0, transmission: 1, ior: 1.5, thickness: 0.22, attenuationColor: new THREE.Color(0.35, 0.8, 0.5), attenuationDistance: 0.55, specularIntensity: 1, envMapIntensity: 1.7, side: THREE.DoubleSide };
+    ext = new THREE.MeshPhysicalMaterial(glass);
+    int = new THREE.MeshPhysicalMaterial(Object.assign({}, glass, { roughness: 0.22 }, off));
+  } else if (id === 'can') {
+    ext = new THREE.MeshStandardMaterial({ map: texFrom(canLabel(), true, true, false), roughness: 0.33, metalness: 0.62, envMapIntensity: 1.1, side: THREE.DoubleSide });
+    int = new THREE.MeshStandardMaterial(Object.assign({ color: 0xd9dcdf, roughness: 0.3, metalness: 1 }, off));
+  } else if (id === 'balloon') {
+    const col = new THREE.Color(TINTS.balloon[(tint | 0) % 4]);
+    ext = new THREE.MeshPhysicalMaterial({ color: col, roughness: 0.26, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.18, transmission: 0.4, thickness: 0.3, ior: 1.3, attenuationColor: col, attenuationDistance: 0.9, envMapIntensity: 1.1, side: THREE.DoubleSide });
+    int = new THREE.MeshStandardMaterial(Object.assign({ color: col, roughness: 0.6, metalness: 0 }, off));
+  } else if (id === 'playdoh') {
+    const col = new THREE.Color(TINTS.playdoh[(tint | 0) % 4]);
+    ext = new THREE.MeshStandardMaterial({ color: col, roughness: 0.8, metalness: 0, envMapIntensity: 0.5 });
+    int = new THREE.MeshStandardMaterial(Object.assign({ color: col.clone().multiplyScalar(0.8), roughness: 0.9, metalness: 0, envMapIntensity: 0.4 }, off));
+  } else if (id === 'mug') {
+    ext = new THREE.MeshPhysicalMaterial({ map: texFrom(mugSkin(), true, true, false), roughness: 0.16, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.0, side: THREE.DoubleSide });
+    int = new THREE.MeshStandardMaterial(Object.assign({ color: 0xd8d0c0, roughness: 0.95, metalness: 0, envMapIntensity: 0.4 }, off));
+  } else if (id === 'egg') {
+    ext = new THREE.MeshStandardMaterial({ color: 0xefdcc6, roughness: 0.6, metalness: 0, envMapIntensity: 0.6, side: THREE.DoubleSide });
+    int = new THREE.MeshStandardMaterial(Object.assign({ color: 0xfaf8f2, roughness: 0.8, metalness: 0 }, off));
+  } else if (id === 'foam') {
+    const bump = texFrom(foamBump(), false, true, true); bump.repeat.set(5, 5);
+    ext = new THREE.MeshStandardMaterial({ color: 0xf4f4f1, roughness: 1, metalness: 0, bumpMap: bump, bumpScale: 0.9, envMapIntensity: 0.45 });
+    int = new THREE.MeshStandardMaterial(Object.assign({ color: 0xececea, roughness: 1, metalness: 0, bumpMap: bump, bumpScale: 1.2, envMapIntensity: 0.4 }, off));
   } else {
     const gem = { color: 0xffffff, roughness: 0.02, metalness: 0, transmission: 1, ior: 2.33, thickness: 0.06, specularIntensity: 1, envMapIntensity: 2.4, clearcoat: 1, clearcoatRoughness: 0 };
     ext = new THREE.MeshPhysicalMaterial(gem);
     int = new THREE.MeshPhysicalMaterial(Object.assign({}, gem, { roughness: 0.12 }, off));
   }
-  return (matCache[id] = [ext, int]);
+  return (matCache[key] = [ext, int]);
 }
 
 /* ─────────────────────────────────────────────────────────── the rig ── */
@@ -2604,6 +3234,13 @@ debrisMesh.setColorAt(0, new THREE.Color(1, 1, 1));
 debrisMesh.count = 0; debrisMesh.frustumCulled = false; debrisMesh.castShadow = true; debrisMesh.receiveShadow = true;
 scene.add(debrisMesh);
 
+/* liquid: glossy little spheres in flight, flat glossy discs once they have landed */
+const dropMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.5, 12, 8), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.06, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 1.5 }), world.drops.cap);
+dropMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+dropMesh.setColorAt(0, new THREE.Color(1, 1, 1));
+dropMesh.count = 0; dropMesh.frustumCulled = false; dropMesh.receiveShadow = true;
+scene.add(dropMesh);
+
 const DUST_VS = `
 attribute float aSize;
 attribute vec4 aCol;
@@ -2669,12 +3306,18 @@ function makeVisual(o) {
     geo.setAttribute('uv', new THREE.BufferAttribute(o.uv, 2));
     geo.setIndex(new THREE.BufferAttribute(o.idx, 1));
     geo.addGroup(0, o.nExt, 0); geo.addGroup(o.nExt, o.nInt, 1);
-    v.mesh = new THREE.Mesh(geo, materialsFor(o.id));
+    v.mesh = new THREE.Mesh(geo, materialsFor(o.id, o.tint));
     if (o.spec.mat.mode === 'brittle') {
       const cg = cakeGeometry(o.cakeSeed), c = o.spec.mat.cakeCol;
       const cm = new THREE.MeshStandardMaterial({ color: new THREE.Color(c[0], c[1], c[2]), roughness: 1, metalness: 0, vertexColors: true, envMapIntensity: 0.4 });
       v.cake = new THREE.Mesh(cg, cm); v.cake.visible = false; v.cake.castShadow = true; v.cake.receiveShadow = true;
       v.own.push(cg, cm); scene.add(v.cake);
+    }
+    if (o.spec.mat.puddle) {
+      const pg = cakeGeometry(o.cakeSeed + 3), c = o.spec.mat.puddleCol;
+      const pm = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(c[0], c[1], c[2]), roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03, transparent: true, opacity: 0.84, depthWrite: false, envMapIntensity: 1.6 });
+      v.puddle = new THREE.Mesh(pg, pm); v.puddle.visible = false; v.puddle.position.y = 0.0015; v.puddle.receiveShadow = true; v.puddle.renderOrder = 2;
+      v.own.push(pg, pm); scene.add(v.puddle);
     }
   } else {
     const gm = o.gm, mat = makeCandyMaterial(o.flavor);
@@ -2693,7 +3336,7 @@ function makeVisual(o) {
 }
 function disposeVisual(o) {
   const v = vis.get(o); if (!v) return;
-  scene.remove(v.mesh); if (v.cake) scene.remove(v.cake);
+  scene.remove(v.mesh); if (v.cake) scene.remove(v.cake); if (v.puddle) scene.remove(v.puddle);
   v.geo.dispose(); v.own.forEach((x) => x.dispose());
   vis.delete(o);
 }
@@ -2714,6 +3357,7 @@ function syncObjects() {
       }
     }
     if (v.cake) { const on = o.cakeV > 0 && o.cakeR > 0.004; v.cake.visible = on; if (on) v.cake.scale.set(o.cakeR, Math.max(o.cakeH, 0.002), o.cakeR); }
+    if (v.puddle) { const on = o.puddleR > 0.01; v.puddle.visible = on; if (on) v.puddle.scale.set(o.puddleR, 0.005, o.puddleR); }
   }
 }
 function handleShaderFailure() {
@@ -2721,148 +3365,1116 @@ function handleShaderFailure() {
     injectionOK = false;
     for (const [o, v] of vis) if (v.candy) { v.candy.dispose(); v.candy = makeCandyMaterial(o.flavor); v.mesh.material = v.candy; v.own = [v.candy]; }
   } else if (shaderFailed === 'dust') dustPts.visible = false;
+  else if (shaderFailed === 'fx') lookFail(new Error('a cinematic shader did not compile'));
   shaderFailed = false;
 }
 
+/* ============================================================================
+   CINEMATIC STACK (optional, WebGL2)
+   Nothing in here runs while the look is set to "Original": the page then renders exactly as it always did.
+   When a cinematic preset is on, the scene is drawn into a float (HDR) target with a depth texture and a
+   chain of fullscreen passes takes it to the screen. Every pass can be switched off on its own, and a pass
+   that is off costs nothing (it is skipped, not run with zero strength).
+
+   Rough cost at 1080p, in fullscreen-pass equivalents (one "FSP" = one full-resolution pass with a few taps):
+     ambient occlusion  ~0.9 FSP  (half-res, 10-16 taps + two 7-tap blurs)
+     fog / combine      ~1.0 FSP  (also writes the circle of confusion)
+     light shafts       ~0.3 FSP  (quarter-res, 4 + 28 taps)
+     depth of field     ~1.6 FSP  (half-res, 24-40 taps)
+     bloom              ~0.9 FSP  (13-tap pyramid down, 9-tap up, 5-6 levels)
+     grade              ~1.0 FSP  (tone map, colour, vignette, chromatic aberration = 2 extra taps)
+     FXAA + grain       ~1.0 FSP
+     particles          2 tiny passes over a 192² or 256² float texture + one instanced draw
+   All targets are allocated once and resized with the window; no per-frame allocations.
+
+   `be` is a thin backend (three.js in the page, raw WebGL2 in the test lab) so the same shaders and
+   the same pass graph can be exercised without the library.
+   ========================================================================== */
+function createFX(be, geo) {
+  'use strict';
+  const HEAD = 'precision highp float;\nprecision highp sampler2D;\nin vec2 vUv;\nout vec4 o;\n';
+  const IGN = 'float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }\n';
+  const LUMA = 'float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }\n';
+
+  /* -- ambient occlusion: darkens creases and contact lines (under the object, between shards, where the tool meets the die).
+        Scalable-ambient-obscurance estimator on view-space positions rebuilt from depth; normals come from depth too. -- */
+  const AO_FS = HEAD + IGN + `
+uniform sampler2D uDepth;
+uniform mat4 uProj, uProjInv;
+uniform vec2 uRes;
+uniform vec2 uAO;                 // radius (world units), frame counter
+vec3 vpos(vec2 uv) { float d = texture(uDepth, uv).r; vec4 p = uProjInv * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); return p.xyz / p.w; }
+void main() {
+  float d = texture(uDepth, vUv).r;
+  if (d >= 0.999999) { o = vec4(1.0); return; }
+  vec3 P = vpos(vUv); vec2 px = 1.0 / uRes;
+  vec3 Pr = vpos(vUv + vec2(px.x, 0.0)), Pl = vpos(vUv - vec2(px.x, 0.0)), Pu = vpos(vUv + vec2(0.0, px.y)), Pd = vpos(vUv - vec2(0.0, px.y));
+  vec3 dx = abs(Pr.z - P.z) < abs(P.z - Pl.z) ? Pr - P : P - Pl;      // the smaller one-sided difference keeps normals clean at silhouettes
+  vec3 dy = abs(Pu.z - P.z) < abs(P.z - Pd.z) ? Pu - P : P - Pd;
+  vec3 N = normalize(cross(dx, dy));
+  float r = uAO.x, r2 = r * r;
+  vec2 rUv = min(r * 0.5 * vec2(uProj[0][0], uProj[1][1]) / max(-P.z, 1e-3), vec2(0.1));
+  float a0 = ign(gl_FragCoord.xy + uAO.y * 5.588238) * 6.2831853, occ = 0.0;
+  for (int i = 0; i < AO_TAPS; i++) {
+    float t = (float(i) + 0.5) / float(AO_TAPS), a = a0 + t * 6.2831853 * 2.71;
+    vec3 v = vpos(vUv + vec2(cos(a), sin(a)) * rUv * (0.12 + 0.88 * t)) - P;
+    float vv = dot(v, v), vn = dot(v, N) - 0.02 * r - 0.0015 * -P.z, f = max(r2 - vv, 0.0);
+    occ += f * f * f * max(vn / (vv + 1e-4), 0.0);
+  }
+  occ = max(0.0, 1.0 - occ * r * 13.0 / (r2 * r2 * r2 * float(AO_TAPS)));
+  o = vec4(occ, 0.0, 0.0, 1.0);
+}`;
+  /* depth-aware separable blur: removes the sampling noise without smearing occlusion across edges */
+  const AOB_FS = HEAD + `
+uniform sampler2D uAOT, uDepth;
+uniform vec2 uDir;
+uniform vec2 uNF;
+float lz(vec2 uv) { float d = texture(uDepth, uv).r; return uNF.x * uNF.y / (uNF.y - d * (uNF.y - uNF.x)); }
+void main() {
+  float zc = lz(vUv), sum = texture(uAOT, vUv).r * 0.26, w = 0.26;
+  for (int i = 1; i <= 3; i++) {
+    float k = i == 1 ? 0.21 : i == 2 ? 0.115 : 0.045;
+    for (int s = -1; s <= 1; s += 2) {
+      vec2 uv = vUv + uDir * float(i * s);
+      float wt = k * max(0.0, 1.0 - abs(lz(uv) - zc) / (0.03 * zc + 0.01));
+      sum += texture(uAOT, uv).r * wt; w += wt;
+    }
+  }
+  o = vec4(sum / w, 0.0, 0.0, 1.0);
+}`;
+  /* -- light shafts: whatever is very bright on screen (the work light, sparks, the pressure ring) is smeared away from the lamp,
+        so anything standing in front of it (the ram, the columns, flying shards) cuts visible beams into the haze. -- */
+  const SHM_FS = HEAD + `
+uniform sampler2D uScene;
+uniform vec3 uSh;                 // threshold, texel x, texel y (of the scene)
+vec3 S(vec2 o2) { vec3 c = min(texture(uScene, vUv + o2 * uSh.yz).rgb, vec3(8.0)); float l = max(c.r, max(c.g, c.b)); return c * smoothstep(uSh.x, uSh.x * 2.0, l); }
+void main() { o = vec4((S(vec2(-1.0, -1.0)) + S(vec2(1.0, -1.0)) + S(vec2(-1.0, 1.0)) + S(vec2(1.0, 1.0))) * 0.25, 1.0); }`;
+  const SHB_FS = HEAD + IGN + `
+uniform sampler2D uMask;
+uniform vec4 uRay;                // lamp uv.xy, frame counter, length
+void main() {
+  vec2 d = (uRay.xy - vUv) * uRay.w;
+  float j = ign(gl_FragCoord.xy + uRay.z * 3.7), w = 1.0, tot = 0.0;
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < SHAFT_TAPS; i++) {
+    acc += texture(uMask, vUv + d * ((float(i) + j) / float(SHAFT_TAPS))).rgb * w; tot += w; w *= 0.955;
+  }
+  o = vec4(acc / tot, 1.0);
+}`;
+  /* -- combine: ambient occlusion, height fog (thicker near the floor, analytic along the view ray) and the shafts are folded into the HDR image;
+        alpha carries the signed circle of confusion for the depth-of-field pass. -- */
+  const CMB_FS = HEAD + `
+uniform sampler2D uScene, uDepth, uAOT, uShaft;
+uniform mat4 uProjInv, uViewInv;
+uniform vec4 uFog;                // rgb, density
+uniform vec4 uFogP;               // height falloff, floor y, max distance, ao strength
+uniform vec4 uShaftC;             // rgb, strength
+uniform vec2 uShaftPx;            // one texel of the (quarter-res) shaft buffer
+uniform vec2 uFocus;              // focus distance, aperture
+void main() {
+  vec3 c = texture(uScene, vUv).rgb;
+  float d = texture(uDepth, vUv).r;
+  vec4 p4 = uProjInv * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  vec3 vp = p4.xyz / p4.w;
+  float dist = length(vp);
+#ifdef USE_AO
+  float hl = smoothstep(1.5, 6.0, max(c.r, max(c.g, c.b)));       // light sources and hot highlights are not occluded
+  c *= mix(pow(texture(uAOT, vUv).r, uFogP.w), 1.0, hl);
+#endif
+#ifdef USE_FOG
+  vec3 cam = uViewInv[3].xyz, wp = (uViewInv * vec4(vp, 1.0)).xyz;
+  float dd = min(dist, uFogP.z), b = uFogP.x, dy = (wp.y - cam.y) * dd / max(dist, 1e-4);
+  float od = uFog.a * dd * exp(-b * (cam.y - uFogP.y)) * (abs(dy) > 1e-3 ? (1.0 - exp(-b * dy)) / (b * dy) : 1.0);
+  c = mix(c, uFog.rgb, 1.0 - exp(-od));
+#endif
+#ifdef USE_SHAFTS
+  vec3 sh = texture(uShaft, vUv + uShaftPx * vec2(0.75, 0.75)).rgb + texture(uShaft, vUv + uShaftPx * vec2(-0.75, 0.75)).rgb + texture(uShaft, vUv + uShaftPx * vec2(0.75, -0.75)).rgb + texture(uShaft, vUv - uShaftPx * vec2(0.75, 0.75)).rgb;
+  c += sh * uShaftC.rgb * (uShaftC.a * 0.25);     // four taps: hides the sampling jitter of the ray march
+#endif
+  float z = -vp.z, raw = (z - uFocus.x) / max(z, 1e-3) * uFocus.y;
+  o = vec4(c, clamp(sign(raw) * max(abs(raw) - 0.05, 0.0), -1.0, 1.0));
+}`;
+  /* -- depth of field: one-pass disc gather (golden-angle spiral). A sample only contributes if its own blur disc reaches the centre,
+        and background samples are not allowed to smear over a sharper foreground. -- */
+  const DOF_FS = HEAD + IGN + `
+uniform sampler2D uTex;
+uniform vec3 uDof;                // texel x, texel y, max radius in pixels
+void main() {
+  vec4 c0 = texture(uTex, vUv);
+  float cs = abs(c0.a) * uDof.z, tot = 1.0, a0 = ign(gl_FragCoord.xy) * 6.2831853;
+  vec3 col = min(c0.rgb, vec3(32.0));
+  for (int i = 0; i < DOF_TAPS; i++) {
+    float r = sqrt((float(i) + 0.5) / float(DOF_TAPS)) * uDof.z, a = a0 + float(i) * 2.39996323;
+    vec4 s = texture(uTex, vUv + vec2(cos(a), sin(a)) * uDof.xy * r);
+    float ss = abs(s.a) * uDof.z;
+    if (s.a > c0.a) ss = clamp(ss, 0.0, cs * 2.0);
+    col += mix(col / tot, min(s.rgb, vec3(32.0)), smoothstep(r - 0.5, r + 0.5, ss)); tot += 1.0;
+  }
+  o = vec4(col / tot, 1.0);
+}`;
+  /* -- bloom: bright areas bleed light. 13-tap downsample pyramid, 9-tap tent upsample, added back on top of the image.
+        The first level applies a soft-knee threshold and weights each 2x2 group by 1/(1+luma), which stops a single
+        hot pixel from turning into a flashing blob (the "extreme peak brightness" problem). -- */
+  const BLD_FS = HEAD + LUMA + `
+uniform sampler2D uTex;
+uniform vec4 uBl;                 // source texel x, y, threshold, knee
+vec3 S(float x, float y) { return min(texture(uTex, vUv + vec2(x, y) * uBl.xy).rgb, vec3(48.0)); }
+void main() {
+  vec3 a = S(-2.0, 2.0), b = S(0.0, 2.0), c = S(2.0, 2.0), d = S(-2.0, 0.0), e = S(0.0, 0.0), f = S(2.0, 0.0), g = S(-2.0, -2.0), h = S(0.0, -2.0), i = S(2.0, -2.0);
+  vec3 j = S(-1.0, 1.0), k = S(1.0, 1.0), l = S(-1.0, -1.0), m = S(1.0, -1.0);
+#ifdef PREFILTER
+  vec3 g0 = (a + b + d + e) * 0.25, g1 = (b + c + e + f) * 0.25, g2 = (d + e + g + h) * 0.25, g3 = (e + f + h + i) * 0.25, g4 = (j + k + l + m) * 0.25;
+  float w0 = 0.125 / (1.0 + luma(g0)), w1 = 0.125 / (1.0 + luma(g1)), w2 = 0.125 / (1.0 + luma(g2)), w3 = 0.125 / (1.0 + luma(g3)), w4 = 0.5 / (1.0 + luma(g4));
+  vec3 col = (g0 * w0 + g1 * w1 + g2 * w2 + g3 * w3 + g4 * w4) / (w0 + w1 + w2 + w3 + w4);
+  float br = max(col.r, max(col.g, col.b)), soft = clamp(br - uBl.z + uBl.w, 0.0, 2.0 * uBl.w);
+  soft = soft * soft / (4.0 * uBl.w + 1e-4);
+  col *= max(soft, br - uBl.z) / max(br, 1e-4);
+#else
+  vec3 col = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625 + (j + k + l + m) * 0.125;
+#endif
+  o = vec4(col, 1.0);
+}`;
+  const BLU_FS = HEAD + `
+uniform sampler2D uLow, uHigh;
+uniform vec4 uUp;                 // low texel x, y (already scaled by the radius), spread
+vec3 L(float x, float y) { return texture(uLow, vUv + vec2(x, y) * uUp.xy).rgb; }
+void main() {
+  vec3 s = L(0.0, 0.0) * 4.0 + (L(-1.0, 0.0) + L(1.0, 0.0) + L(0.0, -1.0) + L(0.0, 1.0)) * 2.0 + L(-1.0, -1.0) + L(1.0, -1.0) + L(-1.0, 1.0) + L(1.0, 1.0);
+  o = vec4(texture(uHigh, vUv).rgb + s * (uUp.z / 16.0), 1.0);
+}`;
+  /* -- grade: where HDR becomes a picture. Chromatic aberration (red/blue pulled apart toward the corners), bloom added, exposure,
+        the same ACES filmic curve the original path uses, saturation and contrast, vignette, and (if this is the last pass) film grain. -- */
+  const GRAIN = `
+float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+vec3 grain(vec3 c, vec2 fc, float amt, float t) {
+  float n = hash12(fc + fract(t) * 517.0) + hash12(fc * 1.37 + fract(t * 1.7) * 291.0) - 1.0;      // triangular noise: also dithers away banding in the dark gradients
+  return c + n * (amt * (1.0 - 0.55 * dot(c, vec3(0.2126, 0.7152, 0.0722))) + 0.5 / 255.0);
+}
+`;
+  const GRD_FS = HEAD + LUMA + GRAIN + `
+uniform sampler2D uScene, uDofT, uBloom;
+uniform vec4 uG0;                 // exposure, contrast, saturation, bloom strength
+uniform vec4 uG1;                 // chromatic aberration, vignette, grain, time
+uniform float uMaxBlur;
+vec3 S(vec2 uv) {
+  vec4 s = texture(uScene, uv);
+#ifdef USE_DOF
+  return mix(s.rgb, texture(uDofT, uv).rgb, smoothstep(0.6, 2.6, abs(s.a) * uMaxBlur));
+#else
+  return s.rgb;
+#endif
+}
+vec3 fit(vec3 v) { vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
+vec3 aces(vec3 c) {
+  const mat3 mi = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));
+  const mat3 mo = mat3(vec3(1.60475, -0.10208, -0.00327), vec3(-0.53108, 1.10813, -0.07276), vec3(-0.07367, -0.00605, 1.07602));
+  return clamp(mo * fit(mi * (c / 0.6)), 0.0, 1.0);
+}
+void main() {
+  vec2 q = vUv - 0.5;
+#ifdef USE_CA
+  vec2 off = q * (dot(q, q) * uG1.x);
+  vec3 c = vec3(S(vUv + off).r, S(vUv).g, S(vUv - off).b);
+#else
+  vec3 c = S(vUv);
+#endif
+#ifdef USE_BLOOM
+  c += texture(uBloom, vUv).rgb * uG0.w;
+#endif
+  c = aces(max(c, 0.0) * uG0.x);
+  c = mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+  c = mix(vec3(luma(c)), c, uG0.z);
+  c = (c - 0.5) * uG0.y + 0.5;
+  c *= 1.0 - uG1.y * smoothstep(0.12, 1.0, dot(q, q) * 2.0);
+#ifdef LAST
+  c = grain(c, gl_FragCoord.xy, uG1.z, uG1.w);
+#endif
+  c = clamp(c, 0.0, 1.0);
+  o = vec4(c, 1.0);
+}`;
+  /* -- FXAA: the HDR target has no multisampling (it needs a readable depth texture), so edges are smoothed here instead; grain goes on last. -- */
+  const FXA_FS = HEAD + LUMA + GRAIN + `
+uniform sampler2D uTex;
+uniform vec4 uFx;                 // texel x, y, grain, time
+void main() {
+  vec2 px = uFx.xy;
+  vec3 m = texture(uTex, vUv).rgb;
+  float lNW = luma(texture(uTex, vUv + vec2(-1.0, -1.0) * px).rgb), lNE = luma(texture(uTex, vUv + vec2(1.0, -1.0) * px).rgb);
+  float lSW = luma(texture(uTex, vUv + vec2(-1.0, 1.0) * px).rgb), lSE = luma(texture(uTex, vUv + vec2(1.0, 1.0) * px).rgb), lM = luma(m);
+  float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+  vec3 c = m;
+  if (lMax - lMin > max(0.035, lMax * 0.11)) {
+    vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+    float red = max((lNW + lNE + lSW + lSE) * 0.03125, 0.0078125);
+    dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + red), -8.0, 8.0) * px;
+    vec3 A = 0.5 * (texture(uTex, vUv + dir * (1.0 / 3.0 - 0.5)).rgb + texture(uTex, vUv + dir * (2.0 / 3.0 - 0.5)).rgb);
+    vec3 B = A * 0.5 + 0.25 * (texture(uTex, vUv - dir * 0.5).rgb + texture(uTex, vUv + dir * 0.5).rgb);
+    float lB = luma(B);
+    c = (lB < lMin || lB > lMax) ? A : B;
+  }
+  o = vec4(clamp(grain(c, gl_FragCoord.xy, uFx.z, uFx.w), 0.0, 1.0), 1.0);
+}`;
+
+  /* -- particles, simulated on the GPU. State lives in two float textures (position + remaining life, velocity + kind/seed) that are
+        read and rewritten every frame; the CPU only describes up to eight emitters per frame (a few uniforms), never touches a particle.
+        kinds: 0 spark (hot, bounces, streaks)  1 mist / dust (drifts on a curl field)  2 glint (twinkling shard)  3 spray (fine droplets)  4 mote (hangs in the air) -- */
+  const SIM_FS = HEAD + `
+uniform sampler2D uPos, uVel;
+uniform vec4 uEA[8], uEB[8], uEC[8], uED[8];   // (pos, radius) (dir, speed) (first index, count, life, kind*16+palette) (spread, lift, speed shape, vertical squash)
+uniform vec4 uEnv;                             // ram y, ram radius, die radius, ram velocity
+uniform vec4 uGeo;                             // bed y, bed half x, bed half z, floor y
+uniform vec4 uT;                               // dt, time, texture size, gravity
+vec3 hash3(float n) { vec3 p = fract(vec3(n) * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.xxy + p.yxx) * p.zyx); }
+vec3 curl(vec3 p, float t) {
+  return vec3(sin(p.y * 1.7 + t * 0.6) + cos(p.z * 1.3 - t * 0.4), sin(p.z * 1.5 + t * 0.5) + cos(p.x * 1.9 + t * 0.3), sin(p.x * 1.6 - t * 0.7) + cos(p.y * 1.4 + t * 0.5));
+}
+void main() {
+  vec4 P = texture(uPos, vUv), V = texture(uVel, vUv);
+  float n = uT.z, idx = floor(vUv.x * n) + floor(vUv.y * n) * n, total = n * n, dt = uT.x;
+  bool born = false;
+  for (int e = 0; e < 8; e++) {
+    vec4 C = uEC[e];
+    if (C.y < 0.5) continue;
+    if (mod(idx - C.x + total, total) < C.y) {
+      vec4 A = uEA[e], B = uEB[e], D = uED[e];
+      vec3 r = hash3(idx * 0.731 + uT.y * 61.7 + float(e) * 17.3), s = hash3(idx * 1.317 + uT.y * 13.1 + 5.0);
+      float a = r.x * 6.2831853, zz = r.y * 2.0 - 1.0, rr = sqrt(max(0.0, 1.0 - zz * zz));
+      vec3 ball = vec3(rr * cos(a), zz, rr * sin(a));
+      vec3 p = A.xyz + ball * A.w * pow(r.z, 0.33) * vec3(1.0, D.w, 1.0);
+      float a2 = s.x * 6.2831853, z2 = s.y * 2.0 - 1.0, q2 = sqrt(max(0.0, 1.0 - z2 * z2));
+      vec3 base = dot(B.xyz, B.xyz) > 1e-3 ? B.xyz : normalize(vec3(ball.x, 0.0, ball.z) + 1e-4);     // no direction given: outward from the emitter's axis
+      vec3 v = normalize(mix(base, vec3(q2 * cos(a2), z2, q2 * sin(a2)), D.x) + 1e-5) * B.w * (0.12 + 0.88 * pow(s.z, D.z));
+      v.y += B.w * D.y * (0.3 + 0.7 * r.z);
+      P = vec4(p, C.z * (0.45 + 0.75 * r.z));
+      V = vec4(v, C.w + fract(s.x * 7.31 + r.y) * 0.998);
+      born = true;
+      break;
+    }
+  }
+  if (!born && P.w > 0.0) {
+    float kind = floor(floor(V.w) / 16.0 + 0.001);
+    vec3 p = P.xyz, v = V.xyz;
+    float grav = kind < 0.5 ? 1.0 : kind < 1.5 ? 0.03 : kind < 3.5 ? 1.0 : 0.0;
+    float drag = kind < 0.5 ? 0.3 : kind < 1.5 ? 3.4 : kind < 2.5 ? 1.0 : kind < 3.5 ? 0.45 : 1.3;
+    float turb = kind < 0.5 ? 0.0 : kind < 1.5 ? 1.7 : kind < 2.5 ? 0.25 : kind < 3.5 ? 0.0 : 0.45;
+    v.y -= uT.w * grav * dt;
+    v += curl(p * 1.3 + fract(V.w) * 9.0, uT.y) * (turb * dt);
+    v /= 1.0 + drag * dt;
+    p += v * dt;
+    float life = P.w - dt, r = length(p.xz);
+    float gy = (r < uEnv.z && p.y > -0.3) ? 0.0 : (abs(p.x) < uGeo.y && abs(p.z) < uGeo.z && p.y > uGeo.x - 0.25) ? uGeo.x : uGeo.w;
+    if (p.y < gy + 0.004) {
+      p.y = gy + 0.004;
+      if (kind < 0.5 || (kind > 1.5 && kind < 2.5)) { v.y = abs(v.y) * 0.3; v.xz *= 0.7; if (v.y < 0.7) { v.y = 0.0; v.xz *= 0.9; } }   // hard bits bounce and skitter
+      else if (kind > 2.5 && kind < 3.5) { life = min(life, 0.05); v = vec3(0.0); }                                               // droplets are gone on contact
+      else { v.y = max(v.y, 0.0); v.xz *= 0.93; }                                                                                  // dust settles and creeps
+    }
+    if (r < uEnv.y && p.y > uEnv.x && p.y < uEnv.x + 8.0) {
+      if (p.y - uEnv.x < 0.1) { p.y = uEnv.x - 0.003; v.y = min(v.y, uEnv.w); if (p.y < gy + 0.01) life = 0.0; }                   // under the descending face
+      else { vec2 nn = p.xz / max(r, 1e-4); p.xz = nn * (uEnv.y + 0.004); float vn = dot(v.xz, nn); if (vn < 0.0) v.xz -= nn * vn * 1.3; }
+    }
+    if (dot(p.xz, p.xz) > 900.0) life = 0.0;
+    P = vec4(p, life); V = vec4(v, V.w);
+  }
+#ifdef OUT_POS
+  o = P;
+#else
+  o = V;
+#endif
+}`;
+  const SPR_VS = `precision highp float;
+precision highp sampler2D;
+in vec3 position;
+in vec2 aRef;
+uniform sampler2D uPos, uVel;
+uniform mat4 modelViewMatrix, projectionMatrix;
+uniform vec4 uPar;                // time, size scale, shutter (s), brightness
+uniform vec2 uPxW;                // world size of one pixel at unit distance, max streak
+uniform vec3 uPal[16];
+out vec2 vQ;
+out vec3 vCol;
+void main() {
+  vec4 P = texture(uPos, aRef), V = texture(uVel, aRef);
+  vQ = position.xy; vCol = vec3(0.0);
+  if (P.w <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  float code = floor(V.w), seed = fract(V.w), kind = floor(code / 16.0 + 0.001), life = P.w;
+  vec3 tint = uPal[int(code - kind * 16.0 + 0.5)], col;
+  float size, streak;
+  if (kind < 0.5) { float h = clamp(life / 0.8, 0.0, 1.0); col = mix(vec3(1.0, 0.14, 0.02), vec3(1.0, 0.74, 0.34), h) * tint * (1.5 + 15.0 * h * h); size = 0.010 * (0.6 + seed); streak = 1.0; }
+  else if (kind < 1.5) { float a = smoothstep(0.0, 0.9, life); col = tint * (0.032 * a); size = 0.065 * (0.6 + 1.5 * seed) * (1.7 - 0.7 * a); streak = 0.12; }
+  else if (kind < 2.5) {
+    float tw = pow(0.5 + 0.5 * sin(uPar.x * (26.0 + 44.0 * seed) + seed * 90.0 + dot(P.xyz, vec3(11.0, 7.0, 13.0))), 14.0);
+    col = tint * (0.2 + 20.0 * tw) * smoothstep(0.0, 0.3, life); size = 0.008 * (0.6 + seed); streak = 0.5;
+  }
+  else if (kind < 3.5) { col = tint * (0.75 * smoothstep(0.0, 0.08, life)); size = 0.011 * (0.5 + seed); streak = 1.0; }
+  else { col = tint * (0.28 * smoothstep(0.0, 1.2, life) * (0.45 + 0.55 * sin(uPar.x * (0.5 + seed) + seed * 40.0))); size = 0.011 * (0.5 + seed); streak = 0.0; }
+  vec4 mv = modelViewMatrix * vec4(P.xyz, 1.0);
+  vec3 vv = (modelViewMatrix * vec4(V.xyz, 0.0)).xyz;
+  float sp = length(vv.xy);
+  vec2 dir = sp > 1e-4 ? vv.xy / sp : vec2(1.0, 0.0);
+  float len = min(sp * uPar.z * streak, uPxW.y);                       // a streak as long as the distance covered while the shutter is open
+  size = max(size * uPar.y, 0.7 * uPxW.x * -mv.z);                      // never thinner than ~1.4 px: sub-pixel sprites flicker
+  mv.xy += dir * position.x * (size + len * 0.5) + vec2(-dir.y, dir.x) * position.y * size;
+  gl_Position = projectionMatrix * mv;
+  vCol = col * uPar.w * (size / (size + len * 0.5));                    // a longer streak is dimmer: same light, spread out
+}`;
+  const SPR_FS = `precision highp float;
+in vec2 vQ;
+in vec3 vCol;
+out vec4 o;
+void main() {
+  float a = exp(-dot(vQ, vQ) * 3.4) - 0.0334;
+  if (a <= 0.0) discard;
+  o = vec4(vCol * a, 1.0);
+}`;
+
+  /* ------------------------------------------------------------------ parameters */
+  const P = {      // every slider in the panel maps to one of these
+    exposure: 1.0, contrast: 1.06, saturation: 1.06,
+    bloomThreshold: 1.0, bloomStrength: 0.5, bloomRadius: 0.75,
+    aoIntensity: 1.1, aoRadius: 0.5,
+    dofAperture: 0.55, dofFocus: 0,
+    fogDensity: 0.02, shafts: 0.6,
+    ca: 0.35, vignette: 0.42, grain: 0.035,
+    particleRate: 1.0,
+  };
+  const ON = { bloom: true, particles: true, ao: true, dof: true, fog: true, shafts: true, grade: true, ca: true, vignette: true, grain: true, fxaa: true, polish: true };
+  const PRESETS = {
+    cinematic: { tier: 0, on: { bloom: true, particles: true, ao: true, dof: true, fog: true, shafts: false, grade: true, ca: true, vignette: true, grain: true, fxaa: true, polish: true } },
+    ultra:     { tier: 1, on: { bloom: true, particles: true, ao: true, dof: true, fog: true, shafts: false, grade: true, ca: true, vignette: true, grain: true, fxaa: true, polish: true } },
+  };
+  const TIERS = [{ ao: 10, dof: 24, shaft: 24, levels: 5, tex: 192 }, { ao: 16, dof: 40, shaft: 32, levels: 6, tex: 256 }];
+  const PALETTE = [
+    [1, 1, 1], [1, 0.85, 0.6], [0.92, 0.9, 0.84], [0.82, 0.74, 0.58], [0.3, 0.3, 0.33], [0.72, 0.9, 1.0], [1.0, 0.16, 0.22], [1.0, 0.12, 0.16],
+    [0.62, 1.0, 0.8], [0.85, 0.5, 0.22], [0.7, 0.86, 1.0], [1.0, 0.8, 0.2], [1.0, 0.55, 0.1], [0.25, 0.92, 0.82], [1.0, 0.76, 0.16], [0.5, 0.72, 1.0],
+  ];
+
+  const fx = { ok: true, P, ON, PRESETS, tier: 0, w: 2, h: 2, passes: 0, alive: 0, particlesOK: be.caps.float || be.caps.half, why: '' };
+  let T = null, prog = null, part = null, frame = 0, time = 0;
+  const f32 = (n) => new Float32Array(n);
+
+  function buildPrograms() {
+    const q = TIERS[fx.tier], def = (o2) => Object.keys(o2).filter((k) => o2[k] !== false && o2[k] !== undefined).map((k) => '#define ' + k + (o2[k] === true ? '' : ' ' + o2[k]) + '\n').join('');
+    const mk = (name, src, defs, u) => be.pass('fx-' + name, def(defs) + src, u);
+    disposePrograms();
+    prog = {
+      ao: mk('ao', AO_FS, { AO_TAPS: q.ao }, { uDepth: { value: null }, uProj: { value: f32(16) }, uProjInv: { value: f32(16) }, uRes: { value: f32(2) }, uAO: { value: f32(2) } }),
+      aob: mk('aoblur', AOB_FS, {}, { uAOT: { value: null }, uDepth: { value: null }, uDir: { value: f32(2) }, uNF: { value: f32(2) } }),
+      shm: mk('shaftmask', SHM_FS, {}, { uScene: { value: null }, uSh: { value: f32(3) } }),
+      shb: mk('shaftblur', SHB_FS, { SHAFT_TAPS: q.shaft }, { uMask: { value: null }, uRay: { value: f32(4) } }),
+      dof: mk('dof', DOF_FS, { DOF_TAPS: q.dof }, { uTex: { value: null }, uDof: { value: f32(3) } }),
+      blp: mk('bloomprefilter', BLD_FS, { PREFILTER: true }, { uTex: { value: null }, uBl: { value: f32(4) } }),
+      bld: mk('bloomdown', BLD_FS, {}, { uTex: { value: null }, uBl: { value: f32(4) } }),
+      blu: mk('bloomup', BLU_FS, {}, { uLow: { value: null }, uHigh: { value: null }, uUp: { value: f32(4) } }),
+      fxa: mk('fxaa', FXA_FS, {}, { uTex: { value: null }, uFx: { value: f32(4) } }),
+    };
+    prog.cmb = {}; prog.grd = {};          // variants are compiled the first time a combination of toggles is used
+    prog._q = q;
+  }
+  function disposePrograms() {
+    if (!prog) return;
+    for (const k of ['ao', 'aob', 'shm', 'shb', 'dof', 'blp', 'bld', 'blu', 'fxa']) prog[k].dispose();
+    for (const k in prog.cmb) prog.cmb[k].dispose();
+    for (const k in prog.grd) prog.grd[k].dispose();
+    prog = null;
+  }
+  const cmbU = () => ({ uScene: { value: null }, uDepth: { value: null }, uAOT: { value: null }, uShaft: { value: null }, uProjInv: { value: f32(16) }, uViewInv: { value: f32(16) }, uFog: { value: f32(4) }, uFogP: { value: f32(4) }, uShaftC: { value: f32(4) }, uShaftPx: { value: f32(2) }, uFocus: { value: f32(2) } });
+  const grdU = () => ({ uScene: { value: null }, uDofT: { value: null }, uBloom: { value: null }, uG0: { value: f32(4) }, uG1: { value: f32(4) }, uMaxBlur: { value: 0 } });
+  function variant(table, src, flags, mkU, name) {
+    const key = Object.keys(flags).filter((k) => flags[k]).join('|') || '-';
+    if (!table[key]) table[key] = be.pass('fx-' + name + '-' + key, Object.keys(flags).filter((k) => flags[k]).map((k) => '#define ' + k + '\n').join('') + src, mkU());
+    return table[key];
+  }
+
+  function buildTargets() {
+    const w = fx.w, h = fx.h, hw = Math.max(1, w >> 1), hh = Math.max(1, h >> 1), n = TIERS[fx.tier].levels;
+    if (T) disposeTargets();
+    T = {
+      scene: be.target(w, h, { type: 'half', linear: true, depth: true }),
+      comb: be.target(w, h, { type: 'half', linear: true }),
+      ldr: be.target(w, h, { type: 'u8', linear: true }),
+      aoA: be.target(hw, hh, { type: 'u8', linear: true }), aoB: be.target(hw, hh, { type: 'u8', linear: true }),
+      shA: be.target(Math.max(1, w >> 2), Math.max(1, h >> 2), { type: 'half', linear: true }), shB: be.target(Math.max(1, w >> 2), Math.max(1, h >> 2), { type: 'half', linear: true }),
+      dof: be.target(hw, hh, { type: 'half', linear: true }),
+      down: [], up: [],
+    };
+    for (let i = 0; i < n; i++) {
+      const lw = Math.max(1, w >> (i + 1)), lh = Math.max(1, h >> (i + 1));
+      T.down.push(be.target(lw, lh, { type: 'half', linear: true }));
+      if (i < n - 1) T.up.push(be.target(lw, lh, { type: 'half', linear: true }));
+    }
+  }
+  function disposeTargets() {
+    if (!T) return;
+    for (const k of ['scene', 'comb', 'ldr', 'aoA', 'aoB', 'shA', 'shB', 'dof']) T[k].dispose();
+    T.down.forEach((t) => t.dispose()); T.up.forEach((t) => t.dispose());
+    T = null;
+  }
+  fx.resize = (w, h) => {
+    w = Math.max(2, w | 0); h = Math.max(2, h | 0);
+    if (w === fx.w && h === fx.h && T) return;
+    fx.w = w; fx.h = h;
+    if (!T) { buildTargets(); return; }
+    const hw = Math.max(1, w >> 1), hh = Math.max(1, h >> 1);
+    T.scene.setSize(w, h); T.comb.setSize(w, h); T.ldr.setSize(w, h); T.aoA.setSize(hw, hh); T.aoB.setSize(hw, hh); T.dof.setSize(hw, hh);
+    T.shA.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2)); T.shB.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2));
+    T.down.forEach((t, i) => t.setSize(Math.max(1, w >> (i + 1)), Math.max(1, h >> (i + 1))));
+    T.up.forEach((t, i) => t.setSize(Math.max(1, w >> (i + 1)), Math.max(1, h >> (i + 1))));
+  };
+
+  /* ------------------------------------------------------------------ particles */
+  const EM = { a: f32(32), b: f32(32), c: f32(32), d: f32(32), n: 0, queue: [] };
+  function buildParticles() {
+    if (part) { part.posA.dispose(); part.posB.dispose(); part.velA.dispose(); part.velB.dispose(); part.simP.dispose(); part.simV.dispose(); part.draw.dispose(); part = null; }
+    if (!fx.particlesOK) return;
+    const n = TIERS[fx.tier].tex, type = be.caps.float ? 'float' : 'half', mkT = () => be.target(n, n, { type, linear: false });
+    const simU = () => ({ uPos: { value: null }, uVel: { value: null }, uEA: { value: EM.a }, uEB: { value: EM.b }, uEC: { value: EM.c }, uED: { value: EM.d }, uEnv: { value: f32(4) }, uGeo: { value: f32([geo.bedY, geo.bedX, geo.bedZ, geo.floorY]) }, uT: { value: f32(4) } });
+    const pal = f32(48); PALETTE.forEach((c, i) => pal.set(c, i * 3));
+    part = {
+      n, count: n * n, head: 0, posA: mkT(), posB: mkT(), velA: mkT(), velB: mkT(),
+      simP: be.pass('fx-sim-pos', '#define OUT_POS\n' + SIM_FS, simU()), simV: be.pass('fx-sim-vel', SIM_FS, simU()),
+      draw: be.sprites('fx-sprites', SPR_VS, SPR_FS, { uPos: { value: null }, uVel: { value: null }, uPar: { value: f32(4) }, uPxW: { value: f32(2) }, uPal: { value: pal } }, n * n, n),
+      fresh: true, moteAcc: 0,
+    };
+  }
+  function resetParticles() {
+    if (!part) return;
+    for (const t of [part.posA, part.posB, part.velA, part.velB]) be.clear(t);
+    part.head = 0; part.fresh = false; EM.queue.length = 0;
+  }
+  /** queue an emitter: { p:[x,y,z], r, dir:[x,y,z]|null, speed, spread, lift, shape, squash, n, life, kind, pal } */
+  fx.emit = (e) => {
+    if (!part || !ON.particles || !fx.active) return;
+    const n = Math.round(e.n * P.particleRate * (fx.tier ? 1.75 : 1));
+    if (n < 1) return;
+    if (EM.queue.length < (e.minor ? 16 : 48)) EM.queue.push(e, Math.min(n, part.count >> 1));      // small events are dropped first when a lot happens at once
+  };
+  fx.simulate = (dt, env) => {
+    if (!part || !fx.active) return;
+    if (!ON.particles) { part.draw.setVisible(false); return; }
+    if (part.fresh) resetParticles();
+    time += dt;
+    // a few motes are always adrift in the light: they give the air some depth (and something for the bokeh to chew on)
+    part.moteAcc += dt * 70 * P.particleRate;
+    if (part.moteAcc >= 24 && EM.queue.length < 40) {
+      const k = Math.floor(part.moteAcc); part.moteAcc -= k;
+      EM.queue.unshift({ p: [0, 1.6, 0], r: 3.4, dir: null, speed: 0.12, spread: 1, lift: 0, shape: 1, squash: 0.6, life: 11, kind: 4, pal: 15 }, k);
+    }
+    let m = 0;
+    while (m < 8 && EM.queue.length) {
+      const e = EM.queue.shift(), n = EM.queue.shift(), i = 4 * m;
+      EM.a[i] = e.p[0]; EM.a[i + 1] = e.p[1]; EM.a[i + 2] = e.p[2]; EM.a[i + 3] = e.r || 0.01;
+      const d = e.dir; EM.b[i] = d ? d[0] : 0; EM.b[i + 1] = d ? d[1] : 0; EM.b[i + 2] = d ? d[2] : 0; EM.b[i + 3] = e.speed;
+      EM.c[i] = part.head; EM.c[i + 1] = n; EM.c[i + 2] = e.life; EM.c[i + 3] = e.kind * 16 + e.pal;
+      EM.d[i] = e.spread === undefined ? 0.5 : e.spread; EM.d[i + 1] = e.lift || 0; EM.d[i + 2] = e.shape || 1; EM.d[i + 3] = e.squash === undefined ? 1 : e.squash;
+      part.head = (part.head + n) % part.count; m++;
+    }
+    for (let k = m; k < 8; k++) EM.c[4 * k + 1] = 0;
+    for (const p of [part.simP, part.simV]) {
+      const u = p.u;
+      u.uPos.value = part.posA.tex; u.uVel.value = part.velA.tex;
+      u.uEnv.value[0] = env.ramY; u.uEnv.value[1] = env.ramR; u.uEnv.value[2] = env.anvR; u.uEnv.value[3] = env.ramV;
+      u.uT.value[0] = dt; u.uT.value[1] = time % 1000; u.uT.value[2] = part.n; u.uT.value[3] = geo.G;
+    }
+    be.draw(part.simP, part.posB); be.draw(part.simV, part.velB);
+    let t = part.posA; part.posA = part.posB; part.posB = t; t = part.velA; part.velA = part.velB; part.velB = t;
+    const du = part.draw.u;
+    du.uPos.value = part.posA.tex; du.uVel.value = part.velA.tex;
+    du.uPar.value[0] = time % 1000; du.uPar.value[1] = env.sizeK || 1; du.uPar.value[2] = env.shutter === undefined ? 1 / 90 : env.shutter; du.uPar.value[3] = 1;
+    du.uPxW.value[0] = env.pxW || 0.001; du.uPxW.value[1] = 0.55;
+    part.draw.setVisible(true);
+  };
+
+  /* ------------------------------------------------------------------ the frame */
+  fx.sceneTarget = () => T.scene;
+  /** cam: { proj, projInv, viewInv (Float32Array 16, column-major), near, far, focus (distance), lamp: [u, v, visible 0..1] | null } */
+  fx.render = (cam, dt) => {
+    const w = fx.w, h = fx.h, q = prog._q;
+    let passes = 0, src = T.scene;
+    frame = (frame + 1) % 64;
+    const needComb = ON.ao || ON.fog || ON.shafts || ON.dof;
+    if (ON.ao) {
+      let u = prog.ao.u;
+      u.uDepth.value = T.scene.depth; u.uProj.value.set(cam.proj); u.uProjInv.value.set(cam.projInv); u.uRes.value[0] = w; u.uRes.value[1] = h; u.uAO.value[0] = P.aoRadius * 0.2 * (cam.scale || 2.4); u.uAO.value[1] = frame;
+      be.draw(prog.ao, T.aoA);
+      u = prog.aob.u; u.uDepth.value = T.scene.depth; u.uNF.value[0] = cam.near; u.uNF.value[1] = cam.far;
+      u.uAOT.value = T.aoA.tex; u.uDir.value[0] = 1 / T.aoA.w; u.uDir.value[1] = 0; be.draw(prog.aob, T.aoB);
+      u.uAOT.value = T.aoB.tex; u.uDir.value[0] = 0; u.uDir.value[1] = 1 / T.aoA.h; be.draw(prog.aob, T.aoA);
+      passes += 3;
+    }
+    const lampOn = ON.shafts && cam.lamp && cam.lamp[2] > 0.01;
+    if (lampOn) {
+      let u = prog.shm.u; u.uScene.value = T.scene.tex; u.uSh.value[0] = 2.2; u.uSh.value[1] = 1 / w; u.uSh.value[2] = 1 / h;
+      be.draw(prog.shm, T.shA);
+      u = prog.shb.u; u.uMask.value = T.shA.tex; u.uRay.value[0] = cam.lamp[0]; u.uRay.value[1] = cam.lamp[1]; u.uRay.value[2] = frame; u.uRay.value[3] = 0.92;
+      be.draw(prog.shb, T.shB);
+      passes += 2;
+    }
+    if (needComb) {
+      const p = variant(prog.cmb, CMB_FS, { USE_AO: ON.ao, USE_FOG: ON.fog, USE_SHAFTS: lampOn }, cmbU, 'combine'), u = p.u;
+      u.uScene.value = T.scene.tex; u.uDepth.value = T.scene.depth; u.uAOT.value = T.aoA.tex; u.uShaft.value = T.shB.tex;
+      u.uProjInv.value.set(cam.projInv); u.uViewInv.value.set(cam.viewInv);
+      u.uFog.value[0] = 0.030; u.uFog.value[1] = 0.040; u.uFog.value[2] = 0.062; u.uFog.value[3] = P.fogDensity;
+      u.uFogP.value[0] = 0.32; u.uFogP.value[1] = geo.floorY; u.uFogP.value[2] = 46; u.uFogP.value[3] = P.aoIntensity;
+      u.uShaftC.value[0] = 0.75; u.uShaftC.value[1] = 0.86; u.uShaftC.value[2] = 1.0; u.uShaftC.value[3] = lampOn ? P.shafts * 0.3 * cam.lamp[2] : 0; u.uShaftPx.value[0] = 1 / T.shB.w; u.uShaftPx.value[1] = 1 / T.shB.h;
+      u.uFocus.value[0] = Math.max(0.05, cam.focus + P.dofFocus); u.uFocus.value[1] = ON.dof ? P.dofAperture : 0;
+      be.draw(p, T.comb); src = T.comb; passes++;
+    }
+    const maxBlur = Math.max(2, h * 0.011);                 // largest blur radius, in half-res pixels
+    if (ON.dof) {
+      const u = prog.dof.u; u.uTex.value = T.comb.tex; u.uDof.value[0] = 2 / w; u.uDof.value[1] = 2 / h; u.uDof.value[2] = maxBlur;
+      be.draw(prog.dof, T.dof); passes++;
+    }
+    if (ON.bloom) {
+      const n = q.levels;
+      let u = prog.blp.u; u.uTex.value = src.tex; u.uBl.value[0] = 1 / w; u.uBl.value[1] = 1 / h; u.uBl.value[2] = P.bloomThreshold; u.uBl.value[3] = P.bloomThreshold * 0.5;
+      be.draw(prog.blp, T.down[0]);
+      for (let i = 1; i < n; i++) { u = prog.bld.u; u.uTex.value = T.down[i - 1].tex; u.uBl.value[0] = 1 / T.down[i - 1].w; u.uBl.value[1] = 1 / T.down[i - 1].h; be.draw(prog.bld, T.down[i]); }
+      // radius: how much each coarser level adds on the way back up (wide, soft halo vs. tight glow)
+      const spread = 0.35 + 0.75 * P.bloomRadius;
+      for (let i = n - 2; i >= 0; i--) {
+        const low = i === n - 2 ? T.down[n - 1] : T.up[i + 1];
+        u = prog.blu.u; u.uLow.value = low.tex; u.uHigh.value = T.down[i].tex; u.uUp.value[0] = (0.6 + 0.9 * P.bloomRadius) / low.w; u.uUp.value[1] = (0.6 + 0.9 * P.bloomRadius) / low.h; u.uUp.value[2] = spread;
+        be.draw(prog.blu, T.up[i]);
+      }
+      let norm = 0; for (let i = 0, s = 1; i < n; i++, s *= spread) norm += s;
+      fx._bloomK = P.bloomStrength / norm; passes += 2 * n - 1;
+    }
+    {
+      const last = !ON.fxaa;
+      const p = variant(prog.grd, GRD_FS, { USE_DOF: ON.dof, USE_BLOOM: ON.bloom, USE_CA: ON.ca && P.ca > 0.001, LAST: last }, grdU, 'grade'), u = p.u;
+      u.uScene.value = src.tex; u.uDofT.value = T.dof.tex; u.uBloom.value = T.up[0].tex; u.uMaxBlur.value = maxBlur;
+      const g = ON.grade;
+      u.uG0.value[0] = g ? P.exposure : 1; u.uG0.value[1] = g ? P.contrast : 1; u.uG0.value[2] = g ? P.saturation : 1; u.uG0.value[3] = ON.bloom ? fx._bloomK : 0;
+      u.uG1.value[0] = P.ca * 0.05; u.uG1.value[1] = ON.vignette ? P.vignette : 0; u.uG1.value[2] = ON.grain ? P.grain : 0; u.uG1.value[3] = time;
+      be.draw(p, last ? null : T.ldr); passes++;
+      if (!last) {
+        const v = prog.fxa.u; v.uTex.value = T.ldr.tex; v.uFx.value[0] = 1 / w; v.uFx.value[1] = 1 / h; v.uFx.value[2] = ON.grain ? P.grain : 0; v.uFx.value[3] = time;
+        be.draw(prog.fxa, null); passes++;
+      }
+    }
+    fx.passes = passes + (part && ON.particles ? 2 : 0);
+  };
+
+  /* ------------------------------------------------------------------ lifecycle */
+  fx.active = false;
+  fx.setActive = (b) => { fx.active = b; if (!b && part) part.draw.setVisible(false); };
+  fx.setTier = (t) => { if (t === fx.tier && prog) return; fx.tier = t; buildPrograms(); if (T) buildTargets(); buildParticles(); };
+  fx.setPreset = (name) => {
+    const p = PRESETS[name]; if (!p) return;
+    Object.assign(ON, p.on);
+    if (!fx.particlesOK) ON.particles = false;
+    fx.setTier(p.tier);
+  };
+  fx.contextRestored = () => { if (part) part.fresh = true; };       // float targets come back empty: every particle is dead again
+  fx.dispose = () => {
+    disposePrograms();
+    disposeTargets();
+    if (part) { part.posA.dispose(); part.posB.dispose(); part.velA.dispose(); part.velB.dispose(); part.simP.dispose(); part.simV.dispose(); part.draw.dispose(); part = null; }
+  };
+  fx.sprites = () => part && part.draw;
+  fx.glsl = { AO_FS, AOB_FS, SHM_FS, SHB_FS, CMB_FS, DOF_FS, BLD_FS, BLU_FS, GRD_FS, FXA_FS, SIM_FS, SPR_VS, SPR_FS };
+  return fx;
+}
+
+/* What each physics event throws into the air (GPU particles). Shared by the page and the test lab.
+   rows: [kind, palette, count, speed (x the object's burst speed), life (s), spread, lift]
+   kinds: 0 spark · 1 mist/dust · 2 glint · 3 spray · 4 mote.  Palette indices refer to PALETTE in the stack. */
+const FX_BURST = {
+  paper:      [[1, 2, 6000, 0.34, 3.6, 0.45, 0.25]],
+  bowling:    [[1, 3, 4400, 0.36, 3.2, 0.4, 0.3], [1, 4, 1200, 0.5, 2.2, 0.4, 0.2]],
+  golf:       [[1, 0, 1500, 0.22, 2.4, 0.5, 0.3], [2, 1, 500, 0.6, 1.6, 0.4, 0.3]],
+  puck:       [[1, 4, 2600, 0.4, 2.6, 0.4, 0.25]],
+  diamond:    [[2, 5, 5200, 0.9, 2.8, 0.45, 0.4], [0, 1, 2600, 1.5, 1.1, 0.4, 0.45], [1, 5, 900, 0.4, 2.5, 0.5, 0.3]],
+  gummy:      [[3, 6, 1300, 0.9, 1.2, 0.35, 0.35]],
+  watermelon: [[3, 7, 6400, 0.95, 1.5, 0.3, 0.4], [1, 7, 3000, 0.4, 2.6, 0.45, 0.35]],
+  bottle:     [[2, 8, 5600, 0.8, 2.6, 0.4, 0.3], [1, 8, 1500, 0.3, 2.4, 0.5, 0.3]],
+  can:        [[3, 9, 5200, 1.0, 1.3, 0.16, 0.3], [1, 9, 1900, 0.3, 2.4, 0.5, 0.5]],
+  balloon:    [[3, 10, 7200, 0.7, 1.4, 0.3, 0.35], [1, 10, 3600, 0.3, 2.8, 0.5, 0.4]],
+  mug:        [[1, 2, 3600, 0.4, 3.0, 0.45, 0.3], [2, 0, 2200, 0.8, 2.2, 0.4, 0.3]],
+  orange:     [[3, 12, 3300, 0.95, 1.3, 0.3, 0.4], [1, 12, 1600, 0.45, 2.4, 0.45, 0.35]],
+  stress:     [[3, 13, 1600, 1.0, 1.2, 0.35, 0.4]],
+  egg:        [[3, 14, 750, 0.9, 1.0, 0.35, 0.4], [3, 0, 520, 0.9, 1.0, 0.35, 0.4], [2, 2, 320, 0.7, 1.6, 0.4, 0.3]],
+};
+const FX_YIELD = { foam: [[1, 0, 2200, 6, 3.2, 0.6, 0.4]], playdoh: [] };
+/* small stuff: [kind, palette] used for cracks, chips, grinding and landings; null = nothing visible */
+const FX_BITS = {
+  paper: [1, 2], bowling: [1, 3], golf: [1, 0], puck: [1, 4], diamond: [2, 5], gummy: null, watermelon: [3, 7], bottle: [2, 8], can: null, balloon: null,
+  playdoh: null, mug: [1, 2], orange: [3, 12], stress: null, egg: [2, 2], foam: [1, 0],
+};
+function fxEmitFor(fx, e, world, P) {
+  const o = world.cur;
+  if (!o || !fx.active) return;
+  const id = e.id || o.id, sp = P.SPECS[id];
+  if (!sp) return;
+  const m = sp.mat;
+  if (e.t === 'burst' || e.t === 'yield') {
+    const rows = (e.t === 'burst' ? FX_BURST : FX_YIELD)[id];
+    if (!rows) return;
+    const hB = Math.max(o.hBurst || o.h || o.H0, 0.02), rr = Math.max(0.05, o.R * Math.pow(Math.max(hB / o.H0, 0.05), -m.nu)), k = e.t === 'burst' ? m.burstV : 1;
+    const pop = m.pop && o.popAngle !== undefined;
+    for (const r of rows) {
+      const aim = pop && r[0] === 3;                               // a can sprays from the one seam that split
+      fx.emit({
+        p: aim ? [Math.cos(o.popAngle) * rr * 0.9, hB * 0.55, Math.sin(o.popAngle) * rr * 0.9] : [0, hB * 0.5, 0], r: aim ? 0.05 : rr, squash: aim ? 1 : Math.min(1, hB * 0.5 / rr),
+        dir: aim ? [Math.cos(o.popAngle), 0.25, Math.sin(o.popAngle)] : null, speed: r[3] * k, spread: r[5], lift: r[6], shape: r[0] === 1 ? 1.6 : 1.1, n: r[2], life: r[4], kind: r[0], pal: r[1],
+      });
+    }
+    return;
+  }
+  const b = FX_BITS[id];
+  if (!b) return;
+  const q = { p: [e.x, e.y, e.z], r: 0.04, dir: null, spread: 0.7, lift: 0.5, shape: 1.3, kind: b[0], pal: b[1], minor: true };
+  if (e.t === 'crack') { q.n = 260; q.speed = m.burstV * 0.14; q.life = 2.0; q.r = o.R * 0.5; q.squash = 0.1; if (id === 'diamond') fx.emit({ p: q.p, r: 0.03, dir: null, speed: 26, spread: 0.6, lift: 0.5, shape: 1, n: 240, life: 0.7, kind: 0, pal: 1 }); }
+  else if (e.t === 'chip') { q.n = 70; q.speed = m.chipV * 0.6; q.life = 1.4; }
+  else if (e.t === 'crunch') { q.n = 26 + 60 * e.p; q.speed = 3 + 5 * e.p; q.life = 1.5; if (id === 'diamond') fx.emit({ p: q.p, r: 0.02, dir: null, speed: 20, spread: 0.7, lift: 0.5, shape: 1, n: 90, life: 0.6, kind: 0, pal: 1, minor: true }); }
+  else if (e.t === 'impact') { if (e.p < 0.25) return; q.n = 14 + 30 * e.p; q.speed = 2 + 3 * e.p; q.life = 1.2; }
+  else if (e.t === 'land') { if (b[0] !== 1) return; q.n = 60 * e.p; q.speed = 2.5; q.life = 1.6; q.r = o.R * 0.8; q.squash = 0.05; }
+  else return;
+  fx.emit(q);
+}
+
+/* ───────────────────────────────────── cinematic stack: the three.js side ──
+   The stack itself (createFX) only knows about a small backend; this is that backend for three.js, plus the
+   things that live in the scene: the work light behind the die (source of the light shafts), the pressure ring
+   and the other "polish" touches. None of it is created, visible or updated while the look is "Original". */
+const look = { name: 'original', fx: null, failed: '', gpuMs: -1, statT: 0, open: false };
+const _v3 = new THREE.Vector3(), _v2 = new THREE.Vector2();
+function threeBackend() {
+  if (!renderer.capabilities.isWebGL2) throw new Error('WebGL2 is not available');
+  const gl = renderer.getContext();
+  const extF = !!gl.getExtension('EXT_color_buffer_float'), extH = extF || !!gl.getExtension('EXT_color_buffer_half_float');
+  if (!extH) throw new Error('this GPU cannot render to float textures');
+  gl.getExtension('OES_texture_float_linear');
+  const FS_VERT = 'precision highp float;\nin vec3 position;\nout vec2 vUv;\nvoid main() { vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+  const tri = new THREE.BufferGeometry();
+  tri.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));      // one triangle covers the screen: no diagonal seam, one draw
+  const quad = new THREE.Mesh(tri, null); quad.frustumCulled = false;
+  const fsScene = new THREE.Scene(); fsScene.add(quad);
+  const fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const TYPE = { u8: THREE.UnsignedByteType, half: THREE.HalfFloatType, float: THREE.FloatType };
+  return {
+    caps: { float: extF, half: extH },
+    target(w, h, o) {
+      const f = o.linear ? THREE.LinearFilter : THREE.NearestFilter;
+      const rt = new THREE.WebGLRenderTarget(w, h, { type: TYPE[o.type], format: THREE.RGBAFormat, minFilter: f, magFilter: f, depthBuffer: !!o.depth, stencilBuffer: false, generateMipmaps: false });
+      if (o.depth) rt.depthTexture = new THREE.DepthTexture(w, h);
+      const t = {
+        w, h, rt, tex: rt.texture, depth: rt.depthTexture || null,
+        setSize(w2, h2) { if (w2 !== t.w || h2 !== t.h) { t.w = w2; t.h = h2; rt.setSize(w2, h2); } },
+        dispose() { rt.dispose(); if (rt.depthTexture) rt.depthTexture.dispose(); },
+      };
+      return t;
+    },
+    pass(name, frag, uniforms, vert) {
+      const m = new THREE.RawShaderMaterial({ name, glslVersion: THREE.GLSL3, vertexShader: vert || FS_VERT, fragmentShader: frag, uniforms, depthTest: false, depthWrite: false });
+      return { u: uniforms, m, dispose() { m.dispose(); } };
+    },
+    draw(p, t) { quad.material = p.m; renderer.setRenderTarget(t ? t.rt : null); renderer.render(fsScene, fsCam); },
+    clear(t) { renderer.setRenderTarget(t.rt); renderer.setClearColor(0x000000, 0); renderer.clear(true, false, false); renderer.setClearColor(0x050507, 1); renderer.setRenderTarget(null); },
+    sprites(name, vert, frag, uniforms, n, texN) {
+      const g = new THREE.InstancedBufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3));
+      g.setIndex([0, 1, 2, 0, 2, 3]);
+      const ref = new Float32Array(n * 2);
+      for (let i = 0; i < n; i++) { ref[2 * i] = ((i % texN) + 0.5) / texN; ref[2 * i + 1] = (Math.floor(i / texN) + 0.5) / texN; }
+      g.setAttribute('aRef', new THREE.InstancedBufferAttribute(ref, 2));
+      g.instanceCount = n;
+      const m = new THREE.RawShaderMaterial({ name, glslVersion: THREE.GLSL3, vertexShader: vert, fragmentShader: frag, uniforms, transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending });
+      const mesh = new THREE.Mesh(g, m);
+      mesh.frustumCulled = false; mesh.renderOrder = 20; mesh.visible = false;
+      scene.add(mesh);
+      return { u: uniforms, mesh, setVisible(b) { mesh.visible = b; }, dispose() { scene.remove(mesh); g.dispose(); m.dispose(); } };
+    },
+  };
+}
+
+/* the work light: a bright tube on two feet behind the die. It is what the shafts streak away from, it rims the object
+   from behind, and it gives bloom something honest to do. Only exists in the picture while "Light shafts" is on. */
+const LAMP_POS = new THREE.Vector3(0, 0.28, -1.8);
+const lampRig = new THREE.Group();
+{
+  const tubeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.75, 0.86, 1.0) });
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 2.6, 16), tubeMat);
+  tube.rotation.z = Math.PI / 2; tube.position.copy(LAMP_POS);
+  const footMat = new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.6, metalness: 0.6 });
+  for (const x of [-1.36, 1.36]) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.08, LAMP_POS.y - P.BED_Y + 0.06, 0.12), footMat); f.position.set(x, (LAMP_POS.y + P.BED_Y) / 2, LAMP_POS.z); lampRig.add(f); }
+  const glow = new THREE.PointLight(0xbcd8ff, 7, 9, 2); glow.position.copy(LAMP_POS).add(new THREE.Vector3(0, 0.1, 0.25));
+  lampRig.add(tube, glow); lampRig.visible = false; lampRig.userData.tube = tubeMat;
+  scene.add(lampRig);
+}
+/* polish: a pressure ring on the ram that goes from green through amber to red with the gauge (emissive, so it blooms),
+   a hot glow on the hazard collar under load, a short flash of light when something lets go, a stronger rim light and tighter steel highlights */
+const polishRig = new THREE.Group();
+const ringMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+const pressureRing = new THREE.Mesh(new THREE.TorusGeometry(P.RAM_BODY * 1.065, 0.022, 10, 96), ringMat);
+pressureRing.rotation.x = Math.PI / 2;
+const flash = new THREE.PointLight(0xffe2c0, 0, 14, 2); flash.position.set(0, 0.6, 0);
+polishRig.add(flash); polishRig.visible = false; scene.add(polishRig);
+rig.ram.add(pressureRing); pressureRing.visible = false;
+const steelMats = [rig.die.material, rig.tool.material, rig.body.material];
+const base = { rim: rimLight.intensity, fill: fillLight.intensity, env: steelMats.map((m) => m.envMapIntensity), rough: steelMats.map((m) => m.roughness) };
+let polishOn = false;
+function applyPolish() {
+  const fxOn = look.name !== 'original' && look.fx && look.fx.active, on = !!(fxOn && look.fx.ON.polish);
+  lampRig.visible = !!(fxOn && look.fx.ON.shafts);
+  polishRig.visible = on; pressureRing.visible = on;
+  if (on === polishOn) return;
+  polishOn = on;
+  rimLight.intensity = base.rim * (on ? 1.4 : 1); fillLight.intensity = base.fill * (on ? 1.15 : 1);
+  steelMats.forEach((m, i) => { m.envMapIntensity = base.env[i] * (on ? 1.25 : 1); m.roughness = base.rough[i] * (on ? 0.85 : 1); });
+  if (!on) { rig.collar.material.emissive.setRGB(0, 0, 0); rig.collar.material.emissiveIntensity = 1; flash.intensity = 0; }
+}
+function updatePolish(dt, force) {
+  if (lampRig.visible) { const k = 14 * clamp(view.frame * view.zoom / 2.4, 0.3, 1); lampRig.userData.tube.color.setRGB(0.75 * k, 0.86 * k, 1.0 * k); }      // dimmer in close-ups, where the tube fills more of the frame
+  if (!polishOn) return;
+  const f = Math.sqrt(clamp(force, 0, 1)), k = 0.6 + 5.5 * f * f;
+  ringMat.color.setRGB(k * clamp(f * 2.2, 0.05, 1), k * clamp(1.25 - f * 1.15, 0.06, 1) * 0.8, k * 0.1 * (1 - f));
+  pressureRing.position.y = rig.collar.position.y + 0.16;
+  rig.collar.material.emissive.setRGB(1.0, 0.42, 0.05); rig.collar.material.emissiveIntensity = 0.04 + 1.6 * f * f * f;
+  flash.intensity *= Math.exp(-dt * 16);
+}
+
+function initLook() {
+  try {
+    look.fx = createFX(threeBackend(), { bedY: P.BED_Y, bedX: P.BED_X, bedZ: P.BED_Z, floorY: P.FLOOR_Y, G: P.G });
+    const gl = renderer.getContext();
+    look.tq = { ext: gl.getExtension('EXT_disjoint_timer_query_webgl2'), q: null, running: false, pending: false, n: 0 };
+  } catch (err) { console.warn('Cinematic stack unavailable; the original renderer stays.', err); look.failed = String((err && err.message) || err); look.fx = null; }
+}
+function lookFail(err) {
+  console.warn('Cinematic stack failed; back to the original renderer.', err);
+  look.failed = String((err && err.message) || err);
+  try { if (look.fx) look.fx.setActive(false); } catch (_) {}
+  try { renderer.setRenderTarget(null); } catch (_) {}
+  look.name = 'original';
+  applyPolish(); syncLookUI();
+  toast('Cinematic look failed — original renderer');
+}
+function setLook(name, quiet) {
+  if (name !== 'original' && (!look.fx || look.failed)) { if (!quiet) toast('Cinematic look unavailable on this device'); name = 'original'; }
+  try {
+    if (name === 'original') { if (look.fx) look.fx.setActive(false); }
+    else { const s = renderer.getDrawingBufferSize(_v2); look.fx.setPreset(name); look.fx.resize(s.x, s.y); look.fx.setActive(true); }
+    look.name = name;
+  } catch (err) { lookFail(err); return; }
+  applyPolish(); syncLookUI();
+  if (!quiet) toast(name === 'original' ? 'Original look' : name === 'ultra' ? 'Ultra — everything on' : 'Cinematic look');
+}
+const camInfo = { proj: null, projInv: null, viewInv: null, near: 0.1, far: 100, focus: 5, scale: 2.4, lamp: [0.5, 0.5, 0] };
+function renderCinematic(dt, simDt) {
+  const fx = look.fx, gl = renderer.getContext(), tq = look.tq;
+  fx.simulate(simDt, { ramY: world.ram.y, ramR: world.ramR, anvR: world.anvR, ramV: world.ram.v, pxW: 2 * TAN / (H * dpr), shutter: clamp(timeScale, 0.06, 1) / 90, sizeK: clamp(view.frame * view.zoom / 2.4, 0.2, 1.2) });
+  renderer.setRenderTarget(fx.sceneTarget().rt);
+  renderer.render(scene, camera);
+  camInfo.proj = camera.projectionMatrix.elements; camInfo.projInv = camera.projectionMatrixInverse.elements; camInfo.viewInv = camera.matrixWorld.elements;
+  camInfo.near = camera.near; camInfo.far = camera.far; camInfo.scale = view.frame * view.zoom;
+  camInfo.focus = camera.position.distanceTo(_v3.set(0, view.ty, 0));
+  // where the work light sits on screen (the shafts fan out from there), fading out as it leaves the frame
+  _v3.copy(LAMP_POS).applyMatrix4(camera.matrixWorldInverse);
+  const front = _v3.z < -0.01;
+  _v3.applyMatrix4(camera.projectionMatrix);
+  const lu = _v3.x * 0.5 + 0.5, lv = _v3.y * 0.5 + 0.5;
+  camInfo.lamp[0] = lu; camInfo.lamp[1] = lv;
+  camInfo.lamp[2] = front && lampRig.visible ? clamp(1 - (Math.max(Math.abs(lu - 0.5), Math.abs(lv - 0.5)) - 0.5) / 0.4, 0, 1) : 0;
+  // GPU time of the post chain, sampled twice a second where the browser exposes timer queries
+  const sample = tq.ext && !tq.pending && (tq.n++ % 30) === 0;
+  if (sample) { tq.q = gl.createQuery(); gl.beginQuery(tq.ext.TIME_ELAPSED_EXT, tq.q); }
+  fx.render(camInfo, dt);
+  if (sample) { gl.endQuery(tq.ext.TIME_ELAPSED_EXT); tq.pending = true; }
+  else if (tq.pending && gl.getQueryParameter(tq.q, gl.QUERY_RESULT_AVAILABLE)) {
+    if (!gl.getParameter(tq.ext.GPU_DISJOINT_EXT)) look.gpuMs = gl.getQueryParameter(tq.q, gl.QUERY_RESULT) / 1e6;
+    gl.deleteQuery(tq.q); tq.q = null; tq.pending = false;
+  }
+  renderer.setRenderTarget(null);
+}
+
+/* the panel */
+const LOOK_TOGGLES = [['bloom', 'Bloom'], ['particles', 'Particles'], ['ao', 'Occlusion'], ['dof', 'Depth of field'], ['fog', 'Fog'], ['shafts', 'Light shafts'], ['polish', 'Polish'], ['grade', 'Grade'], ['ca', 'Chromatic'], ['vignette', 'Vignette'], ['grain', 'Grain'], ['fxaa', 'FXAA']];
+const LOOK_SLIDERS = [
+  ['exposure', 'Exposure', 0.4, 2, 0.01], ['bloomThreshold', 'Bloom threshold', 0.2, 3, 0.01], ['bloomStrength', 'Bloom strength', 0, 1.5, 0.01], ['bloomRadius', 'Bloom radius', 0, 1, 0.01],
+  ['particleRate', 'Particle rate', 0, 2, 0.01], ['aoIntensity', 'Occlusion', 0, 3, 0.01], ['aoRadius', 'Occlusion radius', 0.1, 1.5, 0.01], ['dofAperture', 'Aperture', 0, 1.5, 0.01], ['dofFocus', 'Focus offset', -3, 3, 0.01],
+  ['fogDensity', 'Fog density', 0, 0.08, 0.001], ['shafts', 'Shaft strength', 0, 2, 0.01], ['contrast', 'Contrast', 0.8, 1.3, 0.005], ['saturation', 'Saturation', 0, 1.6, 0.01],
+  ['ca', 'Chromatic aberration', 0, 1.5, 0.01], ['vignette', 'Vignette', 0, 1, 0.01], ['grain', 'Film grain', 0, 0.15, 0.001],
+];
+const lookEl = $('#look');
+function buildLookUI() {
+  const chips = $('#lookToggles'), sl = $('#lookSliders');
+  for (const [k, label] of LOOK_TOGGLES) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.fx = k; b.textContent = label; b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => {
+      const fx = look.fx; if (!fx || look.name === 'original') return;
+      if (k === 'particles' && !fx.particlesOK) { toast('No float textures here — particles stay off'); return; }
+      fx.ON[k] = !fx.ON[k]; applyPolish(); syncLookUI(); Sound.sfx({ t: 'tick' });
+    });
+    chips.appendChild(b);
+  }
+  for (const [k, label, lo, hi, step] of LOOK_SLIDERS) {
+    const row = document.createElement('label'); row.className = 'sl';
+    row.innerHTML = '<span>' + label + '</span><output></output><input type="range" min="' + lo + '" max="' + hi + '" step="' + step + '">';
+    const inp = row.querySelector('input'), out = row.querySelector('output');
+    inp.dataset.p = k;
+    inp.addEventListener('input', () => { if (look.fx) look.fx.P[k] = +inp.value; out.textContent = (+inp.value).toFixed(step < 0.01 ? 3 : 2); });
+    sl.appendChild(row);
+  }
+  for (const b of document.querySelectorAll('[data-look]')) b.addEventListener('click', () => { Sound.unlock(); setLook(b.dataset.look); Sound.sfx({ t: 'tick' }); });
+}
+function syncLookUI() {
+  const fx = look.fx, on = look.name !== 'original' && !!fx;
+  lookEl.classList.toggle('off', !on);
+  for (const b of document.querySelectorAll('[data-look]')) b.setAttribute('aria-pressed', b.dataset.look === look.name ? 'true' : 'false');
+  for (const b of document.querySelectorAll('[data-fx]')) b.setAttribute('aria-pressed', on && fx.ON[b.dataset.fx] ? 'true' : 'false');
+  for (const inp of document.querySelectorAll('#lookSliders input')) { if (fx) inp.value = fx.P[inp.dataset.p]; inp.previousElementSibling.textContent = fx ? (+fx.P[inp.dataset.p]).toFixed(+inp.step < 0.01 ? 3 : 2) : '—'; }
+  $('#lookNote').textContent = look.failed ? 'The cinematic passes are not available here (' + look.failed + '). The original renderer is in use.'
+    : on ? 'Every pass is optional: switch one off and it is skipped entirely.' : 'Original: the page renders exactly as it always has. Pick Cinematic or Ultra to switch the passes below on.';
+}
+function setLookOpen(v) { look.open = v; lookEl.hidden = !v; document.body.classList.toggle('look-open', v); $('#tLook').setAttribute('aria-pressed', v ? 'true' : 'false'); }
+function updateLookStat(dt) {
+  look.statT += dt; if (look.statT < 0.25 || !look.open) return;
+  look.statT = 0;
+  const fx = look.fx, on = look.name !== 'original' && fx;
+  $('#lookStat').textContent = frameAvg.toFixed(1) + ' ms' + (on ? ' · ' + fx.passes + ' passes' + (look.gpuMs >= 0 ? ' · post ' + look.gpuMs.toFixed(1) + ' ms' : '') : ' · original path');
+}
+
 /* ═════════════════════════════════════════════════════════ SOUND ══════
-   Everything is low and slow: sub drones that beat against each other, a strain tone
-   that climbs with the gauge, and deep hits drowned in a long reverb. No assets.     */
+   Built from the sound-design brief: the machine owns the low end at all times (sub-80 Hz bed, motor, pump,
+   frame groans), and whatever is on the anvil rides on top of it in the mids and highs.
+     idle      15–60 Hz rumble · oil ticks and bloops · thermal creaks · faint 2–8 kHz hiss · room tone
+     start-up  contactor clunk · motor spins up to 50 Hz with 2× / 3× harmonics · pump whine 240 Hz and up
+     pressure  20–80 Hz rumble grows · pump pulsation deepens · long frame groans · 1–5 kHz valve hiss
+     ram       hydraulic whoosh while it travels · sub thud + mid clank on contact
+     release   sharp hiss that dies away · valve clunks · low shudder · now and then a hydraulic hammer
+   Every object then gets its own placement → compression → carnage → aftermath voices. No samples: all synthesis. */
 const Sound = (() => {
-  const S = { on: true, ctx: null, master: null, dry: null, send: null, tone: null, voices: 0, requested: 0, last: Object.create(null), slow: 1, noise: null, strain: null, hum: null, drone: [] };
-  const PENTA = [110, 130.81, 146.83, 164.81, 196, 220];
+  const S = { on: true, ctx: null, master: null, mach: null, obj: null, send: null, tone: null, voices: 0, requested: 0, last: Object.create(null), slow: 1, white: null, brown: null, L: null, prevComp: 0, prevF: 0, grainAcc: 0, groanAcc: 0, wasPress: false, peakF: 0, idleT: 0 };
+  const R = (a, b) => a + Math.random() * (b - a);
   function unlock() {
     if (S.ctx) { if (S.ctx.state === 'suspended') S.ctx.resume().catch(() => {}); return; }
     try {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-      const ctx = new AC(), sr = ctx.sampleRate;
-      const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 5; comp.attack.value = 0.012; comp.release.value = 0.35;
-      const tone = ctx.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 2400; tone.Q.value = 0.3;
-      const master = ctx.createGain(); master.gain.value = S.on ? 0.85 : 0;
+      const ctx = new AC(), sr = ctx.sampleRate, t0 = ctx.currentTime;
+      const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = 0.006; comp.release.value = 0.25;
+      const tone = ctx.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 16000; tone.Q.value = 0.2;       // closes while the high-speed camera runs
+      const master = ctx.createGain(); master.gain.value = S.on ? 0.8 : 0;
       master.connect(tone); tone.connect(comp); comp.connect(ctx.destination);
-      // long dark reverb from a synthetic impulse
-      const n = Math.floor(sr * 5), ir = ctx.createBuffer(2, n, sr);
-      for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); let lp = 0; for (let i = 0; i < n; i++) { const t = i / n; lp += ((Math.random() * 2 - 1) * Math.pow(1 - t, 2.8) - lp) * 0.09; d[i] = lp * 4.5; } }
+      // a workshop: short, hard, a little boxy
+      const n = Math.floor(sr * 1.7), ir = ctx.createBuffer(2, n, sr);
+      for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); let lp = 0; for (let i = 0; i < n; i++) { const t = i / n; lp += ((Math.random() * 2 - 1) * Math.pow(1 - t, 3.2) - lp) * 0.35; d[i] = lp * 1.6 * (i < sr * 0.012 ? i / (sr * 0.012) : 1); } }
       const rev = ctx.createConvolver(); rev.buffer = ir;
-      const wet = ctx.createGain(); wet.gain.value = 0.55; rev.connect(wet); wet.connect(master);
-      const dry = ctx.createGain(); dry.connect(master);
+      const wet = ctx.createGain(); wet.gain.value = 0.32; rev.connect(wet); wet.connect(master);
       const send = ctx.createGain(); send.connect(rev);
-      const nb = ctx.createBuffer(1, sr * 2, sr), nd = nb.getChannelData(0);
-      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-      Object.assign(S, { ctx, master, dry, send, tone, noise: nb });
-      const t0 = ctx.currentTime;
-      // drone: two subs a fraction of a hertz apart (a slow beat), a fifth that drifts, and filtered air
-      const dg = ctx.createGain(); dg.gain.value = 0; dg.gain.setTargetAtTime(0.5, t0, 2.5); dg.connect(dry);
-      const ds = ctx.createGain(); ds.gain.value = 0.45; dg.connect(ds); ds.connect(send);
-      const osc = (type, f, g, dest) => { const o = ctx.createOscillator(), gn = ctx.createGain(); o.type = type; o.frequency.value = f; gn.gain.value = g; o.connect(gn); gn.connect(dest); o.start(); S.drone.push(o); return { o, g: gn }; };
-      osc('sine', 55, 0.3, dg); osc('sine', 55.37, 0.26, dg); osc('sine', 27.5, 0.2, dg);
-      const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 260; flt.Q.value = 2; flt.connect(dg);
-      S.fifth = osc('triangle', 82.41, 0.1, flt); S.third = osc('sine', 110.4, 0.035, flt);
-      const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 0.07; lg.gain.value = 110; lfo.connect(lg); lg.connect(flt.frequency); lfo.start();
-      const air = ctx.createBufferSource(); air.buffer = nb; air.loop = true;
-      const ab = ctx.createBiquadFilter(); ab.type = 'bandpass'; ab.frequency.value = 240; ab.Q.value = 0.7;
-      const ag = ctx.createGain(); ag.gain.value = 0.03; air.connect(ab); ab.connect(ag); ag.connect(dg); air.start();
-      const l2 = ctx.createOscillator(), l2g = ctx.createGain(); l2.frequency.value = 0.045; l2g.gain.value = 0.02; l2.connect(l2g); l2g.connect(ag.gain); l2.start();
-      // strain: two saws through a filter that opens as the gauge climbs, with a tremolo that quickens
-      const sg = ctx.createGain(); sg.gain.value = 0; const sf = ctx.createBiquadFilter(); sf.type = 'lowpass'; sf.frequency.value = 90; sf.Q.value = 5;
-      const s1 = ctx.createOscillator(), s2 = ctx.createOscillator(); s1.type = 'sawtooth'; s2.type = 'sawtooth'; s1.frequency.value = 41.2; s2.frequency.value = 41.5;
-      s1.connect(sf); s2.connect(sf); sf.connect(sg); sg.connect(dry); const ss = ctx.createGain(); ss.gain.value = 0.6; sg.connect(ss); ss.connect(send); s1.start(); s2.start();
-      const tr = ctx.createOscillator(), tg = ctx.createGain(); tr.frequency.value = 2; tg.gain.value = 0; tr.connect(tg); tg.connect(sg.gain); tr.start();
-      S.strain = { s1, s2, sf, sg, tr, tg };
-      // pump hum while the ram moves
-      const hg = ctx.createGain(); hg.gain.value = 0; const hf = ctx.createBiquadFilter(); hf.type = 'lowpass'; hf.frequency.value = 130;
-      const h1 = ctx.createOscillator(); h1.type = 'sawtooth'; h1.frequency.value = 36.7; h1.connect(hf); hf.connect(hg); hg.connect(dry); h1.start();
-      S.hum = { h1, hg };
+      const mach = ctx.createGain(); mach.gain.value = 1; mach.connect(master);
+      const ms = ctx.createGain(); ms.gain.value = 0.25; mach.connect(ms); ms.connect(send);
+      const objHP = ctx.createBiquadFilter(); objHP.type = 'highpass'; objHP.frequency.value = 70; objHP.Q.value = 0.5; objHP.connect(master);      // the sub band belongs to the press
+      const obj = ctx.createGain(); obj.gain.value = 1; obj.connect(objHP);
+      const mkNoise = (brown) => { const b = ctx.createBuffer(1, sr * 2, sr), d = b.getChannelData(0); let l = 0; for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { l = (l + 0.02 * w) / 1.02; d[i] = l * 3.5; } else d[i] = w; } return b; };
+      Object.assign(S, { ctx, master, mach, obj, send, tone, white: mkNoise(false), brown: mkNoise(true) });
+      const osc = (type, f, dest) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = f; g.gain.value = 0; o.connect(g); if (dest) g.connect(dest); o.start(); return { o, g }; };
+      const loop = (buf, type, f, q, dest) => { const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = ctx.createGain(); g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(dest); s.start(0, Math.random()); return { s, f: fl, g }; };
+      const L = S.L = {};
+      // idle bed: always there, always below 80 Hz
+      L.sub1 = osc('sine', 31, mach); L.sub2 = osc('sine', 47.5, mach); L.rum = loop(S.brown, 'lowpass', 62, 0.7, mach);
+      L.sub1.g.gain.setTargetAtTime(0.2, t0, 1.5); L.sub2.g.gain.setTargetAtTime(0.1, t0, 1.5); L.rum.g.gain.setTargetAtTime(0.5, t0, 1.5);
+      L.room = loop(S.white, 'bandpass', 380, 0.5, mach); L.room.g.gain.setTargetAtTime(0.006, t0, 2);
+      L.air = loop(S.white, 'highpass', 3200, 0.4, mach); L.air.g.gain.setTargetAtTime(0.0022, t0, 2);
+      // motor: 50 Hz and its 2nd and 3rd harmonics
+      L.m1 = osc('sine', 50, mach); L.m2 = osc('sine', 100, mach); L.m3 = osc('triangle', 150, mach);
+      // pump: a whine at 240 Hz with harmonics up to 1–2 kHz, chopped by the piston pulsation
+      const pf = ctx.createBiquadFilter(); pf.type = 'bandpass'; pf.frequency.value = 520; pf.Q.value = 0.6;
+      const pg = ctx.createGain(); pg.gain.value = 0; pf.connect(pg); pg.connect(mach);
+      const p1 = ctx.createOscillator(); p1.type = 'sawtooth'; p1.frequency.value = 240; p1.connect(pf); p1.start();
+      const p2 = ctx.createOscillator(); p2.type = 'square'; p2.frequency.value = 241.3; const p2g = ctx.createGain(); p2g.gain.value = 0.35; p2.connect(p2g); p2g.connect(pf); p2.start();
+      const pl = ctx.createOscillator(); pl.type = 'sine'; pl.frequency.value = 23; const plg = ctx.createGain(); plg.gain.value = 0; pl.connect(plg); plg.connect(pg.gain); pl.start();
+      L.pump = { p1, p2, f: pf, g: pg, lfo: pl, depth: plg };
+      // pressure: deep rumble that follows the gauge, and the relief-valve hiss
+      L.load = loop(S.brown, 'lowpass', 80, 1.2, mach); L.strain = osc('sawtooth', 38, null);
+      const sf = ctx.createBiquadFilter(); sf.type = 'lowpass'; sf.frequency.value = 70; sf.Q.value = 3; L.strain.g.connect(sf); sf.connect(mach); L.strain.f = sf;
+      L.valve = loop(S.white, 'bandpass', 2600, 0.8, mach);
+      // ram travel: fluid rushing through the lines
+      L.whoosh = loop(S.white, 'bandpass', 520, 0.9, mach);
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-      S.driftT = setInterval(() => {
-        if (!S.ctx || S.ctx.state !== 'running') return;
-        const f = [82.41, 73.42, 98.0, 65.41][(Math.random() * 4) | 0];
-        S.fifth.o.frequency.setTargetAtTime(f, S.ctx.currentTime, 3.5); S.third.o.frequency.setTargetAtTime(f * 1.335, S.ctx.currentTime, 4.5);
-      }, 13000);
     } catch (err) { console.warn('Audio unavailable', err); S.ctx = null; }
   }
-  function setOn(v) { S.on = v; if (S.master && S.ctx) S.master.gain.setTargetAtTime(v ? 0.85 : 0, S.ctx.currentTime, 0.05); }
+  function setOn(v) { S.on = v; if (S.master && S.ctx) S.master.gain.setTargetAtTime(v ? 0.8 : 0, S.ctx.currentTime, 0.05); }
   function gate(key, ms) { const n = performance.now(); if (n - (S.last[key] || -1e9) < ms) return false; S.last[key] = n; return true; }
-  /** one enveloped oscillator; pitches drop and stretch while the camera is in slow motion */
+  const live = () => S.ctx && S.on && S.ctx.state === 'running' && S.voices < 34;
+  /** enveloped oscillator. o: { f0, f1, dur, gain, type, attack, bend, send, at (delay s), bus ('m' machine | 'o' object), vib } */
   function tone(o) {
     S.requested++;
-    const ctx = S.ctx;
-    if (!ctx || !S.on || ctx.state !== 'running' || S.voices > 26) return;
-    const k = 0.5 + 0.5 * S.slow, st = 1 / (0.45 + 0.55 * S.slow), t = ctx.currentTime, dur = o.dur * st;
+    if (!live()) return;
+    const ctx = S.ctx, k = 0.45 + 0.55 * S.slow, st = 1 / (0.4 + 0.6 * S.slow), t = ctx.currentTime + (o.at || 0) * st, dur = o.dur * st;
     const osc = ctx.createOscillator(), g = ctx.createGain();
     osc.type = o.type || 'sine';
-    osc.frequency.setValueAtTime(o.f0 * k, t);
-    if (o.f1) osc.frequency.exponentialRampToValueAtTime(Math.max(18, o.f1 * k), t + dur * (o.bend || 0.5));
+    osc.frequency.setValueAtTime(Math.max(12, o.f0 * k), t);
+    if (o.f1) osc.frequency.exponentialRampToValueAtTime(Math.max(12, o.f1 * k), t + dur * (o.bend || 0.6));
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, o.gain), t + (o.attack || 0.008) * st);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, o.gain), t + (o.attack || 0.004) * st);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g); g.connect(S.dry);
+    osc.connect(g); g.connect(o.bus === 'm' ? S.mach : S.obj);
     if (o.send) { const s = ctx.createGain(); s.gain.value = o.send; g.connect(s); s.connect(S.send); }
     S.voices++;
     osc.onended = () => { S.voices--; try { g.disconnect(); } catch (_) {} };
     osc.start(t); osc.stop(t + dur + 0.05);
   }
-  /** a burst of filtered noise with a sweeping filter */
-  function hiss(o) {
+  /** filtered noise burst. o: { f0, f1, q, dur, gain, type, attack, send, at, bus, brown } */
+  function noise(o) {
     S.requested++;
-    const ctx = S.ctx;
-    if (!ctx || !S.on || ctx.state !== 'running' || S.voices > 26) return;
-    const k = 0.5 + 0.5 * S.slow, st = 1 / (0.45 + 0.55 * S.slow), t = ctx.currentTime, dur = o.dur * st;
-    const src = ctx.createBufferSource(); src.buffer = S.noise; src.loop = true; src.playbackRate.value = 0.6 + 0.4 * S.slow;
+    if (!live()) return;
+    const ctx = S.ctx, k = 0.45 + 0.55 * S.slow, st = 1 / (0.4 + 0.6 * S.slow), t = ctx.currentTime + (o.at || 0) * st, dur = o.dur * st;
+    const src = ctx.createBufferSource(); src.buffer = o.brown ? S.brown : S.white; src.loop = true; src.playbackRate.value = 0.55 + 0.45 * S.slow;
     const f = ctx.createBiquadFilter(); f.type = o.type || 'bandpass'; f.Q.value = o.q || 1;
-    f.frequency.setValueAtTime(o.f0 * k, t); f.frequency.exponentialRampToValueAtTime(Math.max(30, (o.f1 || o.f0) * k), t + dur);
-    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, o.gain), t + (o.attack || 0.006) * st); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f); f.connect(g); g.connect(S.dry);
+    f.frequency.setValueAtTime(Math.min(18000, o.f0 * k), t); f.frequency.exponentialRampToValueAtTime(Math.max(25, Math.min(18000, (o.f1 || o.f0) * k)), t + dur);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, o.gain), t + (o.attack || 0.003) * st); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(o.bus === 'm' ? S.mach : S.obj);
     if (o.send) { const s = ctx.createGain(); s.gain.value = o.send; g.connect(s); s.connect(S.send); }
     S.voices++;
     src.onended = () => { S.voices--; try { g.disconnect(); } catch (_) {} };
     src.start(t, Math.random()); src.stop(t + dur + 0.05);
   }
-  function burst(id, p) {
-    // the shared part: a sub drop, a dark whoosh, and a soft chord left hanging in the reverb
-    tone({ f0: 58, f1: 25, dur: 1.7, gain: 0.8 * p, bend: 0.7, send: 0.5 });
-    tone({ f0: 88, f1: 37, dur: 0.9, gain: 0.38 * p, bend: 0.6, send: 0.4 });
-    hiss({ type: 'lowpass', f0: 900, f1: 80, dur: 0.8, gain: 0.34 * p, q: 0.7, send: 0.9 });
-    for (const f of [110, 164.81, 246.94]) tone({ f0: f * (1 + (Math.random() - 0.5) * 0.006), dur: 5.5, gain: 0.03, attack: 0.5, send: 1.4 });
-    if (id === 'paper') { hiss({ f0: 420, f1: 140, dur: 0.6, gain: 0.5, q: 0.6, send: 0.9 }); hiss({ type: 'lowpass', f0: 300, f1: 60, dur: 1.4, gain: 0.3, send: 1 }); }
-    else if (id === 'bowling') { tone({ type: 'triangle', f0: 140, f1: 48, dur: 0.5, gain: 0.5, send: 0.5 }); hiss({ f0: 260, f1: 110, dur: 0.35, gain: 0.4, q: 1.4, send: 0.6 }); }
-    else if (id === 'golf') { tone({ f0: 196, f1: 62, dur: 0.32, gain: 0.6, bend: 0.4, send: 0.5 }); }
-    else if (id === 'puck') { tone({ f0: 82, f1: 33, dur: 0.8, gain: 0.7, send: 0.5 }); hiss({ f0: 180, f1: 90, dur: 0.3, gain: 0.3, q: 2, send: 0.5 }); }
-    else if (id === 'diamond') { for (const f of [523.25, 783.99, 1174.66]) tone({ f0: f, dur: 2.6, gain: 0.045, send: 1.6 }); hiss({ f0: 700, f1: 400, dur: 0.12, gain: 0.12, q: 3, send: 0.8 }); }
-    else if (id === 'gummy') { tone({ f0: 130, f1: 46, dur: 0.6, gain: 0.55, bend: 0.5, send: 0.5 }); hiss({ f0: 380, f1: 130, dur: 0.45, gain: 0.3, q: 4, send: 0.7 }); }
+  /* ───────── building blocks named after what they sound like ───────── */
+  const V = {
+    thud:    (p, f, at) => { tone({ f0: f * 1.6, f1: f, dur: 0.22, gain: 0.5 * p, send: 0.3, at }); noise({ type: 'lowpass', f0: 420, f1: 120, dur: 0.09, gain: 0.2 * p, at }); },
+    clink:   (p, f, at) => { for (const m of [1, 2.76, 5.4]) tone({ f0: f * m * R(0.98, 1.02), dur: 0.5 / m + 0.08, gain: 0.1 * p / m, send: 0.5, at }); noise({ type: 'highpass', f0: 5000, dur: 0.012, gain: 0.16 * p, at }); },
+    tick:    (p, f, at) => { noise({ f0: f, q: 5, dur: 0.018, gain: 0.3 * p, at }); },
+    crack:   (p, f, at) => { noise({ f0: f, f1: f * 0.7, q: 7, dur: 0.035, gain: 0.5 * p, send: 0.4, at }); noise({ type: 'highpass', f0: f * 1.6, dur: 0.01, gain: 0.3 * p, at }); },
+    creak:   (p, f, at) => { tone({ type: 'sawtooth', f0: f, f1: f * R(1.15, 1.6), dur: R(0.12, 0.3), gain: 0.05 * p, attack: 0.03, bend: 1, send: 0.3, at }); },
+    squeak:  (p, f, at) => { tone({ type: 'triangle', f0: f, f1: f * R(1.2, 1.9), dur: R(0.06, 0.16), gain: 0.06 * p, attack: 0.015, bend: 1, send: 0.3, at }); },
+    squish:  (p, f, at) => { noise({ f0: f, f1: f * R(0.5, 0.8), q: 2.2, dur: R(0.07, 0.16), gain: 0.16 * p, attack: 0.02, send: 0.2, at }); },
+    crackle: (p, f, at) => { noise({ type: 'highpass', f0: f, dur: R(0.004, 0.012), gain: 0.2 * p, at }); },
+    crunch:  (p, f, at) => { noise({ f0: f, f1: f * 0.5, q: 0.8, dur: R(0.05, 0.14), gain: 0.34 * p, send: 0.3, at }); },
+    splat:   (p, f, at) => { noise({ type: 'lowpass', f0: f * 2.5, f1: f * 0.5, dur: 0.14, gain: 0.3 * p, send: 0.3, at }); tone({ f0: f * 0.7, f1: f * 0.35, dur: 0.09, gain: 0.14 * p, at }); },
+    drip:    (p, f, at) => { tone({ f0: f, f1: f * 1.7, dur: 0.045, gain: 0.05 * p, bend: 1, send: 0.6, at }); },
+    ping:    (p, f, at) => { tone({ f0: f, dur: R(0.25, 0.7), gain: 0.05 * p, send: 0.8, at }); tone({ f0: f * 2.71, dur: 0.15, gain: 0.025 * p, send: 0.8, at }); },
+    tear:    (p, f, at) => { noise({ f0: f, f1: f * 2.2, q: 1.5, dur: 0.16, gain: 0.3 * p, attack: 0.01, send: 0.3, at }); },
+    boom:    (p, f, at) => { tone({ f0: f * 2, f1: f, dur: 0.7, gain: 0.8 * p, bend: 0.3, send: 0.4, at }); noise({ type: 'lowpass', brown: true, f0: 300, f1: 60, dur: 0.5, gain: 0.6 * p, send: 0.4, at }); },
+    whoomp:  (p, f, at) => { tone({ f0: f * 1.4, f1: f * 0.6, dur: 0.4, gain: 0.6 * p, bend: 0.5, send: 0.3, at }); noise({ type: 'lowpass', f0: 900, f1: 150, dur: 0.3, gain: 0.5 * p, attack: 0.012, send: 0.4, at }); },
+    pop:     (p, f, at) => { noise({ f0: f, f1: f * 0.4, q: 0.7, dur: 0.07, gain: 0.7 * p, send: 0.5, at }); tone({ f0: f * 0.5, f1: f * 0.2, dur: 0.1, gain: 0.3 * p, at }); },
+    shatter: (p, f, at) => { noise({ type: 'highpass', f0: f, f1: f * 0.5, dur: 0.3, gain: 0.5 * p, send: 0.5, at }); for (let i = 0; i < 5; i++) V.ping(p * R(0.5, 1.2), f * R(0.6, 2.6), (at || 0) + R(0, 0.12)); },
+    fizz:    (p, f, at) => { noise({ type: 'highpass', f0: f, dur: 1.4, gain: 0.07 * p, attack: 0.05, at }); },
+  };
+  /* ───────── the sixteen objects: placement / what compression sounds like / carnage / aftermath ─────────
+     grain: [voice, lowest f, highest f, grains per second at full compression speed, loudness] — played while the gauge is climbing */
+  const M = {
+    watermelon: { land: () => { V.thud(1, 70); V.squish(0.5, 500); }, grain: [['creak', 140, 380, 9, 0.9], ['squish', 300, 800, 7, 0.7]], crack: (p) => { V.tear(0.5 * p, 380); V.squish(p, 500); },
+      burst: (p) => { V.whoomp(p, 75); V.splat(p, 420); for (let i = 0; i < 7; i++) V.pop(R(0.08, 0.2), R(900, 2200), R(0.02, 0.3)); V.tear(0.6, 520, 0.02); }, hit: (p) => V.splat(0.6 * p, R(250, 500)), after: () => { for (let i = 0; i < 9; i++) V.drip(R(0.5, 1), R(500, 1100), R(0.5, 3.2)); } },
+    orange: { land: () => { V.thud(0.5, 110); }, grain: [['squish', 500, 1300, 9, 0.6], ['creak', 300, 700, 4, 0.5]], crack: (p) => { V.tick(p, 2200); V.tear(0.3 * p, 900); },
+      burst: (p) => { V.whoomp(0.5 * p, 120); V.splat(0.7 * p, 700); V.tick(0.8, 2600, 0.01); noise({ type: 'highpass', f0: 3500, dur: 0.25, gain: 0.12, attack: 0.02 }); }, hit: (p) => V.splat(0.4 * p, R(400, 800)), after: () => { for (let i = 0; i < 6; i++) V.drip(R(0.4, 0.9), R(800, 1500), R(0.4, 2.6)); } },
+    bottle: { land: () => V.clink(1, 2100), grain: [['crack', 2200, 8000, 5, 0.35], ['ping', 2500, 6000, 1.5, 0.5]], crack: (p) => { V.crack(p, R(3000, 7000)); V.ping(0.7 * p, R(2500, 5000)); },
+      burst: (p) => { V.shatter(p, 3600); V.shatter(0.7 * p, 5200, 0.05); tone({ f0: 190, f1: 120, dur: 0.18, gain: 0.35 * p, send: 0.3 }); for (let i = 0; i < 10; i++) V.ping(R(0.3, 0.9), R(2400, 7500), R(0.08, 0.7)); }, hit: (p) => V.ping(0.8 * p + 0.2, R(2200, 6800)), after: () => { for (let i = 0; i < 8; i++) V.ping(R(0.2, 0.6), R(3000, 8000), R(0.6, 2.6)); } },
+    can: { land: () => { V.tick(1, 3200); tone({ f0: 620, dur: 0.12, gain: 0.05, send: 0.5 }); }, grain: [['crunch', 900, 3200, 11, 0.5], ['ping', 1500, 4200, 3, 0.5], ['tick', 2500, 6000, 8, 0.5]], crack: (p) => V.crunch(p, 1800),
+      burst: (p) => { V.pop(p, 900); V.crunch(p, 1600); V.fizz(1, 4200); for (let i = 0; i < 5; i++) V.ping(R(0.4, 1), R(1400, 3800), R(0, 0.2)); V.splat(0.4, 600, 0.05); }, hit: (p) => V.tick(p, R(2000, 4000)), after: () => { for (let i = 0; i < 6; i++) V.tick(R(0.2, 0.5), R(2500, 5200), R(0.5, 2.4)); V.fizz(0.5, 5000, 0.8); } },
+    balloon: { land: () => { V.thud(0.35, 120); V.squeak(0.5, 500); }, grain: [['squeak', 500, 1800, 6, 0.8], ['creak', 250, 600, 3, 0.5]], crack: (p) => V.squeak(p, 900),
+      burst: (p) => { V.pop(1, 1300); V.splat(1, 380, 0.015); noise({ type: 'lowpass', f0: 2600, f1: 300, dur: 0.6, gain: 0.4, attack: 0.02, send: 0.4, at: 0.02 }); V.tear(0.4, 1400); }, hit: (p) => { V.squish(0.4 * p, 600); }, after: () => { for (let i = 0; i < 10; i++) V.drip(R(0.5, 1), R(600, 1300), R(0.4, 3)); V.squish(0.3, 900, 0.5); } },
+    playdoh: { land: () => V.thud(0.45, 90), grain: [['squish', 220, 600, 14, 0.75]], crack: (p) => V.squish(p, 360),
+      burst: (p) => { V.squish(1, 260); V.splat(0.5, 220); }, hit: () => {}, after: () => { V.squish(0.3, 300, 0.4); } },
+    mug: { land: () => V.clink(1, 1500), grain: [['crack', 3000, 10000, 4, 0.4], ['creak', 500, 900, 1.5, 0.3]], crack: (p) => { V.crack(p, R(3500, 9000)); tone({ f0: 240, f1: 170, dur: 0.07, gain: 0.2 * p }); },
+      burst: (p) => { V.shatter(p, 2600); V.crack(1, 4200); tone({ f0: 210, f1: 110, dur: 0.22, gain: 0.5 * p, send: 0.3 }); for (let i = 0; i < 7; i++) V.clink(R(0.3, 0.8), R(1400, 3600), R(0.06, 0.6)); noise({ f0: 1200, f1: 500, q: 0.6, dur: 0.5, gain: 0.07, attack: 0.05, at: 0.1 }); }, hit: (p) => V.clink(0.7 * p + 0.15, R(1500, 3800)), after: () => { for (let i = 0; i < 6; i++) V.clink(R(0.15, 0.4), R(1800, 4200), R(0.6, 2.4)); } },
+    stress: { land: () => V.thud(0.3, 130), grain: [['squish', 300, 800, 8, 0.6], ['squeak', 900, 2200, 3, 0.6]], crack: (p) => V.squeak(p, 1500),
+      burst: (p) => { V.pop(0.6, 700); V.tear(0.5, 700); V.splat(0.6, 300, 0.02); }, hit: (p) => V.squish(0.4 * p, 400), after: () => { for (let i = 0; i < 4; i++) V.squish(R(0.15, 0.3), R(250, 500), R(0.4, 2.2)); } },
+    egg: { land: () => V.tick(0.6, 3800), grain: [['crackle', 4000, 9000, 9, 0.5]], crack: (p) => V.crack(0.6 * p, R(4500, 9000)),
+      burst: (p) => { V.crack(1, 5200); for (let i = 0; i < 6; i++) V.crackle(R(0.4, 1), R(4000, 9000), R(0, 0.08)); V.splat(0.8, 520, 0.02); }, hit: (p) => V.tick(0.4 * p, R(3500, 7000)), after: () => { for (let i = 0; i < 5; i++) V.drip(R(0.3, 0.7), R(500, 900), R(0.5, 2.5)); } },
+    foam: { land: () => noise({ type: 'highpass', f0: 2500, dur: 0.03, gain: 0.03 }), grain: [['crackle', 2500, 8000, 46, 0.42], ['squeak', 1800, 3600, 2, 0.4]], crack: (p) => { V.crunch(0.5 * p, 2600); },
+      burst: (p) => { V.crunch(1, 1900); tone({ f0: 90, f1: 60, dur: 0.2, gain: 0.3 }); for (let i = 0; i < 12; i++) V.crackle(R(0.5, 1), R(2500, 7000), R(0, 0.25)); }, hit: () => {}, after: () => { for (let i = 0; i < 5; i++) V.squeak(R(0.2, 0.5), R(1800, 3400), R(0.4, 2.4)); noise({ type: 'highpass', f0: 5000, dur: 1.2, gain: 0.012, attack: 0.3, at: 0.4 }); } },
+    paper: { land: () => { V.thud(0.7, 85); noise({ f0: 900, q: 0.6, dur: 0.05, gain: 0.1 }); }, grain: [['crunch', 500, 1600, 9, 0.5], ['creak', 180, 420, 3, 0.6]], crack: (p) => { V.tear(0.8 * p, 700); noise({ type: 'lowpass', f0: 600, f1: 200, dur: 0.2, gain: 0.2 * p }); },
+      burst: (p) => { V.boom(0.7 * p, 60); V.tear(1, 600); V.crunch(1, 800); noise({ f0: 1400, f1: 400, q: 0.5, dur: 0.6, gain: 0.3, attack: 0.02, send: 0.4 }); }, hit: (p) => noise({ f0: R(500, 1200), q: 1, dur: 0.05, gain: 0.08 * p }), after: () => { for (let i = 0; i < 5; i++) noise({ f0: R(600, 1500), q: 1, dur: 0.04, gain: R(0.02, 0.05), at: R(0.5, 2.4) }); } },
+    bowling: { land: () => { V.thud(1.2, 55); tone({ f0: 320, f1: 250, dur: 0.05, gain: 0.1 }); }, grain: [['creak', 60, 170, 4, 1.4], ['crack', 400, 1100, 1.2, 0.5]], crack: (p) => { V.crack(p, R(500, 1100)); tone({ f0: 130, f1: 70, dur: 0.16, gain: 0.5 * p, send: 0.3 }); },
+      burst: (p) => { V.boom(p, 48); V.crack(1, 900); V.crunch(1, 600); noise({ type: 'highpass', f0: 3000, f1: 1500, dur: 0.25, gain: 0.25, send: 0.4 }); for (let i = 0; i < 6; i++) V.thud(R(0.2, 0.5), R(110, 260), R(0.1, 0.7)); }, hit: (p) => { V.thud(0.5 * p + 0.1, R(120, 300)); V.tick(0.3 * p, 1800); }, after: () => { for (let i = 0; i < 6; i++) V.thud(R(0.08, 0.2), R(160, 380), R(0.7, 2.6)); } },
+    puck: { land: () => V.thud(0.9, 95), grain: [['creak', 110, 300, 7, 1.0], ['squeak', 500, 1000, 1.5, 0.4]], crack: (p) => { V.tear(0.7 * p, 420); tone({ f0: 150, f1: 90, dur: 0.1, gain: 0.3 * p }); },
+      burst: (p) => { V.boom(0.6 * p, 62); V.tear(1, 380); V.thud(1, 120, 0.02); }, hit: (p) => V.thud(0.4 * p + 0.08, R(140, 260)), after: () => { for (let i = 0; i < 4; i++) V.thud(R(0.08, 0.18), R(150, 280), R(0.5, 2)); } },
+    golf: { land: () => { V.thud(0.4, 180); V.tick(0.7, 2400); }, grain: [['creak', 220, 520, 5, 0.7], ['squeak', 800, 1500, 1.5, 0.4]], crack: (p) => V.crack(p, R(1800, 3200)),
+      burst: (p) => { V.crack(1.2, 3400); V.thud(1, 90); V.pop(0.5, 1200); V.ping(0.8, 2600, 0.03); }, hit: (p) => { V.thud(0.3 * p, R(200, 320)); V.tick(0.5 * p, R(1800, 2800)); }, after: () => { for (let i = 0; i < 4; i++) V.tick(R(0.2, 0.5), R(1800, 3000), R(0.4, 1.8)); } },
+    gummy: { land: () => { V.thud(0.35, 120); V.squish(0.4, 400); }, grain: [['squish', 250, 700, 9, 0.6], ['squeak', 600, 1200, 1.2, 0.3]], crack: (p) => V.squish(p, 500),
+      burst: (p) => { V.pop(0.5, 520); V.tear(0.6, 500); V.splat(0.5, 300, 0.02); }, hit: (p) => V.squish(0.4 * p, R(300, 500)), after: () => { for (let i = 0; i < 4; i++) V.squish(R(0.12, 0.25), R(250, 450), R(0.5, 2.4)); } },
+    diamond: { land: () => { V.tick(0.8, 6500); V.ping(0.5, 5200); }, grain: [['creak', 45, 110, 5, 1.6], ['crackle', 8000, 14000, 5, 0.3]], crack: (p) => { V.crackle(p, R(9000, 14000)); tone({ type: 'sawtooth', f0: 70, f1: 95, dur: 0.3, gain: 0.07, attack: 0.05, bus: 'm' }); },
+      burst: (p) => { V.crack(1.3, 7500); noise({ type: 'highpass', f0: 9000, dur: 0.05, gain: 0.5 }); tone({ type: 'sawtooth', f0: 110, f1: 52, dur: 0.5, gain: 0.3, bus: 'm', send: 0.4 }); V.boom(0.45, 50); for (let i = 0; i < 8; i++) V.ping(R(0.3, 0.8), R(5000, 11000), R(0.02, 0.5)); }, hit: (p) => V.tick(0.5 * p + 0.1, R(5000, 9000)), after: () => { tone({ type: 'sawtooth', f0: 60, f1: 82, dur: 0.5, gain: 0.05, attack: 0.1, bus: 'm', at: 0.5 }); for (let i = 0; i < 6; i++) V.tick(R(0.15, 0.4), R(5500, 10000), R(0.4, 2.2)); } },
+  };
+  /* ───────── machine one-shots ───────── */
+  function startup() {            // contactor pulls in, motor and pump come up to speed
+    tone({ f0: 180, f1: 90, dur: 0.07, gain: 0.3, bus: 'm' }); noise({ f0: 1800, q: 2, dur: 0.02, gain: 0.25, bus: 'm' }); tone({ f0: 95, f1: 60, dur: 0.12, gain: 0.3, bus: 'm', at: 0.03 });
+  }
+  function release(load) {        // valves open: hiss, clunks, the frame shudders as it unloads
+    noise({ type: 'highpass', f0: 1400, f1: 3200, dur: 0.25 + 0.6 * load, gain: 0.1 + 0.3 * load, attack: 0.004, send: 0.3, bus: 'm' });
+    noise({ f0: 2600, f1: 900, q: 0.7, dur: 0.5 + 0.5 * load, gain: 0.05 + 0.12 * load, attack: 0.02, bus: 'm' });
+    tone({ f0: 130, f1: 80, dur: 0.09, gain: 0.3 + 0.25 * load, bus: 'm' }); noise({ f0: 900, q: 3, dur: 0.02, gain: 0.2, bus: 'm' });
+    tone({ f0: 105, f1: 70, dur: 0.1, gain: 0.25, bus: 'm', at: 0.16 + 0.1 * Math.random() }); noise({ f0: 1100, q: 3, dur: 0.02, gain: 0.14, bus: 'm', at: 0.18 });
+    if (load > 0.25) { tone({ f0: 44, f1: 36, dur: 0.6, gain: 0.5 * load, attack: 0.03, bus: 'm' }); tone({ f0: 47.5, f1: 38.5, dur: 0.6, gain: 0.4 * load, attack: 0.03, bus: 'm' }); }      // two tones a few hertz apart: the shudder
+    if (load > 0.6 && Math.random() < 0.4) { const at = R(0.18, 0.4); tone({ f0: 120, f1: 55, dur: 0.3, gain: 0.7, send: 0.5, bus: 'm', at }); noise({ f0: 420, q: 2.5, dur: 0.06, gain: 0.4, send: 0.5, bus: 'm', at }); toneRing(at); }   // hydraulic hammer
+  }
+  function toneRing(at) { for (const f of [310, 470, 730]) tone({ f0: f, dur: 0.5, gain: 0.03, send: 0.6, bus: 'm', at }); }
+  function groan(force) {         // the frame taking the load: slow, very low, long tail
+    const f = R(18, 68);
+    tone({ type: 'sawtooth', f0: f, f1: f * R(0.86, 1.2), dur: R(1.0, 2.4), gain: 0.05 + 0.12 * force, attack: 0.12, bend: 1, send: 0.5, bus: 'm' });
+    if (Math.random() < 0.5) tone({ f0: f * 3.02, f1: f * 2.9, dur: 0.8, gain: 0.02 + 0.03 * force, attack: 0.1, send: 0.6, bus: 'm' });
+  }
+  function idleBit() {            // the little noises a warm machine makes on its own
+    const r = Math.random();
+    if (r < 0.45) noise({ f0: R(1400, 3200), q: 6, dur: 0.012, gain: R(0.01, 0.03), bus: 'm', send: 0.4 });                               // oil tick
+    else if (r < 0.75) tone({ f0: R(260, 420), f1: R(150, 230), dur: R(0.05, 0.09), gain: R(0.008, 0.02), bus: 'm', send: 0.5 });        // bloop in the lines
+    else tone({ type: 'triangle', f0: R(100, 400), f1: R(100, 400), dur: R(0.04, 0.1), gain: R(0.008, 0.02), bus: 'm', send: 0.6 });     // thermal creak
   }
   function sfx(e) {
-    const p = clamp(e.p || 0, 0.05, 1);
+    const p = clamp(e.p || 0, 0.05, 1), m = M[e.id];
     switch (e.t) {
-      case 'burst': burst(e.id, p); break;
-      case 'contact': tone({ f0: 72, f1: 44, dur: 0.3, gain: 0.3, send: 0.4 }); break;
-      case 'land': if (gate('land', 60)) { if (e.id === 'gummy') tone({ f0: 150, f1: 66, dur: 0.22, gain: 0.06 + 0.2 * p, send: 0.5 }); else tone({ f0: 120 + 80 * Math.random(), f1: 58, dur: 0.16, gain: 0.05 + 0.24 * p, send: 0.5 }); } break;
-      case 'crack': if (gate('crack', 50)) { hiss({ f0: 240, f1: 110, dur: 0.2, gain: 0.26 * p, q: 6, send: 0.8 }); tone({ f0: 96, f1: 52, dur: 0.14, gain: 0.3 * p, send: 0.5 }); } break;
-      case 'chip': if (gate('chip', 45)) { hiss({ f0: 520, f1: 280, dur: 0.06, gain: 0.09, q: 4, send: 0.7 }); tone({ f0: 185, f1: 120, dur: 0.07, gain: 0.08, send: 0.6 }); } break;
-      case 'crunch': if (gate('crunch', 34)) hiss({ f0: 150 + 200 * Math.random(), f1: 110, dur: 0.1, gain: 0.07 + 0.1 * p, q: 2.5, send: 0.5 }); break;
-      case 'impact': if (gate('impact', 42)) tone({ f0: PENTA[(Math.random() * PENTA.length) | 0], dur: 0.3, gain: 0.012 + 0.07 * p, send: 1.2 }); break;
-      case 'snap': if (gate('snap', 40)) tone({ f0: 250, f1: 105, dur: 0.13, gain: 0.14, bend: 0.8, send: 0.6 }); break;
-      case 'stall': tone({ f0: 49, f1: 41, dur: 1.3, gain: 0.4, send: 0.5 }); hiss({ type: 'lowpass', f0: 220, f1: 60, dur: 0.35, gain: 0.2, send: 0.4 }); break;
-      case 'sweep': hiss({ f0: 480, f1: 190, dur: 0.38, gain: 0.1, q: 1.2, send: 0.6 }); break;
-      case 'tick': if (gate('tick', 30)) tone({ type: 'triangle', f0: 330, f1: 220, dur: 0.07, gain: 0.04, send: 0.5 }); break;
+      case 'burst': case 'yield':
+        tone({ f0: 62, f1: 30, dur: 0.9, gain: 0.5 * p, bend: 0.6, send: 0.3, bus: 'm' });      // the ram lurching as the load goes
+        if (m) { m.burst(Math.max(p, 0.35)); m.after(); }
+        break;
+      case 'contact': tone({ f0: 74, f1: 46, dur: 0.22, gain: 0.5, send: 0.3, bus: 'm' }); noise({ f0: 640, q: 2.2, dur: 0.035, gain: 0.16, send: 0.3, bus: 'm' }); tone({ f0: 410, dur: 0.08, gain: 0.03, send: 0.5, bus: 'm' }); break;
+      case 'land': if (m && gate('land', 70)) m.land(); break;
+      case 'crack': if (m && gate('crack', 45)) m.crack(p); break;
+      case 'chip': if (m && gate('chip', 50)) m.hit(0.7); break;
+      case 'crunch': if (m && gate('crunch', 40)) { const g = m.grain[0]; V[g[0]](0.6 + 0.6 * p, R(g[1], g[2])); } break;
+      case 'impact': if (m && gate('impact', 48)) m.hit(p); break;
+      case 'snap': if (gate('snap', 40)) { V.tear(0.4, 800); V.squish(0.4, 500); } break;
+      case 'stall': tone({ f0: 52, f1: 44, dur: 0.9, gain: 0.5, send: 0.3, bus: 'm' }); noise({ f0: 3000, f1: 4200, q: 1.2, dur: 0.5, gain: 0.12, attack: 0.02, bus: 'm' }); groan(1); break;     // relief valve lifts
+      case 'sweep': noise({ f0: 1800, f1: 600, q: 0.8, dur: 0.3, gain: 0.08, attack: 0.03 }); noise({ f0: 3000, q: 2, dur: 0.02, gain: 0.08, at: 0.25 }); break;
+      case 'tick': if (gate('tick', 30)) { noise({ f0: 2400, q: 4, dur: 0.012, gain: 0.1, bus: 'm' }); tone({ f0: 300, f1: 200, dur: 0.03, gain: 0.04, bus: 'm' }); } break;
     }
   }
-  /** continuous layers: called every frame */
-  function drive(force, comp, ramV, slow) {
+  /** continuous layers: called every frame. force and comp are 0..1; id is whatever is on the anvil; intact while it is still in one piece;
+      prog is how far along it is (0 = untouched, 1 = at failure, up to 2 while a crumpled thing is pressed flat) */
+  function drive(force, comp, ramV, slow, dt, pressing, id, intact, prog) {
     const ctx = S.ctx; if (!ctx || ctx.state !== 'running') return;
-    const t = ctx.currentTime, st = S.strain;
+    const t = ctx.currentTime, L = S.L, k = 0.45 + 0.55 * slow;
     S.slow = slow;
-    const f0 = 41.2 * Math.pow(2, clamp(comp, 0, 1) * 0.9 + force * 0.35);
-    st.s1.frequency.setTargetAtTime(f0, t, 0.08); st.s2.frequency.setTargetAtTime(f0 * 1.007, t, 0.08);
-    st.sf.frequency.setTargetAtTime(80 + 560 * Math.pow(force, 0.7), t, 0.06);
-    st.sg.gain.setTargetAtTime(0.17 * Math.pow(force, 0.55), t, 0.05);
-    st.tr.frequency.setTargetAtTime(1.5 + 7 * force, t, 0.2); st.tg.gain.setTargetAtTime(0.05 * Math.pow(force, 0.55), t, 0.1);
-    S.hum.hg.gain.setTargetAtTime(Math.min(0.07, Math.abs(ramV) * 0.035), t, 0.08);
-    S.hum.h1.frequency.setTargetAtTime(36.7 * (ramV > 0 ? 1.19 : 1), t, 0.2);
-    const cents = -700 * (1 - slow);
-    for (const o of S.drone) o.detune.setTargetAtTime(cents, t, 0.18);
-    S.tone.frequency.setTargetAtTime(700 + 1700 * slow, t, 0.15);
+    S.tone.frequency.setTargetAtTime(900 + 15000 * slow * slow, t, 0.12);
+    if (pressing && !S.wasPress) startup();
+    if (!pressing && S.wasPress) release(clamp(S.peakF, 0, 1));
+    if (pressing) S.peakF = Math.max(S.peakF * Math.exp(-dt * 0.5), force); else S.peakF *= Math.exp(-dt * 3);
+    S.wasPress = pressing;
+    const run = pressing ? 1 : Math.abs(ramV) > 0.05 ? 0.55 : 0, f = Math.sqrt(force);
+    // motor + pump: spin up in about half a second, sag a little in pitch under load
+    const mf = 50 * (1 - 0.035 * f) * k;
+    L.m1.o.frequency.setTargetAtTime(mf, t, 0.25); L.m2.o.frequency.setTargetAtTime(mf * 2, t, 0.25); L.m3.o.frequency.setTargetAtTime(mf * 3, t, 0.25);
+    L.m1.g.gain.setTargetAtTime(0.16 * run, t, 0.18); L.m2.g.gain.setTargetAtTime(0.06 * run, t, 0.18); L.m3.g.gain.setTargetAtTime(0.025 * run, t, 0.18);
+    const pfq = 240 * (0.55 + 0.45 * run) * (1 - 0.05 * f) * k;
+    L.pump.p1.frequency.setTargetAtTime(pfq, t, 0.3); L.pump.p2.frequency.setTargetAtTime(pfq * 1.005, t, 0.3);
+    L.pump.f.frequency.setTargetAtTime((380 + 520 * f) * k, t, 0.15);
+    L.pump.g.gain.setTargetAtTime(run * (0.012 + 0.035 * f), t, 0.2);
+    L.pump.lfo.frequency.setTargetAtTime(19 + 9 * f, t, 0.2); L.pump.depth.gain.setTargetAtTime(run * 0.03 * f, t, 0.15);
+    // pressure
+    L.load.g.gain.setTargetAtTime(1.1 * Math.pow(force, 0.6), t, 0.08); L.load.f.frequency.setTargetAtTime((38 + 48 * f) * k, t, 0.1);
+    L.strain.o.frequency.setTargetAtTime((30 + 34 * f) * k, t, 0.1); L.strain.f.frequency.setTargetAtTime(60 + 120 * f, t, 0.1); L.strain.g.gain.setTargetAtTime(0.13 * Math.pow(force, 0.7), t, 0.06);
+    L.valve.g.gain.setTargetAtTime(0.05 * Math.pow(force, 1.5) * (pressing ? 1 : 0.2), t, 0.1); L.valve.f.frequency.setTargetAtTime((1400 + 3200 * f) * k, t, 0.1);
+    L.whoosh.g.gain.setTargetAtTime(Math.min(0.05, Math.abs(ramV) * 0.022), t, 0.08); L.whoosh.f.frequency.setTargetAtTime((380 + 260 * Math.min(1, Math.abs(ramV))) * k, t, 0.1);
+    const cents = -900 * (1 - slow);
+    L.sub1.o.detune.setTargetAtTime(cents, t, 0.15); L.sub2.o.detune.setTargetAtTime(cents, t, 0.15);
+    // frame groans: the faster the load climbs and the higher it is, the more often
+    const dF = Math.max(0, force - S.prevF) / Math.max(dt, 1e-4); S.prevF = force;
+    S.groanAcc += dt * (pressing ? 0.25 * f + 1.6 * Math.min(1, dF * 0.6) + (force > 0.9 ? 0.5 : 0) : 0);
+    if (S.groanAcc > 1) { S.groanAcc = 0; groan(force); }
+    // the object, complaining: grains at a rate set by how fast it is being squeezed
+    const dc = Math.max(0, prog - S.prevComp) / Math.max(dt, 1e-4); S.prevComp = prog;
+    const m = M[id];
+    if (m && intact && pressing && dc > 1e-4) {
+      const sp = Math.min(1, dc * 3);
+      for (const g of m.grain) if (Math.random() < g[3] * sp * dt * 2) V[g[0]](g[4] * (0.45 + 0.55 * Math.min(1, prog)), R(g[1], g[2]) * (1 + 0.25 * Math.min(1, prog)));
+    }
+    // idle life
+    S.idleT -= dt;
+    if (S.idleT <= 0) { S.idleT = R(0.25, 2.2); if (!pressing) idleBit(); }
   }
-  return { S, unlock, setOn, sfx, drive };
+  return { S, unlock, setOn, sfx, drive, M, V };
 })();
 
 /* ───────────────────────────────────────────────────────── the session ── */
@@ -2877,10 +4489,12 @@ function selectObject(id, quiet) {
   $('#objName').textContent = sp.name; $('#objBlurb').textContent = INFO[id].blurb; $('#objIdx').textContent = (P.ORDER.indexOf(id) + 1) + ' / ' + P.ORDER.length;
   document.querySelectorAll('[data-obj]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.obj === id ? 'true' : 'false'));
   trace.fill(0); peakShown = -1; view.kick = 0; slowLeft = 0;
+  const ab = document.querySelector('[data-obj="' + id + '"]'); if (ab && ab.scrollIntoView && objBtns.scrollWidth > objBtns.clientWidth) ab.scrollIntoView({ block: 'nearest', inline: 'center' });
   if (!quiet) { Sound.sfx({ t: 'tick' }); toast(sp.name); }
   return o;
 }
 function nextObject() { const i = P.ORDER.indexOf(state.cur); selectObject(P.ORDER[(i + 1) % P.ORDER.length]); }
+function prevObject() { const i = P.ORDER.indexOf(state.cur); selectObject(P.ORDER[(i + P.ORDER.length - 1) % P.ORDER.length]); }
 
 /* slow motion: a high-speed camera that triggers on failure */
 let timeScale = 1, slowLeft = 0;
@@ -2902,8 +4516,11 @@ function handleEvents() {
       if (state.slow) { slowLeft = SLOW_LEN; timeScale = 0.035; stop = true; }
       view.kick = 1; view.shake = Math.max(view.shake, 0.5 + 1.2 * e.p);
       Sound.S.slow = timeScale;
-    } else if (e.t === 'crack') view.shake = Math.max(view.shake, 0.25 * e.p);
+      if (polishOn) flash.intensity = 30 + 60 * e.p;
+    } else if (e.t === 'yield') view.shake = Math.max(view.shake, 0.2);
+    else if (e.t === 'crack') view.shake = Math.max(view.shake, 0.25 * e.p);
     else if (e.t === 'stall') view.shake = Math.max(view.shake, 0.3);
+    if (look.name !== 'original') fxEmitFor(look.fx, e, world, P);
     Sound.sfx(e);
   }
   world.events.length = 0;
@@ -2982,7 +4599,7 @@ pressBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 const objBtns = $('#objBtns');
 P.ORDER.forEach((id, i) => {
   const b = document.createElement('button');
-  b.type = 'button'; b.className = 'tb'; b.dataset.obj = id; b.setAttribute('aria-pressed', 'false'); b.title = P.SPECS[id].name + ' (' + (i + 1) + ')';
+  b.type = 'button'; b.className = 'tb obj'; b.dataset.obj = id; b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', P.SPECS[id].name); b.title = P.SPECS[id].name + (i < 10 ? ' (' + ((i + 1) % 10) + ')' : '');
   b.innerHTML = '<kbd>' + (i + 1) + '</kbd><svg viewBox="0 0 24 24">' + INFO[id].icon + '</svg><span>' + INFO[id].short + '</span>';
   b.addEventListener('click', () => { Sound.unlock(); if (state.auto) setAuto(false, true); selectObject(id); });
   objBtns.appendChild(b);
@@ -2995,19 +4612,22 @@ $('#tAuto').addEventListener('click', () => { Sound.unlock(); setAuto(!state.aut
 $('#tSlow').addEventListener('click', () => { Sound.unlock(); setSlow(!state.slow); });
 $('#tSound').addEventListener('click', () => setSound(!state.sound));
 $('#tSweep').addEventListener('click', () => { Sound.unlock(); reload(); });
+$('#tLook').addEventListener('click', () => { Sound.unlock(); setLookOpen(!look.open); Sound.sfx({ t: 'tick' }); });
 document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button'); if (b && e.detail > 0) b.blur(); });
-const KEYS = { KeyA: () => setAuto(!state.auto), KeyT: () => setSlow(!state.slow), KeyM: () => setSound(!state.sound), KeyC: reload, KeyN: nextObject, ArrowRight: nextObject };
+const KEYS = { KeyA: () => setAuto(!state.auto), KeyT: () => setSlow(!state.slow), KeyM: () => setSound(!state.sound), KeyC: reload, KeyN: nextObject, ArrowRight: nextObject, ArrowLeft: prevObject, KeyL: () => setLookOpen(!look.open),
+  KeyV: () => setLook(look.name === 'original' ? 'cinematic' : look.name === 'cinematic' ? 'ultra' : 'original') };
 addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) { Sound.unlock(); spaceHeld = true; if (state.auto) setAuto(false); pressBtn.classList.add('down'); updateCursorClass(); } return; }
   if (e.repeat) return;
-  const d = /^Digit([1-6])$/.exec(e.code);
-  if (d) { e.preventDefault(); Sound.unlock(); if (state.auto) setAuto(false, true); selectObject(P.ORDER[+d[1] - 1]); return; }
+  if (e.target && e.target.tagName === 'INPUT') return;
+  const d = /^Digit([0-9])$/.exec(e.code);
+  if (d) { e.preventDefault(); Sound.unlock(); if (state.auto) setAuto(false, true); selectObject(P.ORDER[(+d[1] + 9) % 10]); return; }
   const fn = KEYS[e.code]; if (!fn) return;
   e.preventDefault(); Sound.unlock(); fn();
 });
 addEventListener('keyup', (e) => { if (e.code === 'Space') { spaceHeld = false; pressBtn.classList.toggle('down', pressHeld); updateCursorClass(); } });
-for (const el of document.querySelectorAll('.card, .dock')) {
+for (const el of document.querySelectorAll('.card, .dock, .look')) {
   el.addEventListener('pointerenter', () => { overUI = true; updateCursorClass(); });
   el.addEventListener('pointerleave', () => { overUI = false; updateCursorClass(); });
 }
@@ -3024,7 +4644,7 @@ const gFrac = (f) => Math.sqrt(clamp(f / P.F_MAX, 0, 1));
 const elForce = $('#mForce'), elPeak = $('#mPeak'), elComp = $('#mComp'), elCount = $('#mCount'), elFill = $('#gFill'), elGPeak = $('#gPeak');
 const traceCv = $('#trace'), tctx = traceCv.getContext('2d'), trace = new Float32Array(272);
 let hudT = 0, fShown = 0, peakShown = -1, compShown = -1, countShown = -1, traceT = 0;
-function fmtT(f) { return (f >= 100 ? f.toFixed(0) : f.toFixed(1)) + '<small>t</small>'; }
+function fmtT(f) { return f > 0.0005 && f < 0.0995 ? (f * 1000).toFixed(0) + '<small>kg</small>' : (f >= 100 ? f.toFixed(0) : f.toFixed(1)) + '<small>t</small>'; }      // an egg fails at a few kilograms
 function updateHud(dt) {
   fShown += (world.F - fShown) * Math.min(1, dt * 18);
   traceT += dt * Math.max(timeScale, 0.12);
@@ -3067,12 +4687,13 @@ function frame(now) {
     P.step(world, h);
     if (world.events.length && handleEvents()) break;       // failure: the high-speed camera takes over from this very frame
   }
-  const debrisDirty = P.update(world);
+  const poolDirty = P.update(world);
   syncObjects();
-  const d = world.debris;
-  debrisMesh.count = d.n;
-  if (debrisDirty) { debrisMesh.instanceMatrix.array.set(d.mat); debrisMesh.instanceMatrix.needsUpdate = true; }
-  if (d.colDirty && debrisMesh.instanceColor) { debrisMesh.instanceColor.array.set(d.col); debrisMesh.instanceColor.needsUpdate = true; d.colDirty = false; }
+  for (const [d, mesh, bit] of [[world.debris, debrisMesh, 1], [world.drops, dropMesh, 2]]) {
+    mesh.count = d.n;
+    if (poolDirty & bit) { mesh.instanceMatrix.array.set(d.mat); mesh.instanceMatrix.needsUpdate = true; }
+    if (d.colDirty && mesh.instanceColor) { mesh.instanceColor.array.set(d.col); mesh.instanceColor.needsUpdate = true; d.colDirty = false; }
+  }
   const dg = dustGeo.attributes;
   if (world.dust.live > 0 || dustPts.userData.wasLive) { dg.position.needsUpdate = true; dg.aSize.needsUpdate = true; dg.aCol.needsUpdate = true; }
   dustPts.userData.wasLive = world.dust.live > 0;
@@ -3080,21 +4701,30 @@ function frame(now) {
   updateRig(dt);
   updateCamera(dt, target);
   dustMat.uniforms.uPx.value = H * dpr / (2 * TAN);
-  Sound.drive(clamp(world.F / P.F_MAX, 0, 1), world.comp, world.ram.v, clamp(timeScale, 0, 1));
+  { const o = world.cur, whole = !!(o && o.intact && !o.hidden && !o.air);
+    Sound.drive(clamp(world.F / P.F_MAX, 0, 1), world.comp, world.ram.v, clamp(timeScale, 0, 1), dt, world.pressing, state.cur, whole, whole ? (o.yielded ? 1 + o.post : clamp(o.c / o.cFailRun, 0, 1)) : 0); }
+  updatePolish(dt, world.F / P.F_MAX);
+  updateLookStat(dt);
   updateHud(dt);
   if (cursorOn) {
     mouse.cx += (mouse.px - mouse.cx) * Math.min(1, dt * 22); mouse.cy += (mouse.py - mouse.cy) * Math.min(1, dt * 22);
     cursor.style.transform = 'translate3d(' + mouse.cx.toFixed(1) + 'px,' + mouse.cy.toFixed(1) + 'px,0)';
   }
 
-  try {
-    if (composer) composer.render(dt); else renderer.render(scene, camera);
-  } catch (err) {
-    console.warn('Render error', err);
-    if (composer) { composer = null; bloomPass = null; }
+  if (!ctxLost) {
+    if (look.name !== 'original') {
+      try { renderCinematic(dt, simDt); } catch (err) { lookFail(err); }
+    } else {
+      try {
+        if (composer) composer.render(dt); else renderer.render(scene, camera);
+      } catch (err) {
+        console.warn('Render error', err);
+        if (composer) { composer = null; bloomPass = null; }
+      }
+    }
   }
   if (shaderFailed) handleShaderFailure();
-  if (!started) { started = true; booted = true; veil.classList.add('gone'); }
+  if (!started) { started = true; booted = true; veil.classList.add('gone'); setTimeout(() => toast('L — look panel'), 2200); }
 
   frameNo++;
   if (frameNo > 150) {
@@ -3104,18 +4734,29 @@ function frame(now) {
 }
 
 addEventListener('resize', () => { dpr = Math.min(window.devicePixelRatio || 1, 1.75); applySize(); });
+/* losing the GL context (driver reset, tab eviction): three.js rebuilds its own state; the things that only ever lived on the GPU
+   are rebuilt here: the pre-filtered environment and the particle state. Nothing is drawn while the context is gone. */
+let ctxLost = false;
+canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); ctxLost = true; });
+canvas.addEventListener('webglcontextrestored', () => {
+  ctxLost = false;
+  try { const old = scene.environment, t = buildEnvironment(); if (t) { scene.environment = t; if (old) old.dispose(); } } catch (err) { console.warn('Environment rebuild failed', err); }
+  if (look.fx) { try { look.fx.contextRestored(); } catch (err) { lookFail(err); } }
+});
 applySize();
 await setupComposer();
 applySize();
+initLook(); buildLookUI(); syncLookUI();
 selectObject(state.cur, true);
+{ const want = new URLSearchParams(location.search).get('look'); setLook(want === 'ultra' || want === 'original' ? want : 'cinematic', true); }      // cinematic unless asked otherwise (falls back to original if unavailable)
 view.frame = target.frame; view.el = target.el; view.ty = target.ty;
 for (let i = 0; i < 300; i++) P.step(world, SUB);            // let the first object drop and settle before the curtain lifts
 world.events.length = 0;
 requestAnimationFrame((t) => { last = t; frame(t); });
 window.__press = {
-  world, Press: P, state, Sound, view, selectObject, nextObject, setAuto,
+  world, Press: P, state, Sound, view, selectObject, nextObject, setAuto, look, setLook, setLookOpen,
   glsl: { FRAG_PARS, FRAG_NORMAL, FRAG_COAT, FRAG_GLOW, FRAG_LIMIT, DUST_VS, DUST_FS },
-  tex: { steelCanvas, bowlingSkin, radialBands, dimpleNormals, puckNormals, paperSkin, paperCore },
+  tex: { steelCanvas, bowlingSkin, radialBands, dimpleNormals, puckNormals, paperSkin, paperCore, melonSkin, fleshBands, canLabel, mugSkin, foamBump },
   get composer() { return composer; }, get timeScale() { return timeScale; }, get pressing() { return world.pressing; },
 };   // handy for poking around in devtools
 </script>
