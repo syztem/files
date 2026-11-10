@@ -1,0 +1,2740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="A toybox of translucent gummy bears that squish, stretch and bounce. Drag, poke, pour and play.">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js">
+<noscript><style>#veil { display: none; } #fatal { display: grid; }</style></noscript>
+<title>Gummy Bears — Toybox</title>
+<style>
+  :root {
+    --bg: #050507;
+    --ink: #f4efe7;
+    --mute: #8f8c96;
+    --dim: #9a97a2;
+    --dock-b: max(10px, env(safe-area-inset-bottom));
+    --line: rgba(255, 255, 255, .10);
+    --accent: #ff3347;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "Hoefler Text", Georgia, "Times New Roman", serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; overscroll-behavior: none; -webkit-font-smoothing: antialiased; }
+  body { font-family: var(--sans); cursor: none; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+  button { font-family: inherit; }
+
+  .hero { position: fixed; left: max(clamp(20px, 4.2vw, 68px), env(safe-area-inset-left)); top: clamp(16px, 4.2vh, 54px); z-index: 5; pointer-events: none; max-width: 70vw; }
+  .eyebrow { display: flex; align-items: center; gap: 12px; font: 600 11px/1 var(--sans); letter-spacing: .22em; text-transform: uppercase; color: var(--mute); margin-bottom: clamp(10px, 2vh, 22px); }
+  .eyebrow i { width: 34px; height: 1px; background: var(--line); display: block; }
+  h1 { margin: 0; font-family: var(--serif); font-style: italic; font-weight: 400; font-size: clamp(60px, 11.4vw, 196px); line-height: .8; letter-spacing: -.04em; color: var(--ink); }
+  h1 span { display: block; }
+  h1 .l2 { padding-left: .5em; }
+  h1 b { color: var(--accent); font-weight: 400; }
+  .sub { margin: clamp(14px, 2.6vh, 28px) 0 0 .2em; max-width: 33ch; font: 400 clamp(13px, 1.05vw, 16px)/1.55 var(--sans); color: #b9b6bf; letter-spacing: .005em; }
+
+  .card {
+    position: fixed; z-index: 6; right: clamp(14px, 3vw, 48px); top: calc(50% - 38px); transform: translateY(-50%); width: 316px;
+    max-height: calc(100vh - 150px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent;
+    padding: 20px 22px 18px; border-radius: 26px; border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,.065), rgba(255,255,255,.022)), rgba(6,6,9,.3);
+    -webkit-backdrop-filter: blur(20px) saturate(140%); backdrop-filter: blur(20px) saturate(140%);
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .card-h { display: flex; justify-content: space-between; align-items: baseline; font: 600 11px/1 var(--sans); letter-spacing: .2em; text-transform: uppercase; color: var(--mute); }
+  .card-h em { font-style: normal; letter-spacing: .08em; color: var(--dim); }
+  .swatches { display: flex; justify-content: space-between; margin: 14px 0 20px; }
+  .sw {
+    position: relative; width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; cursor: none; outline: none;
+    background: radial-gradient(circle at 32% 26%, rgba(255,255,255,.95) 0 9%, rgba(255,255,255,0) 22%), radial-gradient(circle at 50% 60%, transparent 0 55%, rgba(0,0,0,.45) 100%), var(--c);
+    box-shadow: 0 7px 14px -7px var(--c), inset 0 -3px 6px rgba(0,0,0,.28);
+    transition: transform .25s cubic-bezier(.2,.9,.2,1.4), opacity .25s, filter .25s;
+  }
+  .sw::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.9); opacity: 0; transform: scale(.85); transition: opacity .2s, transform .25s cubic-bezier(.2,.9,.2,1.4); }
+  .sw[aria-pressed="true"]::after { opacity: 1; transform: scale(1); }
+  .sw[aria-pressed="false"] { opacity: .55; filter: saturate(.5); }
+  @media (hover: hover) {
+    .sw:hover { transform: translateY(-2px) scale(1.08); }
+    .sw[aria-pressed="false"]:hover { opacity: .85; filter: none; }
+  }
+  .sw.clear { background: radial-gradient(circle at 32% 26%, rgba(255,255,255,1) 0 9%, rgba(255,255,255,0) 24%), radial-gradient(circle at 50% 58%, #fff6c6 0 40%, #f6dd7c 78%, #e9c64f 100%); box-shadow: 0 7px 14px -7px #ffe88a, inset 0 0 0 1.5px rgba(255,255,255,.55), inset 0 -3px 6px rgba(120,80,0,.16); }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 3px; margin: 12px 0 20px; border-radius: 13px; background: rgba(255,255,255,.06); }
+  .seg button { border: 0; padding: 8px 0; border-radius: 10px; background: transparent; color: #a9a6b2; font: 600 11.5px/1 var(--sans); letter-spacing: .02em; cursor: none; outline: none; transition: background .2s, color .2s, transform .2s; }
+  @media (hover: hover) { .seg button:hover { color: #fff; } }
+  .seg button:active { transform: scale(.96); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: #0b0b0e; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; font: 500 13px/1 var(--sans); color: #d7d3dc; margin-bottom: 8px; }
+  .row output { font: 600 12px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--mute); letter-spacing: .02em; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 22px; background: transparent; margin: 0 0 14px; cursor: none; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: linear-gradient(90deg, #fff var(--p, 55%), rgba(255,255,255,.14) var(--p, 55%)); }
+  input[type=range]::-moz-range-track { height: 3px; border-radius: 3px; background: rgba(255,255,255,.14); }
+  input[type=range]::-moz-range-progress { height: 3px; border-radius: 3px; background: #fff; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; margin-top: -8.5px; background: #fff; border: 0; box-shadow: 0 4px 14px rgba(0,0,0,.6), 0 0 0 6px rgba(255,255,255,.08); transition: box-shadow .2s; }
+  input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 4px 14px rgba(0,0,0,.6), 0 0 0 6px rgba(255,255,255,.08); }
+  input[type=range]:active::-webkit-slider-thumb { box-shadow: 0 4px 14px rgba(0,0,0,.6), 0 0 0 10px rgba(255,255,255,.12); }
+  .meters { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin: 6px 0 16px; }
+  .meters > div { padding: 12px 0 11px; }
+  .meters > div + div { padding-left: 18px; border-left: 1px solid var(--line); }
+  .meters span { display: block; font: 600 10.5px/1 var(--sans); letter-spacing: .2em; text-transform: uppercase; color: var(--mute); margin-bottom: 8px; }
+  .meters b { display: block; font: italic 400 32px/1 var(--serif); letter-spacing: -.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .meters b small { font-size: .55em; margin-left: 2px; color: var(--mute); }
+  .pour {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 0; cursor: none; outline: none;
+    padding: 15px 18px 15px 22px; border-radius: 999px; background: var(--ink); color: #0b0b0e;
+    font: 600 14.5px/1 var(--sans); letter-spacing: .01em; transition: transform .25s cubic-bezier(.2,.9,.2,1.3), background .2s, box-shadow .3s;
+    box-shadow: 0 14px 34px -14px rgba(255,255,255,.55);
+  }
+  .pour i { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #0b0b0e; color: var(--ink); font-style: normal; font-size: 14px; transition: transform .35s cubic-bezier(.2,.9,.2,1.4); }
+  @media (hover: hover) {
+    .pour:hover { transform: translateY(-2px); background: #fff; box-shadow: 0 18px 40px -14px rgba(255,255,255,.7); }
+    .pour:hover i { transform: translateY(3px); }
+  }
+  .pour:active { transform: translateY(1px) scale(.985); }
+  .hint { margin: 14px 2px 0; font: 400 11.5px/1.5 var(--sans); color: var(--dim); }
+
+  .dock {
+    position: fixed; z-index: 7; left: 50%; bottom: clamp(12px, 2.6vh, 28px); transform: translateX(-50%);
+    display: flex; align-items: center; gap: 4px; padding: 8px 10px; border-radius: 24px; border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.025)), rgba(6,6,9,.3);
+    -webkit-backdrop-filter: blur(20px) saturate(140%); backdrop-filter: blur(20px) saturate(140%);
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.06);
+    max-width: calc(100vw - 24px);
+  }
+  .grp { display: flex; gap: 3px; }
+  .sep { width: 1px; height: 32px; background: var(--line); margin: 0 7px; flex: none; }
+  .tb {
+    position: relative; width: 54px; height: 54px; flex: none; border: 0; border-radius: 16px; background: transparent; color: #cfcbd6; padding: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: none; outline: none;
+    font: 600 9px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; white-space: nowrap;
+    transition: background .2s, color .2s, transform .25s cubic-bezier(.2,.9,.2,1.4);
+  }
+  .tb.wide { width: 72px; }
+  .tb svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+  @media (hover: hover) { .tb:hover { background: rgba(255,255,255,.09); color: #fff; transform: translateY(-2px); } }
+  .tb:active { transform: translateY(0) scale(.93); }
+  .tb[aria-pressed="true"] { background: var(--ink); color: #0b0b0e; }
+  .tb kbd { position: absolute; top: 5px; right: 6px; font: 600 9px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--dim); letter-spacing: 0; }
+  .tb[aria-pressed="true"] kbd { color: #6a6670; }
+  .tb .slash { display: none; }
+  .tb[aria-pressed="false"] .slash { display: block; }
+  .sw:focus-visible, .seg button:focus-visible, .pour:focus-visible, .tb:focus-visible, input[type=range]:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  .sw:focus-visible { outline-offset: 5px; opacity: 1; }
+  .seg button:focus-visible { outline-offset: -2px; }
+
+  #cursor {
+    position: fixed; left: 0; top: 0; z-index: 60; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,.92); pointer-events: none; mix-blend-mode: difference; will-change: transform;
+    transition: width .26s cubic-bezier(.2,.9,.2,1), height .26s cubic-bezier(.2,.9,.2,1), margin .26s cubic-bezier(.2,.9,.2,1), background-color .2s, border-color .2s, opacity .3s;
+    opacity: 0;
+  }
+  #cursor.on { opacity: 1; }
+  #cursor.hot { width: 40px; height: 40px; margin: -20px 0 0 -20px; }
+  #cursor.orbit { width: 34px; height: 34px; margin: -17px 0 0 -17px; border-style: dotted; }
+  #cursor.tool { width: var(--d, 60px); height: var(--d, 60px); margin: calc(var(--d, 60px) / -2) 0 0 calc(var(--d, 60px) / -2); border-style: dashed; }
+  #cursor.tool.down { background: rgba(255,255,255,.16); border-style: solid; }
+  #cursor.tool.orbit { width: 34px; height: 34px; margin: -17px 0 0 -17px; border-style: dotted; }
+  #cursor.ui { width: 12px; height: 12px; margin: -6px 0 0 -6px; background: #fff; border-style: solid; }
+  #cursor.grab { width: 66px; height: 66px; margin: -33px 0 0 -33px; background: rgba(255,255,255,.95); border-color: transparent; border-style: solid; }
+  @media (hover: none), (pointer: coarse) { #cursor { display: none; } body, .sw, .pour, .tb, .seg button, input[type=range] { cursor: auto; } }
+
+  #veil { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: grid; place-items: center; transition: opacity .9s ease .1s, visibility 0s linear 1.1s; font: italic 400 22px/1 var(--serif); color: var(--mute); letter-spacing: .01em; }
+  #veil.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+  #fatal { position: fixed; inset: 0; z-index: 70; display: none; place-items: center; padding: 32px; text-align: center; background: var(--bg); font: 400 15px/1.6 var(--sans); color: #b9b6bf; cursor: auto; user-select: text; -webkit-user-select: text; }
+  #fatal b { display: block; font: italic 400 34px/1.1 var(--serif); color: var(--ink); margin-bottom: 12px; }
+  #toast { position: fixed; z-index: 30; left: 50%; bottom: calc(clamp(12px, 2.6vh, 28px) + 90px); white-space: nowrap; transform: translate(-50%, 10px); padding: 9px 16px; border-radius: 999px; background: rgba(255,255,255,.1); border: 1px solid var(--line); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); font: 600 11px/1 var(--sans); letter-spacing: .16em; text-transform: uppercase; color: #e9e5ee; opacity: 0; pointer-events: none; transition: opacity .25s, transform .3s cubic-bezier(.2,.9,.2,1.2); }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 1180px) {
+    .tb, .tb.wide { width: 46px; height: 46px; gap: 0; } .tb span:not(#gravLabel), .tb kbd { display: none; } #tGrav { gap: 2px; } .sep { margin: 0 4px; }
+    #toast { bottom: calc(clamp(12px, 2.6vh, 28px) + 82px); }
+  }
+  @media (max-width: 860px), (max-width: 1180px) and (max-aspect-ratio: 5/4) {
+    .card { top: auto; bottom: calc(var(--dock-b) + 64px); right: max(14px, env(safe-area-inset-right)); left: max(14px, env(safe-area-inset-left)); transform: none; width: auto; max-width: 440px; margin: 0 auto; max-height: none; overflow: visible; padding: 14px 16px 12px; border-radius: 22px; }
+    .meters, .hint { display: none; }
+    .swatches { margin: 10px 0 12px; } .sw { width: 30px; height: 30px; }
+    input[type=range] { margin-bottom: 10px; }
+    .hero { max-width: 92vw; } .sub { display: none; }
+    .pour { padding: 12px 14px 12px 20px; }
+    .dock { bottom: var(--dock-b); padding: 6px 8px; overflow-x: auto; scrollbar-width: none; justify-content: flex-start; } .dock::-webkit-scrollbar { display: none; }
+    .tb, .tb.wide { width: 42px; height: 42px; border-radius: 13px; }
+    #toast { bottom: 420px; }
+  }
+  @media (max-width: 649px) {
+    .dock { flex-wrap: wrap; justify-content: center; width: calc(100vw - 24px); overflow: visible; row-gap: 2px; } .sep { display: none; }
+    .card { bottom: calc(var(--dock-b) + 110px); }
+    #toast { bottom: 460px; }
+  }
+  @media (max-width: 520px) {
+    .eyebrow { letter-spacing: .14em; gap: 8px; } .eyebrow i { width: 14px; }
+    .size-h, .seg, #bounceRow, #bounce { display: none; }
+    #toast { bottom: 340px; }
+  }
+  @media (max-width: 354px) {
+    .tb, .tb.wide { width: 36px; height: 40px; }
+  }
+  @media (max-width: 860px) and (max-height: 520px) and (min-aspect-ratio: 5/4) {
+    .card { left: auto; width: min(300px, 44vw); top: 12px; bottom: auto; max-height: calc(100vh - 84px); overflow-y: auto; margin: 0; }
+    .hero { max-width: calc(100vw - min(300px, 44vw) - 44px); }
+    .size-h, .seg, #bounceRow, #bounce { display: none; }
+    .dock { flex-wrap: nowrap; justify-content: flex-start; width: auto; overflow-x: auto; row-gap: 0; } .sep { display: block; }
+    #toast { bottom: 80px; }
+  }
+  @media (max-height: 700px) and (min-width: 861px) and (min-aspect-ratio: 5/4) { .hint { display: none; } .swatches { margin-bottom: 14px; } .seg { margin-bottom: 14px; } }
+  @media (max-height: 596px) and (min-width: 861px) and (min-aspect-ratio: 5/4) { .size-h, .seg, .meters, #bounceRow, #bounce { display: none; } }
+  @media (hover: none), (pointer: coarse) {
+    .card, .dock { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(14,14,18,.8); }
+    #toast { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(30,30,36,.9); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-delay: 0s !important; }
+  }
+  @media (forced-colors: active) {
+    .tb[aria-pressed="true"], .seg button[aria-pressed="true"] { background: Highlight; color: HighlightText; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="gl" aria-label="A toybox of translucent gummy bears. Drag any part to stretch it; drag the floor to orbit."></canvas>
+
+<header class="hero">
+  <div class="eyebrow"><span>Soft-body toybox</span><i></i><span>№ 01 — Gummy Candy</span></div>
+  <h1 aria-label="Gummy Bears"><span class="l1">Gummy</span><span class="l2">Bears<b>.</b></span></h1>
+  <p class="sub">A toybox of translucent candy that actually squishes. Pull an ear, poke a belly, flip on the trampoline — then let go.</p>
+</header>
+
+<aside class="card" id="card" aria-label="Controls">
+  <div class="card-h"><span>Flavors</span><em id="flavCount">8 / 8</em></div>
+  <div class="swatches" id="swatches"></div>
+  <div class="card-h size-h"><span>Size</span></div>
+  <div class="seg" id="sizeSeg" role="group" aria-label="Bear size">
+    <button type="button" data-size="baby" aria-pressed="false">Baby</button>
+    <button type="button" data-size="normal" aria-pressed="true">Normal</button>
+    <button type="button" data-size="mama" aria-pressed="false">Mama</button>
+    <button type="button" data-size="mix" aria-pressed="false">Mix</button>
+  </div>
+  <div class="row"><label for="wobble">Wobble</label><output id="wobbleVal">0.55</output></div>
+  <input id="wobble" type="range" min="0" max="1" step="0.01" value="0.55">
+  <div class="row" id="bounceRow"><label for="bounce">Bounciness</label><output id="bounceVal">28</output></div>
+  <input id="bounce" type="range" min="0" max="100" step="1" value="28">
+  <div class="meters">
+    <div><span>Stretch</span><b id="mStretch">1.00<small>×</small></b></div>
+    <div><span>Bounces</span><b id="mBounce">0</b></div>
+  </div>
+  <button class="pour" id="pour" type="button" title="Pour more bears (Space)" aria-keyshortcuts="Space"><span>Pour more bears</span><i aria-hidden="true">↓</i></button>
+  <p class="hint">Drag to stretch · hold a head to squash it · fling things · drag the floor to orbit, scroll to zoom</p>
+</aside>
+
+<nav class="dock" id="dock" aria-label="Toybox">
+  <div class="grp" role="group" aria-label="Tools">
+    <button class="tb" type="button" aria-label="Grab" aria-keyshortcuts="1" data-tool="grab" aria-pressed="true" title="Grab — drag any part (1)"><kbd aria-hidden="true">1</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg><span>Grab</span></button>
+    <button class="tb" type="button" aria-label="Poke" aria-keyshortcuts="2" data-tool="poke" aria-pressed="false" title="Poke — press things into the floor (2)"><kbd aria-hidden="true">2</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v8"/><path d="M8.5 11.5 12 15l3.5-3.5"/></svg><span>Poke</span></button>
+    <button class="tb" type="button" aria-label="Magnet" aria-keyshortcuts="3" data-tool="magnet" aria-pressed="false" title="Magnet — pull things to the cursor (3)"><kbd aria-hidden="true">3</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M5 3v8a7 7 0 0 0 14 0V3h-4v8a3 3 0 0 1-6 0V3z"/><path d="M5 7h4M15 7h4"/></svg><span>Magnet</span></button>
+    <button class="tb" type="button" aria-label="Gust" aria-keyshortcuts="4" data-tool="gust" aria-pressed="false" title="Gust — sweep things along (4)"><kbd aria-hidden="true">4</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></svg><span>Gust</span></button>
+  </div>
+  <i class="sep"></i>
+  <div class="grp" role="group" aria-label="Toys">
+    <button class="tb" type="button" aria-label="Balls" aria-keyshortcuts="B" id="tBall" title="Beach balls — grab and throw them (B)"><kbd aria-hidden="true">B</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 8.6c5 2 12 2 16.8 0"/><path d="M12 3c-3 3.4-3 14.6 0 18"/></svg><span>Balls</span></button>
+    <button class="tb wide" type="button" aria-label="Trampoline" aria-keyshortcuts="P" id="tPad" aria-pressed="false" title="Trampoline (P)"><kbd aria-hidden="true">P</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M3 14c0-1.7 4-3 9-3s9 1.3 9 3-4 3-9 3-9-1.3-9-3z"/><path d="M6 16.2 5 21M18 16.2l1 4.8"/><path d="M12 8V3"/><path d="M9.5 5.5 12 3l2.5 2.5"/></svg><span>Trampoline</span></button>
+    <button class="tb wide" type="button" aria-label="Bumpers" aria-keyshortcuts="N" id="tBump" aria-pressed="false" title="Pinball bumpers (N)"><kbd aria-hidden="true">N</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M7 7c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2z"/><path d="M7 7v10c0 1.1 2.2 2 5 2s5-.9 5-2V7"/><path d="M7 12c0 1.1 2.2 2 5 2s5-.9 5-2"/></svg><span>Bumpers</span></button>
+  </div>
+  <i class="sep"></i>
+  <div class="grp" role="group" aria-label="World">
+    <button class="tb" type="button" aria-label="Gravity: Earth" aria-keyshortcuts="G" id="tGrav" title="Gravity: Earth / Moon / Float (G)"><kbd aria-hidden="true">G</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 20h14"/></svg><span id="gravLabel">Earth</span></button>
+    <button class="tb" type="button" aria-label="Slow-mo" aria-keyshortcuts="T" id="tSlow" aria-pressed="false" title="Slow motion (T)"><kbd aria-hidden="true">T</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Slow-mo</span></button>
+    <button class="tb" type="button" aria-label="Rain" aria-keyshortcuts="R" id="tRain" aria-pressed="false" title="Gummy rain (R)"><kbd aria-hidden="true">R</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 3s6 6.2 6 10.5a6 6 0 0 1-12 0C6 9.2 12 3 12 3z"/></svg><span>Rain</span></button>
+    <button class="tb" type="button" aria-label="Shake" aria-keyshortcuts="S" id="tShake" title="Shake the box (S)"><kbd aria-hidden="true">S</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M2 12h3l2-5 3 10 3-10 2 5h7"/></svg><span>Shake</span></button>
+    <button class="tb" type="button" aria-label="Sound" aria-keyshortcuts="M" id="tSound" aria-pressed="true" title="Sound (M)"><kbd aria-hidden="true">M</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/><path class="slash" d="M3 3l18 18"/></svg><span>Sound</span></button>
+    <button class="tb" type="button" aria-label="Clear" aria-keyshortcuts="C" id="tClear" title="Clear the toybox (C)"><kbd aria-hidden="true">C</kbd>
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg><span>Clear</span></button>
+  </div>
+</nav>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="cursor"></div>
+<div id="veil" role="status">Pouring…</div>
+<div id="fatal" role="alert"><div><b id="fatalTitle">Couldn’t load three.js</b><span id="fatalMsg">This page pulls three.js from a CDN (cdn.jsdelivr.net). Check your connection and reload.</span></div></div>
+
+<script type="module">
+const Core = (() => {
+  'use strict';
+
+  const NP = 10;
+  const HEAD = 0, BODY = 1, BELLY = 2, SNOUT = 3, EARL = 4, EARR = 5, HANDL = 6, HANDR = 7, FOOTL = 8, FOOTR = 9;
+
+  const REST = [
+    [ 0.00,  0.76,  0.07,  2.4,  0.34,  0.395, 0.90, 1.15],
+    [ 0.00,  0.00, -0.02,  3.4,  0.41,  0.455, 1.00, 0.55],
+    [ 0.00, -0.10,  0.21,  1.4,  0.29,  0.335, 1.00, 0.55],
+    [ 0.00,  0.65,  0.41,  0.5,  0.10,  0.135, 0.70, 0.60],
+    [-0.315, 1.08, -0.02,  0.4,  0.11,  0.158, 0.55, 0.85],
+    [ 0.315, 1.08, -0.02,  0.4,  0.11,  0.158, 0.55, 0.85],
+    [-0.56,  0.11,  0.19,  0.5,  0.12,  0.145, 0.60, 1.00],
+    [ 0.56,  0.11,  0.19,  0.5,  0.12,  0.145, 0.60, 1.00],
+    [-0.28, -0.25,  0.43,  0.8,  0.16,  0.195, 0.70, 0.95],
+    [ 0.28, -0.25,  0.43,  0.8,  0.16,  0.195, 0.70, 0.95],
+  ];
+
+  const STRANDS = [
+    { a: BODY, o: [ 0.00,  0.30,  0.02], b: HEAD,  r0: 0.27, r1: 0.28, kind: 0 },
+    { a: BODY, o: [-0.31,  0.24,  0.00], b: HANDL, r0: 0.165, r1: 0.14, kind: 1 },
+    { a: BODY, o: [ 0.31,  0.24,  0.00], b: HANDR, r0: 0.165, r1: 0.14, kind: 1 },
+    { a: BODY, o: [-0.22, -0.20,  0.10], b: FOOTL, r0: 0.19, r1: 0.18, kind: 2 },
+    { a: BODY, o: [ 0.22, -0.20,  0.10], b: FOOTR, r0: 0.19, r1: 0.18, kind: 2 },
+    { a: HEAD, o: [-0.21,  0.30, -0.04], b: EARL,  r0: 0.14, r1: 0.15, kind: 3 },
+    { a: HEAD, o: [ 0.21,  0.30, -0.04], b: EARR,  r0: 0.14, r1: 0.15, kind: 3 },
+    { a: HEAD, o: [ 0.00, -0.10,  0.20], b: SNOUT, r0: 0.12, r1: 0.13, kind: 4 },
+  ];
+  const NS = STRANDS.length;
+
+  const MASS = new Float64Array(NP), CR = new Float64Array(NP), BR = new Float64Array(NP),
+        SF = new Float64Array(NP), MAXST = new Float64Array(NP);
+  const Q = new Float64Array(NP * 3);
+  let TOTAL_M = 0;
+  const AQI = new Float64Array(9);
+  const STR_REST = new Float64Array(NS);
+
+  (function initTemplate() {
+    let cx = 0, cy = 0, cz = 0;
+    for (let i = 0; i < NP; i++) {
+      const r = REST[i];
+      MASS[i] = r[3]; CR[i] = r[4]; BR[i] = r[5]; SF[i] = r[6]; MAXST[i] = r[7];
+      TOTAL_M += r[3]; cx += r[3] * r[0]; cy += r[3] * r[1]; cz += r[3] * r[2];
+    }
+    cx /= TOTAL_M; cy /= TOTAL_M; cz /= TOTAL_M;
+    for (let i = 0; i < NP; i++) {
+      Q[3 * i] = REST[i][0] - cx; Q[3 * i + 1] = REST[i][1] - cy; Q[3 * i + 2] = REST[i][2] - cz;
+    }
+    const m = new Float64Array(9);
+    for (let i = 0; i < NP; i++) {
+      const x = Q[3 * i], y = Q[3 * i + 1], z = Q[3 * i + 2], w = MASS[i];
+      m[0] += w * x * x; m[1] += w * x * y; m[2] += w * x * z;
+      m[3] += w * y * x; m[4] += w * y * y; m[5] += w * y * z;
+      m[6] += w * z * x; m[7] += w * z * y; m[8] += w * z * z;
+    }
+    inv3(m, AQI);
+    for (let s = 0; s < NS; s++) {
+      const S = STRANDS[s];
+      const ax = Q[3 * S.a] + S.o[0], ay = Q[3 * S.a + 1] + S.o[1], az = Q[3 * S.a + 2] + S.o[2];
+      const dx = Q[3 * S.b] - ax, dy = Q[3 * S.b + 1] - ay, dz = Q[3 * S.b + 2] - az;
+      STR_REST[s] = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+  })();
+
+  function inv3(m, o) {
+    const a = m[0], b = m[1], c = m[2], d = m[3], e = m[4], f = m[5], g = m[6], h = m[7], i = m[8];
+    const A = e * i - f * h, B = f * g - d * i, C = d * h - e * g;
+    let det = a * A + b * B + c * C;
+    if (Math.abs(det) < 1e-12) det = det < 0 ? -1e-12 : 1e-12;
+    const id = 1 / det;
+    o[0] = A * id; o[1] = (c * h - b * i) * id; o[2] = (b * f - c * e) * id;
+    o[3] = B * id; o[4] = (a * i - c * g) * id; o[5] = (c * d - a * f) * id;
+    o[6] = C * id; o[7] = (b * g - a * h) * id; o[8] = (a * e - b * d) * id;
+  }
+
+  function createWorld() {
+    return {
+      bears: [],
+      time: 0,
+      wobble: 0.55,
+      gravity: -27,
+      arena: 3.35,
+      bounces: 0,
+      nextId: 1,
+      events: [],
+      grabbed: null,
+      restitution: 0.34,
+      ceiling: 9.0,
+      fields: [],
+      balls: [],
+      pad: null,
+      bumpers: [],
+    };
+  }
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  function quatFromEuler(yaw, pitch, roll, out) {
+    const cy = Math.cos(yaw * 0.5), sy = Math.sin(yaw * 0.5);
+    const cp = Math.cos(pitch * 0.5), sp = Math.sin(pitch * 0.5);
+    const cr = Math.cos(roll * 0.5), sr = Math.sin(roll * 0.5);
+    out[0] = cy * sp * cr + sy * cp * sr;
+    out[1] = sy * cp * cr - cy * sp * sr;
+    out[2] = cy * cp * sr - sy * sp * cr;
+    out[3] = cy * cp * cr + sy * sp * sr;
+  }
+
+  function rotFromQuat(q, R) {
+    const x = q[0], y = q[1], z = q[2], w = q[3];
+    const xx = x * x, yy = y * y, zz = z * z, xy = x * y, xz = x * z, yz = y * z, wx = w * x, wy = w * y, wz = w * z;
+    R[0] = 1 - 2 * (yy + zz); R[1] = 2 * (xy - wz);     R[2] = 2 * (xz + wy);
+    R[3] = 2 * (xy + wz);     R[4] = 1 - 2 * (xx + zz); R[5] = 2 * (yz - wx);
+    R[6] = 2 * (xz - wy);     R[7] = 2 * (yz + wx);     R[8] = 1 - 2 * (xx + yy);
+  }
+
+  function createBear(world, flavor, x, y, z, opt) {
+    opt = opt || {};
+    const b = {
+      id: world.nextId++, flavor, scale: opt.scale || rand(0.94, 1.06),
+      P: new Float64Array(NP * 3), V: new Float64Array(NP * 3),
+      q: new Float64Array(4), R: new Float64Array(9),
+      c: new Float64Array(3), vc: new Float64Array(3),
+      sq: 0, sqv: 0, sx: 1, sy: 1,
+      press: 0, pressing: false, flash: 0, wake: 0,
+      hopT: rand(1.2, 5.5), crouch: 0, crouchLen: 0,
+      asleep: false, still: 0, grounded: false, groundT: 0, bounceCD: 0, hitCD: 0, padCD: 0, bmpCD: 0, ballCD: 0,
+      grab: -1, gt: new Float64Array(3), gStretch: 0,
+      bound: 1.2, maxStretch: 1, restStretch: 1,
+      grow: opt.grow === undefined ? 1 : opt.grow, growTarget: 1, dying: false,
+      meshAge: 99, dirty: true, hue: 0,
+      strandLen: new Float64Array(NS), strandThin: new Float64Array(NS).fill(1),
+      springErr: 0, ke: 0,
+    };
+    quatFromEuler(opt.yaw !== undefined ? opt.yaw : rand(0, 6.283), opt.pitch !== undefined ? opt.pitch : rand(-0.5, 0.5),
+                  opt.roll !== undefined ? opt.roll : rand(-0.5, 0.5), b.q);
+    rotFromQuat(b.q, b.R);
+    for (let i = 0; i < NP; i++) {
+      const qx = Q[3 * i] * b.scale, qy = Q[3 * i + 1] * b.scale, qz = Q[3 * i + 2] * b.scale;
+      b.P[3 * i]     = x + b.R[0] * qx + b.R[1] * qy + b.R[2] * qz;
+      b.P[3 * i + 1] = y + b.R[3] * qx + b.R[4] * qy + b.R[5] * qz;
+      b.P[3 * i + 2] = z + b.R[6] * qx + b.R[7] * qy + b.R[8] * qz;
+    }
+    if (opt.vel) for (let i = 0; i < NP; i++) { b.V[3 * i] = opt.vel[0]; b.V[3 * i + 1] = opt.vel[1]; b.V[3 * i + 2] = opt.vel[2]; }
+    if (opt.spin) {
+      const wx = opt.spin[0], wy = opt.spin[1], wz = opt.spin[2];
+      for (let i = 0; i < NP; i++) {
+        const rx = b.P[3 * i] - x, ry = b.P[3 * i + 1] - y, rz = b.P[3 * i + 2] - z;
+        b.V[3 * i] += wy * rz - wz * ry; b.V[3 * i + 1] += wz * rx - wx * rz; b.V[3 * i + 2] += wx * ry - wy * rx;
+      }
+    }
+    world.bears.push(b);
+    return b;
+  }
+
+  const _g = new Float64Array(NP * 3);
+  function stepBear(w, b, dt) {
+    const P = b.P, V = b.V, sc = b.scale * (0.35 + 0.65 * Math.min(1, b.grow));
+    const invM = 1 / TOTAL_M;
+
+    let cx = 0, cy = 0, cz = 0, vx = 0, vy = 0, vz = 0;
+    for (let i = 0; i < NP; i++) {
+      const m = MASS[i];
+      cx += m * P[3 * i]; cy += m * P[3 * i + 1]; cz += m * P[3 * i + 2];
+      vx += m * V[3 * i]; vy += m * V[3 * i + 1]; vz += m * V[3 * i + 2];
+    }
+    cx *= invM; cy *= invM; cz *= invM; vx *= invM; vy *= invM; vz *= invM;
+    b.c[0] = cx; b.c[1] = cy; b.c[2] = cz; b.vc[0] = vx; b.vc[1] = vy; b.vc[2] = vz;
+
+    let a00 = 0, a01 = 0, a02 = 0, a10 = 0, a11 = 0, a12 = 0, a20 = 0, a21 = 0, a22 = 0;
+    const isc = 1 / b.scale;
+    for (let i = 0; i < NP; i++) {
+      const m = MASS[i] * isc;
+      const px = P[3 * i] - cx, py = P[3 * i + 1] - cy, pz = P[3 * i + 2] - cz;
+      const qx = Q[3 * i], qy = Q[3 * i + 1], qz = Q[3 * i + 2];
+      a00 += m * px * qx; a01 += m * px * qy; a02 += m * px * qz;
+      a10 += m * py * qx; a11 += m * py * qy; a12 += m * py * qz;
+      a20 += m * pz * qx; a21 += m * pz * qy; a22 += m * pz * qz;
+    }
+
+    const bq = b.q;
+    let qx = bq[0], qy = bq[1], qz = bq[2], qw = bq[3];
+    for (let it = 0; it < 4; it++) {
+      const xx = qx * qx, yy = qy * qy, zz = qz * qz, xy = qx * qy, xz = qx * qz, yz = qy * qz, wx = qw * qx, wy = qw * qy, wz = qw * qz;
+      const r0x = 1 - 2 * (yy + zz), r0y = 2 * (xy + wz), r0z = 2 * (xz - wy);
+      const r1x = 2 * (xy - wz), r1y = 1 - 2 * (xx + zz), r1z = 2 * (yz + wx);
+      const r2x = 2 * (xz + wy), r2y = 2 * (yz - wx), r2z = 1 - 2 * (xx + yy);
+      let ox = r0y * a20 - r0z * a10 + r1y * a21 - r1z * a11 + r2y * a22 - r2z * a12;
+      let oy = r0z * a00 - r0x * a20 + r1z * a01 - r1x * a21 + r2z * a02 - r2x * a22;
+      let oz = r0x * a10 - r0y * a00 + r1x * a11 - r1y * a01 + r2x * a12 - r2y * a02;
+      const dn = Math.abs(r0x * a00 + r0y * a10 + r0z * a20 + r1x * a01 + r1y * a11 + r1z * a21 + r2x * a02 + r2y * a12 + r2z * a22) + 1e-9;
+      ox /= dn; oy /= dn; oz /= dn;
+      const wl = Math.sqrt(ox * ox + oy * oy + oz * oz);
+      if (wl < 1e-9) break;
+      const s = Math.sin(wl * 0.5) / wl, cw = Math.cos(wl * 0.5);
+      const dx = ox * s, dy = oy * s, dz = oz * s;
+      const nx = cw * qx + dx * qw + dy * qz - dz * qy;
+      const ny = cw * qy - dx * qz + dy * qw + dz * qx;
+      const nz = cw * qz + dx * qy - dy * qx + dz * qw;
+      const nw = cw * qw - dx * qx - dy * qy - dz * qz;
+      const il = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz + nw * nw);
+      qx = nx * il; qy = ny * il; qz = nz * il; qw = nw * il;
+    }
+    bq[0] = qx; bq[1] = qy; bq[2] = qz; bq[3] = qw;
+    const R = b.R; rotFromQuat(bq, R);
+
+    const L0 = a00 * AQI[0] + a01 * AQI[3] + a02 * AQI[6], L1 = a00 * AQI[1] + a01 * AQI[4] + a02 * AQI[7], L2 = a00 * AQI[2] + a01 * AQI[5] + a02 * AQI[8];
+    const L3 = a10 * AQI[0] + a11 * AQI[3] + a12 * AQI[6], L4 = a10 * AQI[1] + a11 * AQI[4] + a12 * AQI[7], L5 = a10 * AQI[2] + a11 * AQI[5] + a12 * AQI[8];
+    const L6 = a20 * AQI[0] + a21 * AQI[3] + a22 * AQI[6], L7 = a20 * AQI[1] + a21 * AQI[4] + a22 * AQI[7], L8 = a20 * AQI[2] + a21 * AQI[5] + a22 * AQI[8];
+    const det = L0 * (L4 * L8 - L5 * L7) - L1 * (L3 * L8 - L5 * L6) + L2 * (L3 * L7 - L4 * L6);
+    let beta = 0.4, ls = 1;
+    if (det > 0.3 && det < 6) ls = 1 / Math.cbrt(det); else beta = 0;
+    const G0 = _G0;
+    G0[0] = (1 - beta) * R[0] + beta * ls * L0; G0[1] = (1 - beta) * R[1] + beta * ls * L1; G0[2] = (1 - beta) * R[2] + beta * ls * L2;
+    G0[3] = (1 - beta) * R[3] + beta * ls * L3; G0[4] = (1 - beta) * R[4] + beta * ls * L4; G0[5] = (1 - beta) * R[5] + beta * ls * L5;
+    G0[6] = (1 - beta) * R[6] + beta * ls * L6; G0[7] = (1 - beta) * R[7] + beta * ls * L7; G0[8] = (1 - beta) * R[8] + beta * ls * L8;
+
+    let Lx = 0, Ly = 0, Lz = 0, i00 = 0, i01 = 0, i02 = 0, i11 = 0, i12 = 0, i22 = 0;
+    for (let i = 0; i < NP; i++) {
+      const m = MASS[i];
+      const rx = P[3 * i] - cx, ry = P[3 * i + 1] - cy, rz = P[3 * i + 2] - cz;
+      const ux = V[3 * i] - vx, uy = V[3 * i + 1] - vy, uz = V[3 * i + 2] - vz;
+      Lx += m * (ry * uz - rz * uy); Ly += m * (rz * ux - rx * uz); Lz += m * (rx * uy - ry * ux);
+      const r2 = rx * rx + ry * ry + rz * rz;
+      i00 += m * (r2 - rx * rx); i11 += m * (r2 - ry * ry); i22 += m * (r2 - rz * rz);
+      i01 -= m * rx * ry; i02 -= m * rx * rz; i12 -= m * ry * rz;
+    }
+    const im = _im, imi = _imi;
+    im[0] = i00; im[1] = i01; im[2] = i02; im[3] = i01; im[4] = i11; im[5] = i12; im[6] = i02; im[7] = i12; im[8] = i22;
+    inv3(im, imi);
+    const wx = imi[0] * Lx + imi[1] * Ly + imi[2] * Lz;
+    const wy = imi[3] * Lx + imi[4] * Ly + imi[5] * Lz;
+    const wz = imi[6] * Lx + imi[7] * Ly + imi[8] * Lz;
+    const grounded = b.groundT > 0;
+
+    const sy = Math.max(0.38, Math.min(1.7, 1 - b.sq));
+    const sxz = 1 / Math.sqrt(sy);
+    b.sy = sy; b.sx = sxz;
+    let pivot = 1e9;
+    for (let i = 0; i < NP; i++) { const yb = P[3 * i + 1] - CR[i] * sc; if (yb < pivot) pivot = yb; }
+
+    const g = _g;
+    for (let i = 0; i < NP; i++) {
+      const qx0 = Q[3 * i] * sc, qy0 = Q[3 * i + 1] * sc, qz0 = Q[3 * i + 2] * sc;
+      const ox = G0[0] * qx0 + G0[1] * qy0 + G0[2] * qz0;
+      const oy = G0[3] * qx0 + G0[4] * qy0 + G0[5] * qz0;
+      const oz = G0[6] * qx0 + G0[7] * qy0 + G0[8] * qz0;
+      let gx = cx + ox, gy = cy + oy, gz = cz + oz;
+      gy = pivot + (gy - pivot) * sy;
+      gx = cx + (gx - cx) * sxz; gz = cz + (gz - cz) * sxz;
+      g[3 * i] = gx; g[3 * i + 1] = gy; g[3 * i + 2] = gz;
+    }
+
+    const wob = w.wobble;
+    const omega = 56 - 30 * wob;
+    const om2 = omega * omega;
+    let ax = 0, ay = 0, az = 0, err = 0, mSum = 0;
+    const acc = _acc, held = b.grab;
+    for (let i = 0; i < NP; i++) {
+      if (i === held) { acc[3 * i] = acc[3 * i + 1] = acc[3 * i + 2] = 0; continue; }
+      const k = om2 * SF[i] * SF[i];
+      const dx = g[3 * i] - P[3 * i], dy = g[3 * i + 1] - P[3 * i + 1], dz = g[3 * i + 2] - P[3 * i + 2];
+      err += dx * dx + dy * dy + dz * dz;
+      const lx = k * dx, ly = k * dy, lz = k * dz;
+      acc[3 * i] = lx; acc[3 * i + 1] = ly; acc[3 * i + 2] = lz;
+      ax += MASS[i] * lx; ay += MASS[i] * ly; az += MASS[i] * lz;
+      mSum += MASS[i];
+    }
+    ax /= mSum; ay /= mSum; az /= mSum;
+    {
+      let tx = 0, ty = 0, tz = 0;
+      for (let i = 0; i < NP; i++) {
+        if (i === held) continue;
+        acc[3 * i] -= ax; acc[3 * i + 1] -= ay; acc[3 * i + 2] -= az;
+        const m = MASS[i], rx = P[3 * i] - cx, ry = P[3 * i + 1] - cy, rz = P[3 * i + 2] - cz;
+        tx += m * (ry * acc[3 * i + 2] - rz * acc[3 * i + 1]);
+        ty += m * (rz * acc[3 * i] - rx * acc[3 * i + 2]);
+        tz += m * (rx * acc[3 * i + 1] - ry * acc[3 * i]);
+      }
+      const alx = imi[0] * tx + imi[1] * ty + imi[2] * tz, aly = imi[3] * tx + imi[4] * ty + imi[5] * tz, alz = imi[6] * tx + imi[7] * ty + imi[8] * tz;
+      for (let i = 0; i < NP; i++) {
+        if (i === held) continue;
+        const rx = P[3 * i] - cx, ry = P[3 * i + 1] - cy, rz = P[3 * i + 2] - cz;
+        acc[3 * i]     -= aly * rz - alz * ry;
+        acc[3 * i + 1] -= alz * rx - alx * rz;
+        acc[3 * i + 2] -= alx * ry - aly * rx;
+      }
+    }
+    b.springErr = err;
+    for (let i = 0; i < NP; i++) {
+      if (i === held) { V[3 * i + 1] += w.gravity * dt; continue; }
+      V[3 * i]     += acc[3 * i] * dt;
+      V[3 * i + 1] += (acc[3 * i + 1] + w.gravity) * dt;
+      V[3 * i + 2] += acc[3 * i + 2] * dt;
+    }
+
+    {
+      const ux = R[1], uy = R[4], uz = R[7];
+      let kx = -uz, kz = ux, mag;
+      const sl = Math.sqrt(kx * kx + kz * kz);
+      if (sl < 1e-4) { if (uy < 0) { kx = 1; kz = 0; mag = 1; } else { kx = 0; kz = 0; mag = 0; } }
+      else { kx /= sl; kz /= sl; mag = uy >= 0 ? sl : 1; }
+      const Kup = b.grab >= 0 ? 30 : (grounded ? 90 : 9);
+      const Cup = grounded ? 12 : 2.5;
+      const alx = Kup * mag * kx - Cup * wx, alz = Kup * mag * kz - Cup * wz;
+      for (let i = 0; i < NP; i++) {
+        const rx = P[3 * i] - cx, ry = P[3 * i + 1] - cy, rz = P[3 * i + 2] - cz;
+        V[3 * i]     += (-alz * ry) * dt;
+        V[3 * i + 1] += (alz * rx - alx * rz) * dt;
+        V[3 * i + 2] += (alx * ry) * dt;
+      }
+    }
+
+    {
+      const damp = 26 - 22 * Math.pow(wob, 0.75);
+      const kap = Math.min(0.9, damp * dt);
+      for (let i = 0; i < NP; i++) {
+        const rx = P[3 * i] - cx, ry = P[3 * i + 1] - cy, rz = P[3 * i + 2] - cz;
+        const rvx = vx + wy * rz - wz * ry, rvy = vy + wz * rx - wx * rz, rvz = vz + wx * ry - wy * rx;
+        V[3 * i]     -= (V[3 * i] - rvx) * kap;
+        V[3 * i + 1] -= (V[3 * i + 1] - rvy) * kap;
+        V[3 * i + 2] -= (V[3 * i + 2] - rvz) * kap;
+      }
+    }
+
+    if (b.grab >= 0) {
+      const gi = b.grab;
+      const dx = b.gt[0] - P[3 * gi], dy = b.gt[1] - P[3 * gi + 1], dz = b.gt[2] - P[3 * gi + 2];
+      const kg = 1500, cgd = 70;
+      V[3 * gi]     += (kg * dx - cgd * V[3 * gi]) * dt;
+      V[3 * gi + 1] += (kg * dy - cgd * V[3 * gi + 1]) * dt;
+      V[3 * gi + 2] += (kg * dz - cgd * V[3 * gi + 2]) * dt;
+      const sx0 = P[3 * gi] - g[3 * gi], sy0 = P[3 * gi + 1] - g[3 * gi + 1], sz0 = P[3 * gi + 2] - g[3 * gi + 2];
+      const sl = Math.sqrt(sx0 * sx0 + sy0 * sy0 + sz0 * sz0);
+      b.gStretch = sl;
+      if (sl > 1e-4) {
+        const lim = MAXST[gi] * b.scale;
+        const lean = 16 + 160 * Math.max(0, sl - lim * 0.5) / lim;
+        const nx = sx0 / sl, ny = sy0 / sl, nz = sz0 / sl;
+        const fl = Math.min(260, lean * sl);
+        for (let j = 0; j < NP; j++) {
+          if (j === gi) continue;
+          const f = fl * dt * (0.55 + 0.45 * SF[j]);
+          V[3 * j] += nx * f; V[3 * j + 1] += ny * f * 0.9; V[3 * j + 2] += nz * f;
+        }
+        if (sl > lim * 1.6) {
+          const k2 = (sl - lim * 1.6) * 900 * dt;
+          V[3 * gi] -= nx * k2; V[3 * gi + 1] -= ny * k2; V[3 * gi + 2] -= nz * k2;
+        }
+      }
+    } else b.gStretch = 0;
+
+    if (w.fields.length) applyFields(w, b, dt);
+
+    for (let i = 0; i < NP * 3; i++) P[i] += V[i] * dt;
+
+    let touched = false, impact = 0, padKick = 0, bumpKick = 0;
+    const arena = w.arena, pad = w.pad, bumpers = w.bumpers, e = w.restitution, ceil = w.ceiling;
+    for (let i = 0; i < NP; i++) {
+      const rad = CR[i] * sc;
+      const k = 3 * i;
+      let fy = 0, onPad = false;
+      if (pad) { const dx = P[k] - pad.x, dz = P[k + 2] - pad.z; if (dx * dx + dz * dz < pad.r * pad.r) { fy = pad.h; onPad = true; } }
+      if (P[k + 1] < rad + fy) {
+        P[k + 1] = rad + fy;
+        if (V[k + 1] < 0) {
+          const vi = -V[k + 1];
+          if (vi > impact) impact = vi;
+          if (onPad && vi > 0.9) { V[k + 1] = Math.max(vi * 1.04, pad.v); if (vi > padKick) padKick = vi; }
+          else V[k + 1] = vi > 1.2 ? vi * e : 0;
+        }
+        const fr = Math.max(0, 1 - 9 * dt);
+        V[k] *= fr; V[k + 2] *= fr;
+        touched = true;
+      }
+      if (P[k + 1] > ceil - rad) { P[k + 1] = ceil - rad; if (V[k + 1] > 0) V[k + 1] *= -0.55; }
+      for (let q = 0; q < bumpers.length; q++) {
+        const bm = bumpers[q];
+        if (P[k + 1] > bm.h + rad) continue;
+        const dx = P[k] - bm.x, dz = P[k + 2] - bm.z, rr2 = dx * dx + dz * dz, lim2 = (bm.r + rad) * (bm.r + rad);
+        if (rr2 < lim2) {
+          const d = Math.sqrt(rr2) || 1e-6, nx = dx / d, nz = dz / d, lim = bm.r + rad;
+          P[k] = bm.x + nx * lim; P[k + 2] = bm.z + nz * lim;
+          const vn = V[k] * nx + V[k + 2] * nz;
+          if (vn < 0) {
+            const out = Math.max(-vn * 1.5, 3.4);
+            V[k] += nx * (out - vn); V[k + 2] += nz * (out - vn); V[k + 1] += 1.2;
+            if (-vn > bumpKick) { bumpKick = -vn; b._bmp = bm; }
+          }
+        }
+      }
+      const rr = Math.sqrt(P[k] * P[k] + P[k + 2] * P[k + 2]);
+      const lim = arena - rad;
+      if (rr > lim) {
+        const nx = P[k] / rr, nz = P[k + 2] / rr;
+        P[k] = nx * lim; P[k + 2] = nz * lim;
+        const vn = V[k] * nx + V[k + 2] * nz;
+        if (vn > 0) { const wf = 1.35 + 0.8 * (e - 0.34); V[k] -= wf * vn * nx; V[k + 2] -= wf * vn * nz; }
+      }
+    }
+    if (padKick > 0) {
+      for (let i = 0; i < NP; i++) if (V[3 * i + 1] < pad.v) V[3 * i + 1] = pad.v;
+      if (b.padCD <= 0) {
+        b.padCD = 0.22; w.bounces++; pad.hit = 1; b.sqv += 9;
+        w.events.push({ type: 'pad', bear: b, speed: padKick });
+      }
+    }
+    if (bumpKick > 0 && b.bmpCD <= 0) {
+      b.bmpCD = 0.22; w.bounces++; if (b._bmp) b._bmp.hit = 1; b.sqv += Math.min(9, bumpKick);
+      w.events.push({ type: 'bumper', bear: b, speed: bumpKick });
+    }
+    if (touched) {
+      if (!b.grounded && impact > 1.0) {
+        b.sqv += Math.min(11, impact * 1.0);
+        const vin = -b.vc[1];
+        if (vin > 1.0 && !(padKick > 0)) {
+          let vyc = 0; for (let i = 0; i < NP; i++) vyc += MASS[i] * V[3 * i + 1];
+          vyc *= invM;
+          const want = Math.max(0.03, 0.05 + 0.95 * (e - 0.12)) * vin;
+          if (vyc < want) { const dv = want - vyc; for (let i = 0; i < NP; i++) V[3 * i + 1] += dv; }
+        }
+        if (impact > 2.2 && b.bounceCD <= 0 && !(padKick > 0)) { w.bounces++; b.bounceCD = 0.16; w.events.push({ type: 'bounce', bear: b, speed: impact }); }
+      }
+      b.grounded = true; b.groundT = 0.09;
+    } else {
+      b.groundT -= dt; if (b.groundT <= 0) b.grounded = false;
+    }
+  }
+
+  function applyFields(w, b, dt) {
+    const P = b.P, V = b.V, F = w.fields;
+    for (let n = 0; n < F.length; n++) {
+      const f = F[n];
+      if (f.kind === 0) {
+        let hit = false;
+        for (let i = 0; i < NP; i++) {
+          const vx = P[3 * i] - f.ox, vy = P[3 * i + 1] - f.oy, vz = P[3 * i + 2] - f.oz;
+          const t = vx * f.dx + vy * f.dy + vz * f.dz;
+          if (t < 0 || t > f.tmax) continue;
+          const px = vx - t * f.dx, py = vy - t * f.dy, pz = vz - t * f.dz;
+          const d = Math.sqrt(px * px + py * py + pz * pz);
+          if (d > f.r) continue;
+          const fall = (1 - d / f.r) * (1 - d / f.r);
+          V[3 * i] += f.dx * f.k * fall * dt; V[3 * i + 1] += f.dy * f.k * fall * dt; V[3 * i + 2] += f.dz * f.k * fall * dt;
+          if (d > 1e-4) { const s = f.k * 0.22 * fall * dt / d; V[3 * i] += px * s; V[3 * i + 1] += py * s * 0.3; V[3 * i + 2] += pz * s; }
+          hit = true;
+        }
+        if (hit) { b.sqv += 34 * dt; b.asleep = false; }
+      } else if (f.kind === 1) {
+        for (let i = 0; i < NP; i++) {
+          const dx = f.x - P[3 * i], dy = f.y - P[3 * i + 1], dz = f.z - P[3 * i + 2];
+          const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (d > f.r) continue;
+          const fall = 1 - d / f.r, id = 1 / (d + 0.12);
+          const a = f.k * fall * dt;
+          V[3 * i] += dx * id * a + (-dz * id) * a * 0.3;
+          V[3 * i + 1] += dy * id * a - w.gravity * fall * 0.62 * dt;
+          V[3 * i + 2] += dz * id * a + (dx * id) * a * 0.3;
+          const damp = Math.max(0, 1 - 2.2 * fall * fall * dt);
+          V[3 * i] *= damp; V[3 * i + 1] *= damp; V[3 * i + 2] *= damp;
+        }
+      } else {
+        for (let i = 0; i < NP; i++) {
+          const dx = P[3 * i] - f.x, dy = P[3 * i + 1] - f.y, dz = P[3 * i + 2] - f.z;
+          const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (d > f.r) continue;
+          const fall = 1 - d / f.r, a = f.k * fall * fall * dt;
+          V[3 * i] += f.dx * a; V[3 * i + 1] += f.dy * a + 0.22 * a; V[3 * i + 2] += f.dz * a;
+        }
+      }
+    }
+  }
+  function fieldReaches(f, b) {
+    const R = f.r + b.bound + 0.2;
+    if (f.kind === 0) {
+      const vx = b.c[0] - f.ox, vy = b.c[1] - f.oy, vz = b.c[2] - f.oz;
+      const t = vx * f.dx + vy * f.dy + vz * f.dz;
+      if (t < 0 || t > f.tmax + b.bound) return false;
+      const px = vx - t * f.dx, py = vy - t * f.dy, pz = vz - t * f.dz;
+      return px * px + py * py + pz * pz < R * R;
+    }
+    const dx = b.c[0] - f.x, dy = b.c[1] - f.y, dz = b.c[2] - f.z;
+    return dx * dx + dy * dy + dz * dz < R * R;
+  }
+  const _G0 = new Float64Array(9), _acc = new Float64Array(NP * 3), _im = new Float64Array(9), _imi = new Float64Array(9);
+
+  function updateBearState(w, b, dt) {
+    let target = 0;
+    if (b.crouch > 0) target = 0.30 * Math.min(1, 1.3 - b.crouch / b.crouchLen);
+    if (b.pressing) target = 0.62 * b.press;
+    else if (!b.grounded && !b.pressing) target = -Math.min(0.22, Math.abs(b.vc[1]) * 0.016);
+    const wob = w.wobble;
+    const ks = 360 - 90 * wob, cs = 20 - 11 * wob;
+    b.sqv += (-ks * (b.sq - target) - cs * b.sqv) * dt;
+    b.sq += b.sqv * dt;
+    if (b.sq > 0.66) { b.sq = 0.66; if (b.sqv > 0) b.sqv = 0; }
+    if (b.sq < -0.55) { b.sq = -0.55; if (b.sqv < 0) b.sqv = 0; }
+
+    if (b.pressing) b.press = Math.min(1, b.press + dt * 3.2);
+    b.flash *= Math.exp(-dt * 4.2);
+    if (b.flash < 0.002) b.flash = 0;
+    b.bounceCD -= dt; b.hitCD -= dt; b.padCD -= dt; b.bmpCD -= dt; b.ballCD -= dt;
+
+    if (b.grab >= 0 || b.pressing) b.crouch = 0;
+    if (b.grab < 0 && !b.pressing && !b.dying) {
+      if (b.crouch > 0) {
+        b.crouch -= dt;
+        if (b.crouch <= 0) {
+          const up = rand(4.8, 7.4), ang = rand(0, 6.283), hv = rand(0.2, 1.1);
+          for (let i = 0; i < NP; i++) {
+            b.V[3 * i + 1] = Math.max(b.V[3 * i + 1], 0) + up;
+            b.V[3 * i] += Math.cos(ang) * hv; b.V[3 * i + 2] += Math.sin(ang) * hv;
+          }
+          const spin = rand(-2.2, 2.2);
+          for (let i = 0; i < NP; i++) {
+            const rx = b.P[3 * i] - b.c[0], rz = b.P[3 * i + 2] - b.c[2];
+            b.V[3 * i] += -spin * rz; b.V[3 * i + 2] += spin * rx;
+          }
+          b.sqv -= 11; b.hopT = rand(2.0, 6.5);
+        }
+      } else if (b.grounded) {
+        b.hopT -= dt;
+        if (b.hopT <= 0) { b.crouch = b.crouchLen = rand(0.15, 0.22); b.asleep = false; b.still = 0; }
+      }
+    }
+
+    if (b.grow !== b.growTarget) {
+      const sp = b.dying ? 4.0 : 3.2;
+      b.grow += Math.sign(b.growTarget - b.grow) * Math.min(Math.abs(b.growTarget - b.grow), sp * dt);
+    }
+  }
+
+  function launchFromPress(w, b) {
+    const p = b.press;
+    b.pressing = false;
+    if (p > 0.1) {
+      const up = 6.4 + 7.2 * p;
+      for (let i = 0; i < NP; i++) b.V[3 * i + 1] = Math.max(b.V[3 * i + 1], 0) + up;
+      b.sqv -= 14 + 10 * p;
+      b.flash = 0.5;
+      b.asleep = false; b.grounded = false; b.groundT = 0;
+    }
+    b.press = 0;
+  }
+
+  function collideBears(w, A, B) {
+    const dxc = A.c[0] - B.c[0], dyc = A.c[1] - B.c[1], dzc = A.c[2] - B.c[2];
+    const rr = A.bound + B.bound;
+    if (dxc * dxc + dyc * dyc + dzc * dzc > rr * rr) return;
+    const sA = A.scale * (0.35 + 0.65 * Math.min(1, A.grow)), sB = B.scale * (0.35 + 0.65 * Math.min(1, B.grow));
+    const aSleep = A.asleep, bSleep = B.asleep;
+    if (aSleep && bSleep) return;
+    const PA = A.P, PB = B.P, VA = A.V, VB = B.V;
+    let maxHit = 0;
+    for (let i = 0; i < NP; i++) {
+      const ax = PA[3 * i], ay = PA[3 * i + 1], az = PA[3 * i + 2];
+      for (let j = 0; j < NP; j++) {
+        const bx = PB[3 * j], by = PB[3 * j + 1], bz = PB[3 * j + 2];
+        const dx = ax - bx, dy = ay - by, dz = az - bz;
+        const minD = (CR[i] * sA + CR[j] * sB) * 0.96;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 >= minD * minD) continue;
+        const d = Math.sqrt(d2) || 1e-6;
+        const nx = dx / d, ny = dy / d, nz = dz / d;
+        const pen = minD - d;
+        const iwA = (aSleep || A.grab === i) ? 0 : 1 / MASS[i];
+        const iwB = (bSleep || B.grab === j) ? 0 : 1 / MASS[j];
+        const ws = iwA + iwB;
+        if (ws === 0) {
+          if (aSleep) { A.asleep = false; A.still = 0; }
+          if (bSleep) { B.asleep = false; B.still = 0; }
+          continue;
+        }
+        const corr = pen / ws * 0.8;
+        PA[3 * i] += nx * corr * iwA; PA[3 * i + 1] += ny * corr * iwA; PA[3 * i + 2] += nz * corr * iwA;
+        PB[3 * j] -= nx * corr * iwB; PB[3 * j + 1] -= ny * corr * iwB; PB[3 * j + 2] -= nz * corr * iwB;
+        const rvx = VA[3 * i] - VB[3 * j], rvy = VA[3 * i + 1] - VB[3 * j + 1], rvz = VA[3 * i + 2] - VB[3 * j + 2];
+        const vn = rvx * nx + rvy * ny + rvz * nz;
+        if (vn < 0) {
+          const jn = -(1.18) * vn / ws;
+          VA[3 * i] += nx * jn * iwA; VA[3 * i + 1] += ny * jn * iwA; VA[3 * i + 2] += nz * jn * iwA;
+          VB[3 * j] -= nx * jn * iwB; VB[3 * j + 1] -= ny * jn * iwB; VB[3 * j + 2] -= nz * jn * iwB;
+          const tx = rvx - vn * nx, ty = rvy - vn * ny, tz = rvz - vn * nz;
+          const fk = 0.06 / ws;
+          VA[3 * i] -= tx * fk * iwA; VA[3 * i + 1] -= ty * fk * iwA; VA[3 * i + 2] -= tz * fk * iwA;
+          VB[3 * j] += tx * fk * iwB; VB[3 * j + 1] += ty * fk * iwB; VB[3 * j + 2] += tz * fk * iwB;
+          if (-vn > maxHit) maxHit = -vn;
+        }
+      }
+    }
+    if (maxHit > 0.25) {
+      if (aSleep) { A.asleep = false; A.still = 0; }
+      if (bSleep) { B.asleep = false; B.still = 0; }
+    }
+    if (maxHit > 2.4) {
+      if (A.hitCD <= 0 && B.hitCD <= 0) {
+        A.hitCD = B.hitCD = 0.2; w.bounces++;
+        A.sqv += Math.min(8, maxHit); B.sqv += Math.min(8, maxHit);
+        w.events.push({ type: 'bump', bear: A, other: B, speed: maxHit });
+      }
+    }
+  }
+
+  function createBall(w, x, y, z, r, opt) {
+    opt = opt || {};
+    if (!(r > 0)) r = 0.04;
+    const ba = {
+      id: w.nextId++, kind: opt.kind || 0, x, y, z, vx: opt.vx || 0, vy: opt.vy || 0, vz: opt.vz || 0,
+      r, m: 4 * (r / 0.45) * (r / 0.45), q: [0, 0, 0, 1], wx: opt.wx || 0, wy: opt.wy || 0, wz: opt.wz || 0,
+      grow: opt.grow === undefined ? 1 : opt.grow, growTarget: 1, dying: false, grab: false, gt: [x, y, z], cd: 0, hit: 0, gv: [0, 0, 0],
+    };
+    w.balls.push(ba);
+    return ba;
+  }
+
+  function ballRadius(ba) { return Math.max(0.04, ba.r * Math.min(1, ba.grow)); }
+
+  function stepBall(w, ba, dt) {
+    const rr = ballRadius(ba), e = w.restitution;
+    if (ba.grow !== ba.growTarget) ba.grow += Math.sign(ba.growTarget - ba.grow) * Math.min(Math.abs(ba.growTarget - ba.grow), (ba.dying ? 4 : 3.2) * dt);
+    ba.cd -= dt; ba.hit *= Math.exp(-dt * 6);
+
+    for (let n = 0; n < w.fields.length; n++) {
+      const f = w.fields[n];
+      if (f.kind === 0) {
+        const vx = ba.x - f.ox, vy = ba.y - f.oy, vz = ba.z - f.oz, t = vx * f.dx + vy * f.dy + vz * f.dz;
+        if (t < 0 || t > f.tmax) continue;
+        const px = vx - t * f.dx, py = vy - t * f.dy, pz = vz - t * f.dz, d = Math.sqrt(px * px + py * py + pz * pz);
+        if (d > f.r + rr) continue;
+        const fall = Math.pow(1 - d / (f.r + rr), 2);
+        ba.vx += f.dx * f.k * fall * dt; ba.vy += f.dy * f.k * fall * dt; ba.vz += f.dz * f.k * fall * dt;
+      } else if (f.kind === 1) {
+        const dx = f.x - ba.x, dy = f.y - ba.y, dz = f.z - ba.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d > f.r) continue;
+        const fall = 1 - d / f.r, id = 1 / (d + 0.12), a = f.k * fall * dt;
+        ba.vx += dx * id * a - dz * id * a * 0.3; ba.vy += dy * id * a - w.gravity * fall * 0.62 * dt; ba.vz += dz * id * a + dx * id * a * 0.3;
+        const damp = Math.max(0, 1 - 2.2 * fall * fall * dt); ba.vx *= damp; ba.vy *= damp; ba.vz *= damp;
+      } else {
+        const dx = ba.x - f.x, dy = ba.y - f.y, dz = ba.z - f.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d > f.r) continue;
+        const fall = 1 - d / f.r, a = f.k * fall * fall * dt;
+        ba.vx += f.dx * a; ba.vy += f.dy * a + 0.22 * a; ba.vz += f.dz * a;
+      }
+    }
+    if (ba.grab) {
+      ba.vx += (700 * (ba.gt[0] - ba.x) - 45 * ba.vx) * dt; ba.vy += (700 * (ba.gt[1] - ba.y) - 45 * ba.vy) * dt; ba.vz += (700 * (ba.gt[2] - ba.z) - 45 * ba.vz) * dt;
+    }
+    ba.vy += w.gravity * dt;
+    ba.x += ba.vx * dt; ba.y += ba.vy * dt; ba.z += ba.vz * dt;
+
+    let fy = 0, onPad = false;
+    const pad = w.pad;
+    if (pad) { const dx = ba.x - pad.x, dz = ba.z - pad.z; if (dx * dx + dz * dz < pad.r * pad.r) { fy = pad.h; onPad = true; } }
+    let ground = false;
+    if (ba.y < rr + fy) {
+      ba.y = rr + fy; ground = true;
+      if (ba.vy < 0) {
+        const vi = -ba.vy;
+        if (onPad && vi > 0.9) {
+          ba.vy = Math.max(vi * 1.04, pad.v * 0.95);
+          if (ba.cd <= 0) { ba.cd = 0.2; w.bounces++; pad.hit = 1; w.events.push({ type: 'pad', ball: ba, speed: vi }); }
+        } else {
+          ba.vy = vi > 0.9 ? vi * Math.min(0.94, e + 0.3) : 0;
+          if (vi > 2.4 && ba.cd <= 0) { ba.cd = 0.16; w.bounces++; ba.hit = 1; w.events.push({ type: 'ball', ball: ba, speed: vi }); }
+        }
+      }
+      const fr = Math.max(0, 1 - 0.7 * dt); ba.vx *= fr; ba.vz *= fr;
+    }
+    if (ba.y > w.ceiling - rr) { ba.y = w.ceiling - rr; if (ba.vy > 0) ba.vy *= -0.6; }
+
+    for (let q = 0; q < w.bumpers.length; q++) {
+      const bm = w.bumpers[q];
+      if (ba.y > bm.h + rr) continue;
+      const dx = ba.x - bm.x, dz = ba.z - bm.z, lim = bm.r + rr, d2 = dx * dx + dz * dz;
+      if (d2 < lim * lim) {
+        const d = Math.sqrt(d2) || 1e-6, nx = dx / d, nz = dz / d;
+        ba.x = bm.x + nx * lim; ba.z = bm.z + nz * lim;
+        const vn = ba.vx * nx + ba.vz * nz;
+        if (vn < 0) {
+          const out = Math.max(-vn * 1.4, 3.8);
+          ba.vx += nx * (out - vn); ba.vz += nz * (out - vn); bm.hit = 1;
+          if (ba.cd <= 0) { ba.cd = 0.2; w.bounces++; w.events.push({ type: 'bumper', ball: ba, speed: -vn }); }
+        }
+      }
+    }
+    const rh = Math.sqrt(ba.x * ba.x + ba.z * ba.z), lim = w.arena - rr;
+    if (rh > lim) {
+      const nx = ba.x / rh, nz = ba.z / rh;
+      ba.x = nx * lim; ba.z = nz * lim;
+      const vn = ba.vx * nx + ba.vz * nz;
+      if (vn > 0) { ba.vx -= 1.8 * vn * nx; ba.vz -= 1.8 * vn * nz; }
+    }
+
+    if (ground || ba.y - rr - fy < 0.03) {
+      const k = Math.min(1, 14 * dt);
+      ba.wx += (ba.vz / rr - ba.wx) * k; ba.wz += (-ba.vx / rr - ba.wz) * k; ba.wy *= (1 - 2 * dt);
+    }
+    const wl = Math.sqrt(ba.wx * ba.wx + ba.wy * ba.wy + ba.wz * ba.wz);
+    if (wl > 1e-4) {
+      const ang = wl * dt, s = Math.sin(ang * 0.5) / wl, c = Math.cos(ang * 0.5), q = ba.q;
+      const dx = ba.wx * s, dy = ba.wy * s, dz = ba.wz * s;
+      const nx = c * q[0] + dx * q[3] + dy * q[2] - dz * q[1], ny = c * q[1] + dy * q[3] + dz * q[0] - dx * q[2];
+      const nz = c * q[2] + dz * q[3] + dx * q[1] - dy * q[0], nw = c * q[3] - dx * q[0] - dy * q[1] - dz * q[2];
+      const ql = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz + nw * nw);
+      q[0] = nx * ql; q[1] = ny * ql; q[2] = nz * ql; q[3] = nw * ql;
+    }
+  }
+
+  function collideBalls(w) {
+    const balls = w.balls;
+    for (let a = 0; a < balls.length; a++) {
+      const A = balls[a], rA = ballRadius(A);
+      for (let c = a + 1; c < balls.length; c++) {
+        const B = balls[c], rB = ballRadius(B);
+        const dx = A.x - B.x, dy = A.y - B.y, dz = A.z - B.z, minD = rA + rB, d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 >= minD * minD) continue;
+        const d = Math.sqrt(d2) || 1e-6, nx = dx / d, ny = dy / d, nz = dz / d, pen = minD - d;
+        const iwA = A.grab ? 0 : 1 / A.m, iwB = B.grab ? 0 : 1 / B.m, ws = iwA + iwB;
+        if (ws === 0) continue;
+        A.x += nx * pen * iwA / ws * 0.9; A.y += ny * pen * iwA / ws * 0.9; A.z += nz * pen * iwA / ws * 0.9;
+        B.x -= nx * pen * iwB / ws * 0.9; B.y -= ny * pen * iwB / ws * 0.9; B.z -= nz * pen * iwB / ws * 0.9;
+        const vn = (A.vx - B.vx) * nx + (A.vy - B.vy) * ny + (A.vz - B.vz) * nz;
+        if (vn < 0) {
+          const j = -(1.9) * vn / ws;
+          A.vx += nx * j * iwA; A.vy += ny * j * iwA; A.vz += nz * j * iwA;
+          B.vx -= nx * j * iwB; B.vy -= ny * j * iwB; B.vz -= nz * j * iwB;
+          if (-vn > 2.4 && A.cd <= 0 && B.cd <= 0) { A.cd = B.cd = 0.18; w.bounces++; w.events.push({ type: 'ball', ball: A, speed: -vn }); }
+        }
+      }
+    }
+  }
+
+  function collideBallBear(w, ba, b) {
+    const rr = ballRadius(ba);
+    const dxc = ba.x - b.c[0], dyc = ba.y - b.c[1], dzc = ba.z - b.c[2], reach = b.bound + rr + 0.1;
+    if (dxc * dxc + dyc * dyc + dzc * dzc > reach * reach) return;
+    const P = b.P, V = b.V, sc = b.scale * (0.35 + 0.65 * Math.min(1, b.grow));
+    const asleep = b.asleep;
+    let maxHit = 0;
+    for (let i = 0; i < NP; i++) {
+      const dx = P[3 * i] - ba.x, dy = P[3 * i + 1] - ba.y, dz = P[3 * i + 2] - ba.z;
+      const minD = (CR[i] * sc + rr) * 0.97, d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 >= minD * minD) continue;
+      const d = Math.sqrt(d2) || 1e-6, nx = dx / d, ny = dy / d, nz = dz / d, pen = minD - d;
+      const iwP = (asleep || b.grab === i) ? 0 : 1 / MASS[i], iwB = ba.grab ? 0 : 1 / ba.m, ws = iwP + iwB;
+      if (ws === 0) {
+        if (asleep) { b.asleep = false; b.still = 0; }
+        continue;
+      }
+      const corr = pen / ws * 0.85;
+      P[3 * i] += nx * corr * iwP; P[3 * i + 1] += ny * corr * iwP; P[3 * i + 2] += nz * corr * iwP;
+      ba.x -= nx * corr * iwB; ba.y -= ny * corr * iwB; ba.z -= nz * corr * iwB;
+      const vn = (V[3 * i] - ba.vx) * nx + (V[3 * i + 1] - ba.vy) * ny + (V[3 * i + 2] - ba.vz) * nz;
+      if (vn < 0) {
+        const j = -1.8 * vn / ws;
+        V[3 * i] += nx * j * iwP; V[3 * i + 1] += ny * j * iwP; V[3 * i + 2] += nz * j * iwP;
+        ba.vx -= nx * j * iwB; ba.vy -= ny * j * iwB; ba.vz -= nz * j * iwB;
+        if (-vn > maxHit) maxHit = -vn;
+      }
+    }
+    if (maxHit > 0.3 && asleep) { b.asleep = false; b.still = 0; }
+    if (maxHit > 2.2 && b.ballCD <= 0) {
+      b.ballCD = 0.2; w.bounces++; b.sqv += Math.min(8, maxHit); ba.hit = 1;
+      w.events.push({ type: 'ball', ball: ba, bear: b, speed: maxHit });
+    }
+  }
+
+  function shakeWorld(w, power) {
+    const p = power === undefined ? 1 : power;
+    for (const b of w.bears) {
+      b.asleep = false; b.still = 0; b.hopT = rand(1, 4);
+      const ux = rand(-3.2, 3.2) * p, uy = rand(3.6, 8.2) * p, uz = rand(-3.2, 3.2) * p, spin = rand(-4, 4) * p;
+      for (let i = 0; i < NP; i++) {
+        const rx = b.P[3 * i] - b.c[0], rz = b.P[3 * i + 2] - b.c[2];
+        b.V[3 * i] += ux - spin * rz; b.V[3 * i + 1] += uy; b.V[3 * i + 2] += uz + spin * rx;
+      }
+      b.sqv -= 6; b.grounded = false; b.groundT = 0;
+    }
+    for (const ba of w.balls) { ba.vx += rand(-3.2, 3.2) * p; ba.vy += rand(4, 9) * p; ba.vz += rand(-3.2, 3.2) * p; }
+  }
+  function wakeAll(w) { for (const b of w.bears) { b.asleep = false; b.still = 0; } }
+
+  function pickBall(w, ox, oy, oz, dx, dy, dz) {
+    let best = null, bt = 1e9;
+    for (const ba of w.balls) {
+      if (ba.dying) continue;
+      const r = ballRadius(ba) * 1.03, cx = ba.x - ox, cy = ba.y - oy, cz = ba.z - oz;
+      const tc = cx * dx + cy * dy + cz * dz;
+      if (tc < 0) continue;
+      const d2 = cx * cx + cy * cy + cz * cz - tc * tc;
+      if (d2 < r * r) { const t = tc - Math.sqrt(r * r - d2); if (t < bt) { bt = t; best = { ball: ba, t, point: [ox + dx * t, oy + dy * t, oz + dz * t] }; } }
+    }
+    return best;
+  }
+
+  function stepWorld(w, dt) {
+    const bears = w.bears;
+    w.time += dt;
+    if (w.pad) w.pad.hit *= Math.exp(-dt * 7);
+    for (let q = 0; q < w.bumpers.length; q++) w.bumpers[q].hit *= Math.exp(-dt * 7);
+    for (let n = 0; n < bears.length; n++) {
+      const b = bears[n];
+      if (b.asleep) {
+        if (w.fields.length) { for (let q = 0; q < w.fields.length; q++) if (fieldReaches(w.fields[q], b)) { b.asleep = false; b.still = 0; break; } }
+      }
+      if (b.asleep) {
+        b.flash *= Math.exp(-dt * 4.2);
+        if (b.grab < 0 && !b.pressing) {
+          b.hopT -= dt;
+          if (b.hopT <= 0) { b.crouch = b.crouchLen = rand(0.15, 0.22); b.asleep = false; b.still = 0; }
+        }
+        if (b.grow !== b.growTarget) { b.asleep = false; }
+        continue;
+      }
+      updateBearState(w, b, dt);
+      stepBear(w, b, dt);
+      let bd = 0;
+      const sc = b.scale;
+      for (let i = 0; i < NP; i++) {
+        const dx = b.P[3 * i] - b.c[0], dy = b.P[3 * i + 1] - b.c[1], dz = b.P[3 * i + 2] - b.c[2];
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz) + CR[i] * sc;
+        if (d > bd) bd = d;
+      }
+      b.bound = bd;
+      let ms = 1;
+      for (let s = 0; s < NS; s++) {
+        const S = STRANDS[s], R = b.R, o = S.o, k = b.scale;
+        const ax = b.P[3 * S.a] + (R[0] * o[0] + R[1] * o[1] + R[2] * o[2]) * k;
+        const ay = b.P[3 * S.a + 1] + (R[3] * o[0] + R[4] * o[1] + R[5] * o[2]) * k;
+        const az = b.P[3 * S.a + 2] + (R[6] * o[0] + R[7] * o[1] + R[8] * o[2]) * k;
+        const dx = b.P[3 * S.b] - ax, dy = b.P[3 * S.b + 1] - ay, dz = b.P[3 * S.b + 2] - az;
+        const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const ratio = len / (STR_REST[s] * k);
+        b.strandLen[s] = len;
+        if (ratio > ms) ms = ratio;
+      }
+      b.maxStretch += (ms - b.maxStretch) * Math.min(1, dt * 18);
+
+      let ke = 0;
+      for (let i = 0; i < NP; i++) {
+        const vx = b.V[3 * i] - b.vc[0], vy = b.V[3 * i + 1] - b.vc[1], vz = b.V[3 * i + 2] - b.vc[2];
+        ke += MASS[i] * (vx * vx + vy * vy + vz * vz);
+      }
+      const sp = b.vc[0] * b.vc[0] + b.vc[1] * b.vc[1] + b.vc[2] * b.vc[2];
+      b.ke = ke + sp * TOTAL_M;
+      const idle = b.grab < 0 && !b.pressing && b.crouch <= 0 && b.grounded && b.ke < 0.05 && b.springErr < 0.09 &&
+                   Math.abs(b.sq) < 0.012 && Math.abs(b.sqv) < 0.25 && b.flash < 0.02 && b.grow === b.growTarget && !b.dying;
+      if (idle) { b.restStretch = b.maxStretch; b.still += dt; if (b.still > 0.45) { b.asleep = true; b.dirty = true; b.V.fill(0); b.sq = 0; b.sqv = 0; } }
+      else b.still = 0;
+    }
+    const balls = w.balls;
+    for (let n = 0; n < balls.length; n++) stepBall(w, balls[n], dt);
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < bears.length; i++) for (let j = i + 1; j < bears.length; j++) collideBears(w, bears[i], bears[j]);
+      if (balls.length) {
+        for (let n = 0; n < balls.length; n++) for (let i = 0; i < bears.length; i++) collideBallBear(w, balls[n], bears[i]);
+        collideBalls(w);
+      }
+    }
+  }
+
+  const T_ISO = 0.1;
+  const LN_RATIO = Math.log(1 / T_ISO);
+  const CUT_EPS = 0.002;
+  const CUT_K = Math.sqrt(Math.log(1 / CUT_EPS) / LN_RATIO);
+  const LN_T = Math.log(T_ISO);
+
+  const GRID_MAX = 300000;
+  const FIELD = new Float32Array(GRID_MAX), THK = new Float32Array(GRID_MAX), LG = new Float32Array(GRID_MAX);
+  const STAMP = new Int32Array(GRID_MAX), VMAP = new Int32Array(GRID_MAX);
+  const GRX = new Float32Array(GRID_MAX), GRY = new Float32Array(GRID_MAX), GRZ = new Float32Array(GRID_MAX), STAMPG = new Int32Array(GRID_MAX);
+  const RMIN = new Int16Array(262144), RMAX = new Int16Array(262144);
+  let stampSerial = 0;
+  const GX = new Float32Array(256), GY = new Float32Array(256), GZ = new Float32Array(256);
+
+  const MAXB = 200;
+  const BX = new Float64Array(MAXB), BY = new Float64Array(MAXB), BZ = new Float64Array(MAXB);
+  const BRX = new Float64Array(MAXB), BRY = new Float64Array(MAXB), BTH = new Float64Array(MAXB);
+
+  function createMeshBuffers(maxV, maxI) {
+    return {
+      maxV, maxI,
+      pos: new Float32Array(maxV * 3), nrm: new Float32Array(maxV * 3), thk: new Float32Array(maxV), face: new Float32Array(maxV * 3),
+      idx: new Uint16Array(maxI), nv: 0, ni: 0,
+      ox: 0, oy: 0, oz: 0, rad: 1, headRot: new Float64Array(9), headPos: new Float64Array(3), h: 0.05,
+    };
+  }
+
+  function buildBlobs(b, h) {
+    const P = b.P, sc = b.scale * (0.35 + 0.65 * Math.min(1, b.grow)), gr = Math.max(0.001, b.grow);
+    const sx = b.sx, sy = b.sy, R = b.R;
+    let n = 0;
+    for (let s = 0; s < NS; s++) {
+      const S = STRANDS[s], o = S.o;
+      const ax = P[3 * S.a] + (R[0] * o[0] + R[1] * o[1] + R[2] * o[2]) * sc;
+      const ay = P[3 * S.a + 1] + (R[3] * o[0] + R[4] * o[1] + R[5] * o[2]) * sc;
+      const az = P[3 * S.a + 2] + (R[6] * o[0] + R[7] * o[1] + R[8] * o[2]) * sc;
+      const bx = P[3 * S.b], by = P[3 * S.b + 1], bz = P[3 * S.b + 2];
+      const dx = bx - ax, dy = by - ay, dz = bz - az;
+      const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const ratio = len / (STR_REST[s] * sc);
+      const thin = ratio <= 1.0 ? 1.0 : Math.max(0.34, Math.pow(1 / ratio, 0.55));
+      b.strandThin[s] = thin;
+      const rm = (S.r0 + S.r1) * 0.5 * sc * thin * gr;
+      let ns = Math.ceil(len / (0.62 * Math.max(rm, 0.05)));
+      if (ns < 2) ns = 2; if (ns > 24) ns = 24;
+      for (let j = 1; j < ns; j++) {
+        if (n >= MAXB - NP) break;
+        const t = j / ns;
+        const r0 = (S.r0 + (S.r1 - S.r0) * t) * sc * gr, r = Math.max(r0 * thin, Math.min(r0, 0.9 * h));
+        BX[n] = ax + dx * t; BY[n] = ay + dy * t; BZ[n] = az + dz * t;
+        BRX[n] = r * sx; BRY[n] = r * sy;
+        BTH[n] = 2 * r * Math.sqrt(sx * sy);
+        n++;
+      }
+    }
+    const endThin = _endThin; endThin.fill(1);
+    for (let s = 0; s < NS; s++) { const b2 = STRANDS[s].b; endThin[b2] = Math.min(endThin[b2], 0.7 + 0.3 * b.strandThin[s]); }
+    for (let i = 0; i < NP; i++) {
+      const r = BR[i] * sc * endThin[i] * gr;
+      BX[n] = P[3 * i]; BY[n] = P[3 * i + 1]; BZ[n] = P[3 * i + 2];
+      BRX[n] = r * sx; BRY[n] = r * sy;
+      BTH[n] = 2 * r * Math.sqrt(sx * sy);
+      n++;
+    }
+    return n;
+  }
+  const _endThin = new Float64Array(NP);
+
+  function splat(bx, by, bz, rx, ry, th, nx, ny, nz) {
+    const ax = LN_RATIO / (rx * rx), ay = LN_RATIO / (ry * ry);
+    const dcx = rx * CUT_K, dcy = ry * CUT_K;
+    let i0 = Math.ceil(bx - dcx), i1 = Math.floor(bx + dcx);
+    let j0 = Math.ceil(by - dcy), j1 = Math.floor(by + dcy);
+    let k0 = Math.ceil(bz - dcx), k1 = Math.floor(bz + dcx);
+    if (i0 < 0) i0 = 0; if (j0 < 0) j0 = 0; if (k0 < 0) k0 = 0;
+    if (i1 > nx - 1) i1 = nx - 1; if (j1 > ny - 1) j1 = ny - 1; if (k1 > nz - 1) k1 = nz - 1;
+    if (i1 < i0 || j1 < j0 || k1 < k0) return;
+    for (let i = i0; i <= i1; i++) { const d = i - bx; GX[i - i0] = Math.exp(-ax * d * d); }
+    for (let j = j0; j <= j1; j++) { const d = j - by; GY[j - j0] = Math.exp(-ay * d * d); }
+    for (let k = k0; k <= k1; k++) { const d = k - bz; GZ[k - k0] = Math.exp(-ax * d * d); }
+    const sy = nx, sz = nx * ny, wi = i1 - i0 + 1;
+    for (let k = k0; k <= k1; k++) {
+      const gz = GZ[k - k0];
+      for (let j = j0; j <= j1; j++) {
+        const gyz = GY[j - j0] * gz;
+        if (gyz < 4e-4) continue;
+        const rr = k * ny + j;
+        if (i0 < RMIN[rr]) RMIN[rr] = i0;
+        if (i1 > RMAX[rr]) RMAX[rr] = i1;
+        let idx = i0 + j * sy + k * sz;
+        for (let ii = 0; ii < wi; ii++, idx++) {
+          const v = GX[ii] * gyz;
+          FIELD[idx] += v; THK[idx] += v * th;
+        }
+      }
+    }
+  }
+
+  const CORNER = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+  const EDGES = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+  const EA = new Int32Array(12), EB = new Int32Array(12);
+  EDGES.forEach((e, i) => { EA[i] = e[0]; EB[i] = e[1]; });
+  const EDGEMASK = new Int32Array(256);
+  for (let m = 0; m < 256; m++) { let em = 0; for (let e = 0; e < 12; e++) if (((m >> EA[e]) & 1) !== ((m >> EB[e]) & 1)) em |= 1 << e; EDGEMASK[m] = em; }
+  const EXP4 = new Int32Array(16);
+  for (let c = 0; c < 16; c++) EXP4[c] = (c & 1 ? 1 : 0) | (c & 2 ? 4 : 0) | (c & 4 ? 16 : 0) | (c & 8 ? 64 : 0);
+  const CX = new Int32Array(8), CY = new Int32Array(8), CZ = new Int32Array(8);
+  CORNER.forEach((c, i) => { CX[i] = c[0]; CY[i] = c[1]; CZ[i] = c[2]; });
+  const _off = new Int32Array(8), _lv = new Float64Array(8);
+  function meshBear(b, h, out) {
+    const nb = buildBlobs(b, h);
+    let minx = 1e9, miny = 1e9, minz = 1e9, maxx = -1e9, maxy = -1e9, maxz = -1e9;
+    for (let i = 0; i < nb; i++) {
+      const dx = BRX[i] * CUT_K, dy = BRY[i] * CUT_K;
+      if (BX[i] - dx < minx) minx = BX[i] - dx; if (BX[i] + dx > maxx) maxx = BX[i] + dx;
+      if (BY[i] - dy < miny) miny = BY[i] - dy; if (BY[i] + dy > maxy) maxy = BY[i] + dy;
+      if (BZ[i] - dx < minz) minz = BZ[i] - dx; if (BZ[i] + dx > maxz) maxz = BZ[i] + dx;
+    }
+    out.ox = b.c[0]; out.oy = b.c[1]; out.oz = b.c[2];
+    let cell = h;
+    let nx, ny, nz;
+    for (let tries = 0; tries < 4; tries++) {
+      nx = Math.ceil((maxx - minx) / cell) + 5; ny = Math.ceil((maxy - miny) / cell) + 5; nz = Math.ceil((maxz - minz) / cell) + 5;
+      if (nx * ny * nz <= GRID_MAX && nx < 250 && ny < 250 && nz < 250) break;
+      cell *= 1.22;
+    }
+    out.h = cell;
+    const gx0 = minx - 2.5 * cell, gy0 = miny - 2.5 * cell, gz0 = minz - 2.5 * cell;
+    const n = nx * ny * nz;
+    FIELD.fill(0, 0, n); THK.fill(0, 0, n); VMAP.fill(-1, 0, n);
+    RMIN.fill(32000, 0, ny * nz); RMAX.fill(-1, 0, ny * nz);
+    const ic = 1 / cell;
+    for (let i = 0; i < nb; i++) {
+      splat((BX[i] - gx0) * ic, (BY[i] - gy0) * ic, (BZ[i] - gz0) * ic, BRX[i] * ic, BRY[i] * ic, BTH[i], nx, ny, nz);
+    }
+
+    const R = b.R, sc = b.scale;
+    {
+      const hx = Q[0] - Q[3], hy = Q[1] - Q[4], hz = Q[2] - Q[5];
+      const rdx = R[0] * hx + R[1] * hy + R[2] * hz, rdy = R[3] * hx + R[4] * hy + R[5] * hz, rdz = R[6] * hx + R[7] * hy + R[8] * hz;
+      let cdx = b.P[0] - b.P[3], cdy = b.P[1] - b.P[4], cdz = b.P[2] - b.P[5];
+      const rl = Math.sqrt(rdx * rdx + rdy * rdy + rdz * rdz) || 1, cl = Math.sqrt(cdx * cdx + cdy * cdy + cdz * cdz) || 1;
+      const ax = rdy * cdz / cl - rdz * cdy / cl, ay = rdz * cdx / cl - rdx * cdz / cl, az = rdx * cdy / cl - rdy * cdx / cl;
+      const sinA = Math.sqrt(ax * ax + ay * ay + az * az) / rl;
+      const cosA = (rdx * cdx + rdy * cdy + rdz * cdz) / (rl * cl);
+      let ang = Math.atan2(sinA, cosA);
+      ang = Math.min(ang, 0.9) * 0.75;
+      const hm = out.headRot;
+      if (sinA < 1e-4) { for (let i = 0; i < 9; i++) hm[i] = R[i]; }
+      else {
+        const al = 1 / (sinA * rl);
+        const kx = ax * al, ky = ay * al, kz = az * al, c = Math.cos(ang), s = Math.sin(ang), t = 1 - c;
+        const M0 = t * kx * kx + c, M1 = t * kx * ky - s * kz, M2 = t * kx * kz + s * ky;
+        const M3 = t * kx * ky + s * kz, M4 = t * ky * ky + c, M5 = t * ky * kz - s * kx;
+        const M6 = t * kx * kz - s * ky, M7 = t * ky * kz + s * kx, M8 = t * kz * kz + c;
+        hm[0] = M0 * R[0] + M1 * R[3] + M2 * R[6]; hm[1] = M0 * R[1] + M1 * R[4] + M2 * R[7]; hm[2] = M0 * R[2] + M1 * R[5] + M2 * R[8];
+        hm[3] = M3 * R[0] + M4 * R[3] + M5 * R[6]; hm[4] = M3 * R[1] + M4 * R[4] + M5 * R[7]; hm[5] = M3 * R[2] + M4 * R[5] + M5 * R[8];
+        hm[6] = M6 * R[0] + M7 * R[3] + M8 * R[6]; hm[7] = M6 * R[1] + M7 * R[4] + M8 * R[7]; hm[8] = M6 * R[2] + M7 * R[5] + M8 * R[8];
+      }
+      out.headPos[0] = b.P[0]; out.headPos[1] = b.P[1]; out.headPos[2] = b.P[2];
+    }
+    const hm = out.headRot, hpx = b.P[0], hpy = b.P[1], hpz = b.P[2];
+    const isc = 1 / sc;
+
+    const sx = 1, sy = nx, sz = nx * ny;
+    const pos = out.pos, nrm = out.nrm, thkA = out.thk, face = out.face, idx = out.idx;
+    const maxV = out.maxV - 2, maxI = out.maxI - 7;
+    let nv = 0, ni = 0, overflow = false;
+    const serial = ++stampSerial;
+    _off[0] = 0; _off[1] = sx; _off[2] = sy; _off[3] = sx + sy; _off[4] = sz; _off[5] = sx + sz; _off[6] = sy + sz; _off[7] = sx + sy + sz;
+    const ox = out.ox, oy = out.oy, oz = out.oz;
+    const nx2 = nx - 2, ny2 = ny - 2, nz2 = nz - 2;
+
+    for (let k = 1; k < nz2 && !overflow; k++) {
+      for (let j = 1; j < ny2; j++) {
+        const rr = k * ny + j;
+        let lo = RMIN[rr], hi = RMAX[rr], t2;
+        t2 = RMIN[rr + 1]; if (t2 < lo) lo = t2; t2 = RMAX[rr + 1]; if (t2 > hi) hi = t2;
+        t2 = RMIN[rr + ny]; if (t2 < lo) lo = t2; t2 = RMAX[rr + ny]; if (t2 > hi) hi = t2;
+        t2 = RMIN[rr + ny + 1]; if (t2 < lo) lo = t2; t2 = RMAX[rr + ny + 1]; if (t2 > hi) hi = t2;
+        lo -= 1; hi += 1;
+        if (lo < 1) lo = 1; if (hi > nx - 3) hi = nx - 3;
+        if (hi < lo) continue;
+        let c0 = lo + j * sy + k * sz;
+        let cc0 = (FIELD[c0] > T_ISO ? 1 : 0) | (FIELD[c0 + sy] > T_ISO ? 2 : 0) | (FIELD[c0 + sz] > T_ISO ? 4 : 0) | (FIELD[c0 + sy + sz] > T_ISO ? 8 : 0);
+        for (let i = lo; i <= hi; i++, c0++) {
+          const c1 = c0 + 1;
+          const cc1 = (FIELD[c1] > T_ISO ? 1 : 0) | (FIELD[c1 + sy] > T_ISO ? 2 : 0) | (FIELD[c1 + sz] > T_ISO ? 4 : 0) | (FIELD[c1 + sy + sz] > T_ISO ? 8 : 0);
+          const mask = EXP4[cc0] | (EXP4[cc1] << 1);
+          cc0 = cc1;
+          if (mask === 0 || mask === 255) continue;
+          const f0 = FIELD[c0], f1 = FIELD[c1], f2 = FIELD[c0 + sy], f3 = FIELD[c1 + sy],
+                f4 = FIELD[c0 + sz], f5 = FIELD[c1 + sz], f6 = FIELD[c0 + sz + sy], f7 = FIELD[c1 + sz + sy];
+
+          for (let c = 0; c < 8; c++) {
+            const ci = c0 + _off[c];
+            if (STAMP[ci] !== serial) { LG[ci] = Math.log(FIELD[ci] + 1e-9); STAMP[ci] = serial; }
+            _lv[c] = LG[ci];
+          }
+          let ex = 0, ey = 0, ez = 0, cnt = 0;
+          let em = EDGEMASK[mask];
+          while (em !== 0) {
+            const lb = em & -em; em ^= lb;
+            const e = 31 - Math.clz32(lb);
+            const a = EA[e], bb = EB[e];
+            const la = _lv[a], lb2 = _lv[bb];
+            const t = (LN_T - la) / (lb2 - la);
+            ex += CX[a] + (CX[bb] - CX[a]) * t; ey += CY[a] + (CY[bb] - CY[a]) * t; ez += CZ[a] + (CZ[bb] - CZ[a]) * t;
+            cnt++;
+          }
+          const ic2 = 1 / cnt;
+          const u = ex * ic2, v = ey * ic2, w = ez * ic2;
+          const mu = 1 - u, mv = 1 - v, mw = 1 - w;
+          const w000 = mu * mv * mw, w100 = u * mv * mw, w010 = mu * v * mw, w110 = u * v * mw,
+                w001 = mu * mv * w, w101 = u * mv * w, w011 = mu * v * w, w111 = u * v * w;
+          let gx = 0, gy = 0, gz = 0;
+          for (let c = 0; c < 8; c++) {
+            const ci = c0 + _off[c];
+            if (STAMPG[ci] !== serial) {
+              const il = 1 / (FIELD[ci] + 1e-9);
+              GRX[ci] = (FIELD[ci + 1] - FIELD[ci - 1]) * il; GRY[ci] = (FIELD[ci + sy] - FIELD[ci - sy]) * il; GRZ[ci] = (FIELD[ci + sz] - FIELD[ci - sz]) * il;
+              STAMPG[ci] = serial;
+            }
+          }
+          gx = w000 * GRX[c0] + w100 * GRX[c0 + 1] + w010 * GRX[c0 + sy] + w110 * GRX[c0 + sy + 1] + w001 * GRX[c0 + sz] + w101 * GRX[c0 + sz + 1] + w011 * GRX[c0 + sz + sy] + w111 * GRX[c0 + sz + sy + 1];
+          gy = w000 * GRY[c0] + w100 * GRY[c0 + 1] + w010 * GRY[c0 + sy] + w110 * GRY[c0 + sy + 1] + w001 * GRY[c0 + sz] + w101 * GRY[c0 + sz + 1] + w011 * GRY[c0 + sz + sy] + w111 * GRY[c0 + sz + sy + 1];
+          gz = w000 * GRZ[c0] + w100 * GRZ[c0 + 1] + w010 * GRZ[c0 + sy] + w110 * GRZ[c0 + sy + 1] + w001 * GRZ[c0 + sz] + w101 * GRZ[c0 + sz + 1] + w011 * GRZ[c0 + sz + sy] + w111 * GRZ[c0 + sz + sy + 1];
+          let gl = Math.sqrt(gx * gx + gy * gy + gz * gz);
+          if (gl < 1e-9) { gx = 0; gy = 1; gz = 0; gl = 1; }
+          gl = -1 / gl;
+          const fsum = w000 * f0 + w100 * f1 + w010 * f2 + w110 * f3 + w001 * f4 + w101 * f5 + w011 * f6 + w111 * f7;
+          const tsum = w000 * THK[c0] + w100 * THK[c0 + 1] + w010 * THK[c0 + sy] + w110 * THK[c0 + sy + 1] +
+                       w001 * THK[c0 + sz] + w101 * THK[c0 + sz + 1] + w011 * THK[c0 + sz + sy] + w111 * THK[c0 + sz + sy + 1];
+
+          const px = gx0 + (i + u) * cell, py = gy0 + (j + v) * cell, pz = gz0 + (k + w) * cell;
+          if (nv >= maxV) { overflow = true; break; }
+          const vi = nv++;
+          pos[3 * vi] = px - ox; pos[3 * vi + 1] = py - oy; pos[3 * vi + 2] = pz - oz;
+          nrm[3 * vi] = gx * gl; nrm[3 * vi + 1] = gy * gl; nrm[3 * vi + 2] = gz * gl;
+          thkA[vi] = tsum / (fsum + 1e-9);
+          const dx = (px - hpx) * isc, dy = (py - hpy) * isc, dz = (pz - hpz) * isc;
+          if (dx * dx + dy * dy + dz * dz > 0.9) { face[3 * vi] = 9; face[3 * vi + 1] = 9; face[3 * vi + 2] = 9; }
+          else {
+            face[3 * vi]     = hm[0] * dx + hm[3] * dy + hm[6] * dz;
+            face[3 * vi + 1] = hm[1] * dx + hm[4] * dy + hm[7] * dz;
+            face[3 * vi + 2] = hm[2] * dx + hm[5] * dy + hm[8] * dz;
+          }
+          VMAP[c0] = vi;
+
+          const inside = mask & 1;
+          if (((mask ^ (mask >> 1)) & 1) && j > 1 && k > 1) {
+            const a = VMAP[c0 - sy - sz], bq = VMAP[c0 - sz], c = vi, d = VMAP[c0 - sy];
+            if (a >= 0 && bq >= 0 && d >= 0) {
+              if (ni + 6 > maxI) overflow = true;
+              else if (inside) { idx[ni++] = a; idx[ni++] = bq; idx[ni++] = c; idx[ni++] = a; idx[ni++] = c; idx[ni++] = d; }
+              else        { idx[ni++] = a; idx[ni++] = c; idx[ni++] = bq; idx[ni++] = a; idx[ni++] = d; idx[ni++] = c; }
+            }
+          }
+          if (((mask ^ (mask >> 2)) & 1) && k > 1 && i > 1) {
+            const a = VMAP[c0 - sz - 1], bq = VMAP[c0 - 1], c = vi, d = VMAP[c0 - sz];
+            if (a >= 0 && bq >= 0 && d >= 0) {
+              if (ni + 6 > maxI) overflow = true;
+              else if (inside) { idx[ni++] = a; idx[ni++] = bq; idx[ni++] = c; idx[ni++] = a; idx[ni++] = c; idx[ni++] = d; }
+              else        { idx[ni++] = a; idx[ni++] = c; idx[ni++] = bq; idx[ni++] = a; idx[ni++] = d; idx[ni++] = c; }
+            }
+          }
+          if (((mask ^ (mask >> 4)) & 1) && i > 1 && j > 1) {
+            const a = VMAP[c0 - 1 - sy], bq = VMAP[c0 - sy], c = vi, d = VMAP[c0 - 1];
+            if (a >= 0 && bq >= 0 && d >= 0) {
+              if (ni + 6 > maxI) overflow = true;
+              else if (inside) { idx[ni++] = a; idx[ni++] = bq; idx[ni++] = c; idx[ni++] = a; idx[ni++] = c; idx[ni++] = d; }
+              else        { idx[ni++] = a; idx[ni++] = c; idx[ni++] = bq; idx[ni++] = a; idx[ni++] = d; idx[ni++] = c; }
+            }
+          }
+        }
+      }
+    }
+    out.nv = nv; out.ni = ni;
+    let br = 0;
+    for (let i = 0; i < nv; i++) { const d = pos[3 * i] * pos[3 * i] + pos[3 * i + 1] * pos[3 * i + 1] + pos[3 * i + 2] * pos[3 * i + 2]; if (d > br) br = d; }
+    out.rad = Math.sqrt(br) + 0.1;
+    return !overflow;
+  }
+
+  function pick(w, ox, oy, oz, dx, dy, dz) {
+    let best = null, bt = 1e9, bestMiss = null, bm = 1e9;
+    for (const b of w.bears) {
+      if (b.dying) continue;
+      const sc = b.scale * (0.35 + 0.65 * Math.min(1, b.grow));
+      for (let i = 0; i < NP; i++) {
+        const cx = b.P[3 * i] - ox, cy = b.P[3 * i + 1] - oy, cz = b.P[3 * i + 2] - oz;
+        const tc = cx * dx + cy * dy + cz * dz;
+        if (tc < 0) continue;
+        const d2 = cx * cx + cy * cy + cz * cz - tc * tc;
+        const r = BR[i] * sc * 1.04 * (i === BODY ? 1.0 : 1);
+        if (d2 < r * r) {
+          const t = tc - Math.sqrt(r * r - d2);
+          const score = t - (i === HEAD || i === BODY || i === BELLY ? 0 : 0.12);
+          if (score < bt) { bt = score; best = { bear: b, idx: i, t, point: [ox + dx * t, oy + dy * t, oz + dz * t] }; }
+        } else {
+          const miss = Math.sqrt(d2) - r;
+          if (miss < 0.12 && miss < bm) { bm = miss; bestMiss = { bear: b, idx: i, t: tc, point: [ox + dx * tc, oy + dy * tc, oz + dz * tc] }; }
+        }
+      }
+    }
+    return best || bestMiss;
+  }
+
+  return {
+    NP, NS, IDX: { HEAD, BODY, BELLY, SNOUT, EARL, EARR, HANDL, HANDR, FOOTL, FOOTR }, REST, STRANDS, MASS, CR, BR, Q, STR_REST,
+    createWorld, createBear, stepWorld, launchFromPress, meshBear, createMeshBuffers, pick, rand,
+    createBall, ballRadius, pickBall, shakeWorld, wakeAll,
+    T_ISO,
+  };
+})();
+
+const $ = (s) => document.querySelector(s);
+const veil = $('#veil');
+
+function hideVeil() {
+  veil.classList.add('gone');
+  veil.setAttribute('aria-hidden', 'true');
+}
+
+function showFatal(title, message) {
+  $('#fatalTitle').textContent = title;
+  $('#fatalMsg').textContent = message;
+  $('#fatal').style.display = 'grid';
+  document.querySelectorAll('.card, .dock').forEach((el) => { el.inert = true; });
+  hideVeil();
+}
+
+let THREE;
+try {
+  THREE = await import('three');
+} catch (err) {
+  console.error(err);
+  showFatal('Couldn’t load three.js', 'This page pulls three.js from a CDN (cdn.jsdelivr.net). Check your connection and reload.');
+  throw err;
+}
+
+const MAXB = 36;
+const MAX_BEARS = 18;
+const MAX_BALLS = 6;
+const MAXV = 9000, MAXI = 9000 * 6;
+const DT = 1 / 240;
+const rand = Core.rand;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+const FLAVORS = [
+  { name: 'Cherry',         css: '#e5192d', tint: [0.93, 0.026, 0.05], deep: [0.34, 0.0, 0.012],  atten: [0.62, 0.012, 0.02], dist: 0.62, glow: 1.0,  base: [1.0, 0.62, 0.64] },
+  { name: 'Orange',         css: '#ff7a14', tint: [1.0, 0.27, 0.014],  deep: [0.56, 0.07, 0.0],   atten: [0.80, 0.20, 0.01],  dist: 0.62, glow: 1.0,  base: [1.0, 0.78, 0.62] },
+  { name: 'Lemon',          css: '#ffd51f', tint: [1.0, 0.72, 0.02],   deep: [0.62, 0.30, 0.0],   atten: [0.93, 0.66, 0.02],  dist: 0.75, glow: 1.0,  base: [1.0, 0.92, 0.62] },
+  { name: 'Apple',          css: '#4ed12a', tint: [0.22, 0.80, 0.04],  deep: [0.05, 0.34, 0.0],   atten: [0.28, 0.80, 0.03],  dist: 0.62, glow: 1.0,  base: [0.72, 1.0, 0.66] },
+  { name: 'Pineapple',      css: '#fff0a6', tint: [1.0, 0.92, 0.60],   deep: [0.78, 0.62, 0.22],  atten: [0.97, 0.92, 0.66],  dist: 1.5,  glow: 0.42, base: [1.0, 1.0, 0.96], clear: true },
+  { name: 'Grape',          css: '#8c3cf2', tint: [0.42, 0.05, 0.80],  deep: [0.15, 0.0, 0.34],   atten: [0.52, 0.07, 0.86],  dist: 0.62, glow: 1.0,  base: [0.82, 0.66, 1.0] },
+  { name: 'Blue raspberry', css: '#1d8dff', tint: [0.03, 0.36, 1.0],   deep: [0.0, 0.10, 0.56],   atten: [0.05, 0.42, 0.96],  dist: 0.62, glow: 1.0,  base: [0.64, 0.80, 1.0] },
+  { name: 'Strawberry',     css: '#ff4d96', tint: [1.0, 0.16, 0.42],   deep: [0.56, 0.03, 0.18],  atten: [0.96, 0.17, 0.36],  dist: 0.62, glow: 1.0,  base: [1.0, 0.68, 0.80] },
+];
+
+const GRAVITY = [
+  { name: 'Earth', g: -27, ceil: 9.0 },
+  { name: 'Moon',  g: -9,  ceil: 5.4 },
+  { name: 'Float', g: -2.2, ceil: 3.7 },
+];
+const state = { tool: 'grab', size: 'normal', gravity: 0, slow: false, rain: false, sound: true, pad: false, bumpers: false };
+const active = new Set(FLAVORS.map((_, i) => i));
+
+const canvas = $('#gl');
+const renderer = (() => {
+  try {
+    return new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', alpha: false });
+  } catch (err) {
+    console.error(err);
+    showFatal('WebGL isn’t available', 'This toybox is drawn with WebGL, and your browser or device couldn’t start it. Try another browser, turn on hardware acceleration, then reload.');
+    throw err;
+  }
+})();
+renderer.setClearColor(0x050507, 1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 90);
+
+const cam = { pos: [0, 5, 9], right: [1, 0, 0], up: [0, 1, 0], fwd: [0, 0, -1], tanH: Math.tan(15 * Math.PI / 180), aspect: 1, shiftX: 0 };
+const camTarget = [0, 0.55, 0.1];
+let camDist = 10, camEl = 27 * Math.PI / 180, camAz = 0, camAzV = 0, zoom = 1, zoomT = 1, shakeAmp = 0;
+const mouse = { x: 0, y: 0, sx: 0, sy: 0, px: -999, py: -999, cx: -999, cy: -999 };
+
+const calmMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+let dprScale = 1;
+const pickDpr = () => Math.max(0.75, Math.min(window.devicePixelRatio || 1, 1.75, Math.sqrt(4.2e6 / Math.max(1, innerWidth * innerHeight))));
+const computeDpr = () => dprScale < 1 ? Math.max(0.8, pickDpr() * dprScale) : pickDpr();
+let dpr = computeDpr();
+let W = innerWidth, H = innerHeight;
+
+function layoutCamera() {
+  const aspect = W / H;
+  camera.aspect = aspect;
+  const tanH = Math.tan(camera.fov * 0.5 * Math.PI / 180);
+  const halfW = aspect < 1 ? 3.1 : 3.95, halfH = aspect < 1 ? 3.0 : 2.4;
+  camDist = Math.min(22, Math.max(halfH / tanH, halfW / (tanH * aspect)));
+  const wide = aspect > 1.25 && W > 880;
+  cam.shiftX = wide ? 0.055 : 0;
+  camera.clearViewOffset();
+  if (wide) camera.setViewOffset(W, H, W * cam.shiftX, 0, W, H);
+  cam.aspect = aspect; cam.tanH = tanH;
+  camera.updateProjectionMatrix();
+}
+
+function updateCamera(dt) {
+  mouse.sx += (mouse.x - mouse.sx) * Math.min(1, dt * 2.2);
+  mouse.sy += (mouse.y - mouse.sy) * Math.min(1, dt * 2.2);
+  if (!orbit) { camAz += camAzV * dt; camAzV *= Math.exp(-dt * 3.2); }
+  zoom += (zoomT - zoom) * Math.min(1, dt * 8);
+  shakeAmp *= Math.exp(-dt * 5);
+  const calm = calmMotion.matches ? 0 : 1;
+  const el = clamp(camEl + (mouse.sy * 0.035 + (Math.random() - 0.5) * shakeAmp * 0.03) * calm, 0.2, 1.05);
+  const az = camAz + (mouse.sx * 0.10 + (Math.random() - 0.5) * shakeAmp * 0.03) * calm;
+  const dist = camDist * zoom;
+  const px = camTarget[0] + Math.sin(az) * Math.cos(el) * dist;
+  const py = camTarget[1] + Math.sin(el) * dist;
+  const pz = camTarget[2] + Math.cos(az) * Math.cos(el) * dist;
+  camera.position.set(px, py, pz);
+  camera.lookAt(camTarget[0], camTarget[1], camTarget[2]);
+  camera.updateMatrixWorld();
+  let fx = camTarget[0] - px, fy = camTarget[1] - py, fz = camTarget[2] - pz;
+  const fl = Math.hypot(fx, fy, fz); fx /= fl; fy /= fl; fz /= fl;
+  let rx = -fz, ry = 0, rz = fx;
+  const rl = Math.hypot(rx, ry, rz); rx /= rl; ry /= rl; rz /= rl;
+  const ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
+  cam.pos = [px, py, pz]; cam.fwd = [fx, fy, fz]; cam.right = [rx, ry, rz]; cam.up = [ux, uy, uz];
+}
+
+function rayFromPixel(clientX, clientY) {
+  const nx = (clientX / W) * 2 - 1 + 2 * cam.shiftX, ny = -((clientY / H) * 2 - 1);
+  const a = nx * cam.tanH * cam.aspect, b = ny * cam.tanH;
+  let dx = cam.fwd[0] + cam.right[0] * a + cam.up[0] * b, dy = cam.fwd[1] + cam.right[1] * a + cam.up[1] * b, dz = cam.fwd[2] + cam.right[2] * a + cam.up[2] * b;
+  const l = Math.hypot(dx, dy, dz);
+  return { o: cam.pos, d: [dx / l, dy / l, dz / l] };
+}
+function worldToScreen(x, y, z) {
+  const dx = x - cam.pos[0], dy = y - cam.pos[1], dz = z - cam.pos[2];
+  const d = dx * cam.fwd[0] + dy * cam.fwd[1] + dz * cam.fwd[2];
+  const a = (dx * cam.right[0] + dy * cam.right[1] + dz * cam.right[2]) / (d * cam.tanH * cam.aspect);
+  const b = (dx * cam.up[0] + dy * cam.up[1] + dz * cam.up[2]) / (d * cam.tanH);
+  return [((a - 2 * cam.shiftX) + 1) * 0.5 * W, (1 - b) * 0.5 * H];
+}
+function pointOnViewPlane(px, py, through) {
+  const r = rayFromPixel(px, py), f = cam.fwd;
+  const den = f[0] * r.d[0] + f[1] * r.d[1] + f[2] * r.d[2];
+  const t = (f[0] * (through[0] - r.o[0]) + f[1] * (through[1] - r.o[1]) + f[2] * (through[2] - r.o[2])) / (Math.abs(den) < 1e-5 ? 1e-5 : den);
+  return [r.o[0] + r.d[0] * t, r.o[1] + r.d[1] * t, r.o[2] + r.d[2] * t];
+}
+const stretchOf = (b) => Math.max(1, b.maxStretch / (b.restStretch || 1));
+const pxPerUnit = () => H / (2 * camDist * zoom * cam.tanH);
+
+let composer = null, bloomPass = null;
+const BLOOM_BASE = 0.2;
+function dropComposer() {
+  if (composer) { try { composer.dispose(); } catch (_) {} }
+  composer = null; bloomPass = null;
+}
+async function setupComposer() {
+  try {
+    const [ec, rp, ub, op] = await Promise.all([
+      import('three/addons/postprocessing/EffectComposer.js'),
+      import('three/addons/postprocessing/RenderPass.js'),
+      import('three/addons/postprocessing/UnrealBloomPass.js'),
+      import('three/addons/postprocessing/OutputPass.js'),
+    ]);
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: dpr >= 1.5 ? 2 : 4 });
+    composer = new ec.EffectComposer(renderer, rt);
+    composer.setPixelRatio(dpr);
+    composer.setSize(W, H);
+    composer.addPass(new rp.RenderPass(scene, camera));
+    bloomPass = new ub.UnrealBloomPass(new THREE.Vector2(W, H), BLOOM_BASE, 0.55, 0.95);
+    composer.addPass(bloomPass);
+    composer.addPass(new op.OutputPass());
+  } catch (err) {
+    console.warn('Post-processing unavailable, rendering directly.', err);
+    dropComposer();
+  }
+}
+
+function applySize() {
+  W = innerWidth; H = innerHeight;
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(W, H, false);
+  if (composer) { composer.setPixelRatio(dpr); composer.setSize(W, H); }
+  layoutCamera();
+}
+
+function buildEnvironment() {
+  const pm = new THREE.PMREMGenerator(renderer);
+  const env = new THREE.Scene();
+  env.add(new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.010, 0.010, 0.014), side: THREE.BackSide })));
+  const mats = [];
+  const panel = (w, h, pos, rgb, k) => {
+    const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(rgb[0] * k, rgb[1] * k, rgb[2] * k), side: THREE.DoubleSide, toneMapped: false });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
+    mesh.position.set(pos[0], pos[1], pos[2]); mesh.lookAt(0, 0, 0); env.add(mesh); mats.push(m);
+  };
+  panel(10, 6.5, [-9, 12, 9],   [1.0, 0.96, 0.90], 9.5);
+  panel(5, 12,   [12, 3, 6],    [1.0, 0.90, 0.84], 1.6);
+  panel(2.2, 15, [9, 4, -11],   [0.30, 0.62, 1.0], 8.0);
+  panel(2.0, 13, [-12, 3, -7],  [1.0, 0.30, 0.62], 3.6);
+  panel(9, 9,    [0, 17, 1],    [1, 1, 1], 2.3);
+  panel(16, 2.2, [0, 1.5, 15],  [1.0, 0.95, 0.90], 1.1);
+  let tex = null;
+  try { tex = pm.fromScene(env, 0.02).texture; } catch (err) { console.warn('PMREM failed', err); }
+  env.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+  mats.forEach((m) => m.dispose());
+  pm.dispose();
+  return tex;
+}
+let envTex = buildEnvironment();
+if (envTex) scene.environment = envTex;
+
+let contextLost = false;
+canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); contextLost = true; });
+canvas.addEventListener('webglcontextrestored', () => {
+  contextLost = false;
+  const tex = buildEnvironment();
+  if (tex) { if (envTex) envTex.dispose(); envTex = tex; scene.environment = tex; }
+  if (composer) { dropComposer(); setupComposer().then(applySize); }
+});
+
+const keyLight = new THREE.DirectionalLight(0xfff0e0, 2.6);  keyLight.position.set(-5, 8, 6);
+const fillLight = new THREE.DirectionalLight(0xffe6d6, 0.55); fillLight.position.set(6.5, 3, 7);
+const rimLight = new THREE.DirectionalLight(0x58b4ff, 4.2);  rimLight.position.set(5.5, 3.5, -7);
+scene.add(keyLight, fillLight, rimLight);
+const KEY_DIR = new THREE.Vector3(-5, 8, 6).normalize();
+
+const U = {
+  uBearN: { value: 0 },
+  uBearPos: { value: new Float32Array(MAXB * 4) },
+  uBearCol: { value: new Float32Array(MAXB * 3) },
+};
+
+const FACE_GLSL = `
+float moldH(vec3 p, out vec3 g) {
+  g = vec3(0.0); float h = 0.0;
+  float m = smoothstep(0.16, 0.30, p.z);
+  for (int s = 0; s < 2; s++) {
+    float sx = s == 0 ? -1.0 : 1.0;
+    vec2 d = p.xy - vec2(sx * 0.140, 0.085);
+    float G = 0.024 * exp(-dot(d, d) / (2.0 * 0.030 * 0.030));
+    h += G; g.xy += -d / (0.030 * 0.030) * G;
+  }
+  { vec2 d = (p.xy - vec2(0.0, -0.092)) * vec2(1.0, 1.25);
+    float G = 0.026 * exp(-dot(d, d) / (2.0 * 0.044 * 0.044));
+    h += G; g.xy += -d * vec2(1.0, 1.25) / (0.044 * 0.044) * G; }
+  for (int i = 0; i < 11; i++) {
+    float t = float(i) / 10.0 * 2.0 - 1.0;
+    vec2 d = p.xy - vec2(t * 0.085, -0.172 - 0.030 * (1.0 - t * t));
+    float G = -0.0105 * exp(-dot(d, d) / (2.0 * 0.0135 * 0.0135));
+    h += G; g.xy += -d / (0.0135 * 0.0135) * G;
+  }
+  { vec2 d = p.xy - vec2(0.0, -0.140);
+    float G = -0.008 * exp(-dot(d, d) / (2.0 * 0.010 * 0.010));
+    h += G; g.xy += -d / (0.010 * 0.010) * G; }
+  g *= m;
+  return h * m;
+}
+`;
+
+const FRAG_PARS = `
+varying float vThick;
+varying vec3 vFace;
+uniform float uFlash;
+uniform float uGlowK;
+uniform vec3 uTint;
+uniform vec3 uDeep;
+uniform mat3 uHeadRot;
+uniform float uSelf;
+uniform float uBearN;
+uniform vec4 uBearPos[${MAXB}];
+uniform vec3 uBearCol[${MAXB}];
+${FACE_GLSL}
+`;
+
+const FRAG_NORMAL = `
+  vec3 gLoc = vec3(0.0);
+  float mh = 0.0;
+  if (vFace.z > 0.16 && vFace.z < 1.5) mh = moldH(vFace, gLoc);
+  {
+    vec3 gV = mat3(viewMatrix) * (uHeadRot * gLoc);
+    gV -= normal * dot(gV, normal);
+    normal = normalize(normal - gV);
+  }
+`;
+
+const FRAG_COAT = `
+  #ifdef USE_CLEARCOAT
+    clearcoatNormal = normal;
+  #endif
+`;
+
+const FRAG_GLOW = `
+  {
+    vec3 Vv = normalize(vViewPosition);
+    float ndv = clamp(dot(normal, Vv), 0.0, 1.0);
+    float th = clamp(vThick + mh * 5.0, 0.04, 1.3);
+    float thin = exp(-th * 2.4);
+    vec3 body = mix(uTint, uDeep, smoothstep(0.18, 0.95, th));
+    vec3 sss = vec3(0.0);
+    #if NUM_DIR_LIGHTS > 0
+    for (int i = 0; i < NUM_DIR_LIGHTS; i++) {
+      vec3 L = directionalLights[i].direction;
+      vec3 lc = directionalLights[i].color;
+      lc = lc / (1.0 + 0.3 * lc);
+      float ndl = dot(normal, L);
+      float wrap = clamp((ndl + 0.5) / 1.5, 0.0, 1.0);
+      float through = pow(clamp(dot(Vv, -normalize(L + normal * 0.35)), 0.0, 1.0), 2.6);
+      sss += lc * (wrap * wrap * 0.17 + through * (0.20 + 0.55 * thin));
+    }
+    #endif
+    vec3 glow = body * (sss + 0.045);
+    glow += uTint * pow(1.0 - ndv, 3.0) * 0.30 * (0.35 + thin);
+    #ifdef USE_TRANSMISSION
+    vec3 nW = inverseTransformDirection(normal, viewMatrix);
+    vec3 bounce = vec3(0.0);
+    for (int i = 0; i < ${MAXB}; i++) {
+      if (float(i) >= uBearN) break;
+      if (abs(float(i) - uSelf) < 0.5) continue;
+      vec3 dd = uBearPos[i].xyz - vWorldPosition;
+      float d2 = dot(dd, dd);
+      if (d2 > 9.0) continue;
+      float att = 1.0 / (1.0 + d2 * 1.15);
+      float fc = clamp(dot(nW, dd * inversesqrt(d2 + 1e-4)) * 0.5 + 0.5, 0.0, 1.0);
+      bounce += uBearCol[i] * (att * att * fc);
+    }
+    glow += bounce * 0.20 * (0.45 + 0.55 * thin);
+    #endif
+    glow *= uGlowK;
+    glow += uFlash * (vec3(1.0, 0.90, 0.80) * pow(1.0 - ndv, 2.2) * 0.7 + uTint * 0.22);
+    totalEmissiveRadiance += glow;
+  }
+`;
+
+const FRAG_LIMIT = `
+  {
+    float pk = max(gl_FragColor.r, max(gl_FragColor.g, gl_FragColor.b));
+    if (pk > 1.2) gl_FragColor.rgb *= (1.2 + 2.2 * (1.0 - exp(-(pk - 1.2) / 2.2))) / pk;
+  }
+`;
+
+function injectInto(src, token, add, where) {
+  const i = src.indexOf(token);
+  if (i < 0) throw new Error('shader token missing: ' + token);
+  return where === 'before' ? src.slice(0, i) + add + src.slice(i)
+       : where === 'replace' ? src.slice(0, i) + add + src.slice(i + token.length)
+       : src.slice(0, i + token.length) + add + src.slice(i + token.length);
+}
+
+let injectionOK = true;
+function candyBeforeCompile(shader) {
+  if (!injectionOK) return;
+  const ud = this.userData;
+  try {
+    let vs = shader.vertexShader, fs = shader.fragmentShader;
+    vs = injectInto(vs, '#include <common>', '\nattribute float aThick;\nattribute vec3 aFace;\nvarying float vThick;\nvarying vec3 vFace;\n', 'after');
+    vs = injectInto(vs, '#include <begin_vertex>', '\nvThick = aThick;\nvFace = aFace;\n', 'after');
+    fs = injectInto(fs, '#include <common>', '\n' + FRAG_PARS, 'after');
+    fs = injectInto(fs, '#include <normal_fragment_maps>', FRAG_NORMAL, 'after');
+    fs = injectInto(fs, '#include <clearcoat_normal_fragment_maps>', FRAG_COAT, 'after');
+    fs = injectInto(fs, '#include <emissivemap_fragment>', FRAG_GLOW, 'after');
+    const tchunk = THREE.ShaderChunk.transmission_fragment;
+    if (tchunk && tchunk.indexOf('material.thickness = thickness;') >= 0) {
+      fs = injectInto(fs, '#include <transmission_fragment>', tchunk.replace('material.thickness = thickness;', 'material.thickness = thickness * clamp(vThick + mh * 5.0, 0.05, 1.3);'), 'replace');
+    }
+    fs = injectInto(fs, '#include <tonemapping_fragment>', FRAG_LIMIT, 'before');
+    shader.vertexShader = vs; shader.fragmentShader = fs;
+    shader.uniforms.uFlash = ud.uFlash; shader.uniforms.uGlowK = ud.uGlowK; shader.uniforms.uTint = ud.uTint; shader.uniforms.uDeep = ud.uDeep;
+    shader.uniforms.uHeadRot = ud.uHeadRot; shader.uniforms.uSelf = ud.uSelf;
+    shader.uniforms.uBearN = U.uBearN; shader.uniforms.uBearPos = U.uBearPos; shader.uniforms.uBearCol = U.uBearCol;
+  } catch (err) {
+    console.warn('Candy shader injection failed — using the stock physical material.', err);
+    injectionOK = false;
+  }
+}
+
+function makeCandyMaterial(fi, scale) {
+  const f = FLAVORS[fi];
+  const m = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(f.base[0], f.base[1], f.base[2]),
+    roughness: 0.24, metalness: 0,
+    transmission: 1, thickness: Math.pow(scale || 1, 0.6), ior: 1.46,
+    attenuationColor: new THREE.Color(f.atten[0], f.atten[1], f.atten[2]), attenuationDistance: f.dist,
+    clearcoat: 1, clearcoatRoughness: 0.045, specularIntensity: 1, envMapIntensity: 1.1,
+    side: THREE.DoubleSide,
+  });
+  m.userData = {
+    uFlash: { value: 0 }, uGlowK: { value: f.glow }, uSelf: { value: -1 },
+    uTint: { value: new THREE.Color(f.tint[0], f.tint[1], f.tint[2]) }, uDeep: { value: new THREE.Color(f.deep[0], f.deep[1], f.deep[2]) },
+    uHeadRot: { value: new THREE.Matrix3() },
+  };
+  m.onBeforeCompile = candyBeforeCompile;
+  m.customProgramCacheKey = () => injectionOK ? 'gummy-candy-v2' : 'gummy-candy-stock';
+  return m;
+}
+
+const FLOOR_VS = `
+varying vec3 vW;
+void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }
+`;
+const FLOOR_FS = `
+varying vec3 vW;
+uniform vec4 uBearPos[${MAXB}];
+uniform vec3 uBearCol[${MAXB}];
+uniform float uBearN;
+uniform vec3 uKeyDir;
+void main() {
+  vec2 p = vW.xz;
+  float rr = length(p);
+  vec3 base = vec3(0.0105, 0.0098, 0.0122);
+  base += vec3(0.0030, 0.0028, 0.0036) * (1.0 - smoothstep(3.30, 3.52, rr));
+  vec2 q = (p - vec2(0.2, -0.2)) * vec2(0.8, 1.1);
+  float pool = exp(-dot(q, q) / 19.0);
+  vec3 lit = vec3(1.0, 0.92, 0.82) * (0.010 + 0.062 * pool);
+  vec2 sdir = -uKeyDir.xz / max(uKeyDir.y, 0.25);
+  float shadow = 0.0, ao = 0.0;
+  vec3 tint = vec3(0.0), glow = vec3(0.0);
+  for (int i = 0; i < ${MAXB}; i++) {
+    if (float(i) >= uBearN) break;
+    vec4 b = uBearPos[i]; vec3 c = uBearCol[i];
+    float hb = max(b.y - 0.62, 0.0);
+    vec2 d0 = p - b.xz;
+    vec2 d1 = p - (b.xz + sdir * b.y);
+    if (dot(d0, d0) > 25.0 && dot(d1, d1) > 25.0) continue;
+    float a0 = exp(-dot(d0, d0) / (b.w * b.w * 0.55 + 0.03));
+    ao = 1.0 - (1.0 - ao) * (1.0 - a0 * 0.8);
+    float sr = b.w * (1.05 + 0.15 * hb) + 0.12;
+    float sh = exp(-dot(d1, d1) / (sr * sr)) / (1.0 + 0.45 * hb);
+    shadow = 1.0 - (1.0 - shadow) * (1.0 - sh * 0.85);
+    tint += c * sh;
+    glow += c * exp(-dot(d0, d0) / (b.w * b.w * 3.2 + 0.08)) / (1.0 + hb * 0.9);
+  }
+  vec3 col = base;
+  col += lit * (1.0 - 0.93 * clamp(max(shadow, ao * 0.85), 0.0, 1.0));
+  col += lit * tint * 2.2;
+  col += glow * 0.06;
+  vec3 V = normalize(cameraPosition - vW);
+  vec3 R = reflect(-V, vec3(0.0, 1.0, 0.0));
+  float fres = pow(1.0 - clamp(V.y, 0.0, 1.0), 4.0);
+  float a1 = acos(clamp(dot(R, normalize(vec3(-0.5, 0.7, 0.5))), -1.0, 1.0));
+  float a2 = acos(clamp(dot(R, normalize(vec3(0.6, 0.25, -0.75))), -1.0, 1.0));
+  col += (vec3(1.0, 0.95, 0.88) * exp(-a1 * a1 * 16.0) * 0.05 + vec3(0.3, 0.6, 1.0) * exp(-a2 * a2 * 28.0) * 0.06) * (0.25 + fres);
+  float e1 = (rr - 3.44) / 0.03;
+  col += vec3(1.0, 0.93, 0.85) * (exp(-e1 * e1) * 0.05 + exp(-(rr - 3.62) * (rr - 3.62) / 0.0004) * 0.018);
+  col = mix(col, base * 0.9, smoothstep(9.0, 18.0, length(p)));
+  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  col += (n - 0.5) * 0.0016;
+  gl_FragColor = vec4(max(col, vec3(0.0)), 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+const floorMat = new THREE.ShaderMaterial({
+  vertexShader: FLOOR_VS, fragmentShader: FLOOR_FS,
+  uniforms: { uBearN: U.uBearN, uBearPos: U.uBearPos, uBearCol: U.uBearCol, uKeyDir: { value: KEY_DIR.clone() } },
+});
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), floorMat);
+floor.rotation.x = -Math.PI / 2; floor.renderOrder = -10; floor.frustumCulled = false;
+scene.add(floor);
+
+let shaderFailed = false;
+renderer.debug.onShaderError = (gl, program, vs, fs) => {
+  const src = gl.getShaderSource(fs) || '';
+  console.error('Shader compile error:', gl.getShaderInfoLog(fs) || gl.getProgramInfoLog(program));
+  if (src.indexOf('uKeyDir') >= 0) shaderFailed = 'floor';
+  else if (src.indexOf('uFlash') >= 0) shaderFailed = 'candy';
+};
+function handleShaderFailure() {
+  if (shaderFailed === 'candy') {
+    injectionOK = false;
+    if (spareMat) { spareMat.dispose(); spareMat = null; }
+    for (const b of world.bears) if (b.vis) { b.vis.mat.dispose(); b.vis.mat = makeCandyMaterial(b.flavor, b.scale); b.vis.mesh.material = b.vis.mat; }
+  } else if (shaderFailed === 'floor') {
+    floor.material = new THREE.MeshBasicMaterial({ color: 0x0a0a0c });
+  }
+  shaderFailed = false;
+}
+
+const Sound = (() => {
+  const S = { on: true, ctx: null, master: null, voices: 0, requested: 0, last: Object.create(null), sq: null, sqLive: false };
+  const PENTA = [0, 2, 4, 7, 9, 12, 14, 16];
+  const BASE = 261.63;
+  function unlock() {
+    if (S.ctx) { if (S.ctx.state === 'suspended') S.ctx.resume().catch(() => {}); return; }
+    if (!S.on) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      const ctx = new AC();
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -16; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.2;
+      const master = ctx.createGain(); master.gain.value = S.on ? 0.5 : 0;
+      master.connect(comp); comp.connect(ctx.destination);
+      S.ctx = ctx; S.master = master;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    } catch (err) { console.warn('Audio unavailable', err); S.ctx = null; }
+  }
+  function setOn(v) { S.on = v; if (S.master && S.ctx) S.master.gain.setTargetAtTime(v ? 0.5 : 0, S.ctx.currentTime, 0.02); if (!v) squeak(1, 0, false); }
+  function freqFor(flavor, scale) {
+    let f = BASE * Math.pow(2, PENTA[flavor % PENTA.length] / 12);
+    if (scale < 0.8) f *= 2; else if (scale > 1.2) f *= 0.5;
+    return f;
+  }
+  function voice(o) {
+    S.requested++;
+    const ctx = S.ctx;
+    if (!ctx || !S.on || ctx.state !== 'running' || S.voices > 14) return;
+    const t = ctx.currentTime, osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.type = o.type || 'sine';
+    osc.frequency.setValueAtTime(o.f0, t);
+    if (o.f1) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.f1), t + o.dur * (o.bend || 0.4));
+    const a = o.attack || 0.006;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, o.gain), t + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
+    osc.connect(g); g.connect(S.master);
+    S.voices++;
+    osc.onended = () => { S.voices--; try { g.disconnect(); } catch (_) {} };
+    osc.start(t); osc.stop(t + o.dur + 0.03);
+  }
+  function forget(key) { delete S.last[key]; }
+  function gate(key, ms) { const n = performance.now(); if (n - (S.last[key] || -1e9) < ms) return false; S.last[key] = n; return true; }
+  function sfx(e) {
+    const v = clamp((e.speed || 0) / 12, 0.06, 1);
+    switch (e.type) {
+      case 'bounce': {
+        if (!gate('b' + (e.bear ? e.bear.id : 0), 90)) return;
+        const f = freqFor(e.bear.flavor, e.bear.scale);
+        voice({ type: 'triangle', f0: f * 1.28, f1: f, dur: 0.26 + 0.24 * v, gain: 0.03 + 0.15 * v * v, bend: 0.2 });
+        voice({ type: 'sine', f0: 130, f1: 62, dur: 0.12, gain: 0.03 + 0.07 * v, bend: 0.5 });
+        break;
+      }
+      case 'bump': {
+        if (!gate('bump', 70)) return;
+        voice({ type: 'sine', f0: freqFor(e.bear.flavor, e.bear.scale) * 0.5, f1: freqFor(e.bear.flavor, e.bear.scale) * 0.42, dur: 0.2, gain: 0.04 + 0.1 * v, bend: 0.5 });
+        break;
+      }
+      case 'ball': {
+        if (!gate('ball' + (e.ball ? e.ball.id : 0), 80)) return;
+        const f = freqFor(((e.ball ? e.ball.kind : 0) * 2 + 3) % 8, 1) * 1.5;
+        voice({ type: 'sine', f0: f * 1.7, f1: f * 0.8, dur: 0.17, gain: 0.04 + 0.13 * v, bend: 0.3 });
+        break;
+      }
+      case 'pad': {
+        if (!gate('pad', 110)) return;
+        voice({ type: 'sine', f0: 150, f1: 540, dur: 0.46, gain: 0.15, bend: 0.32 });
+        voice({ type: 'triangle', f0: 300, f1: 190, dur: 0.3, gain: 0.05, bend: 0.5 });
+        break;
+      }
+      case 'bumper': {
+        if (!gate('bumper', 90)) return;
+        voice({ type: 'sine', f0: 988, dur: 0.38, gain: 0.08 });
+        voice({ type: 'sine', f0: 1480, dur: 0.24, gain: 0.04 });
+        break;
+      }
+      case 'launch': voice({ type: 'sine', f0: 230, f1: 940, dur: 0.17, gain: 0.13, bend: 0.8 }); break;
+      case 'spawn': { if (gate('spawn', 55)) { const f = freqFor(e.flavor, e.scale || 1); voice({ type: 'sine', f0: f * 1.6, f1: f * 0.8, dur: 0.09, gain: 0.04, bend: 0.5 }); } break; }
+      case 'shake': voice({ type: 'triangle', f0: 120, f1: 44, dur: 0.38, gain: 0.2, bend: 0.5 }); break;
+      case 'tick': if (gate('tick', 30)) voice({ type: 'triangle', f0: 900, f1: 640, dur: 0.05, gain: 0.035, bend: 0.8 }); break;
+      case 'on': voice({ type: 'sine', f0: 523, f1: 784, dur: 0.12, gain: 0.07, bend: 0.8 }); break;
+    }
+  }
+  function squeak(stretch, rate, activeNow) {
+    const ctx = S.ctx; if (!ctx || ctx.state !== 'running') return;
+    if (!S.sq) {
+      if (!activeNow) return;
+      const o = ctx.createOscillator(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+      o.type = 'sawtooth'; bp.type = 'bandpass'; bp.Q.value = 5; bp.frequency.value = 900; g.gain.value = 0;
+      o.connect(bp); bp.connect(g); g.connect(S.master); o.start();
+      S.sq = { o, bp, g };
+    }
+    if (!activeNow && !S.sqLive) return;
+    S.sqLive = activeNow;
+    const t = ctx.currentTime, f = 260 + 340 * clamp(stretch - 1, 0, 3);
+    S.sq.o.frequency.setTargetAtTime(f, t, 0.03); S.sq.bp.frequency.setTargetAtTime(f * 2.2, t, 0.03);
+    S.sq.g.gain.setTargetAtTime(activeNow && S.on ? Math.min(0.06, rate * 0.02) : 0, t, 0.04);
+  }
+  return { S, unlock, setOn, sfx, squeak, freqFor, forget };
+})();
+
+const world = Core.createWorld();
+function setRange(attr, count) {
+  if (attr.clearUpdateRanges) { attr.clearUpdateRanges(); attr.addUpdateRange(0, count); }
+  else if (attr.updateRange) { attr.updateRange.offset = 0; attr.updateRange.count = count; }
+  attr.needsUpdate = true;
+}
+
+function attachVisual(b) {
+  const mb = Core.createMeshBuffers(MAXV, MAXI);
+  const geo = new THREE.BufferGeometry();
+  const dyn = THREE.DynamicDrawUsage;
+  geo.setAttribute('position', new THREE.BufferAttribute(mb.pos, 3).setUsage(dyn));
+  geo.setAttribute('normal', new THREE.BufferAttribute(mb.nrm, 3).setUsage(dyn));
+  geo.setAttribute('aThick', new THREE.BufferAttribute(mb.thk, 1).setUsage(dyn));
+  geo.setAttribute('aFace', new THREE.BufferAttribute(mb.face, 3).setUsage(dyn));
+  geo.setIndex(new THREE.BufferAttribute(mb.idx, 1).setUsage(dyn));
+  geo.setDrawRange(0, 0);
+  const mat = makeCandyMaterial(b.flavor, b.scale);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.frustumCulled = false;
+  mesh.visible = false;
+  scene.add(mesh);
+  b.vis = { mb, geo, mat, mesh, meshed: false };
+  b.dirty = true; b.meshAge = 99;
+}
+
+let spareMat = null;
+function removeBear(b) {
+  const i = world.bears.indexOf(b); if (i >= 0) world.bears.splice(i, 1);
+  if (b.vis) {
+    scene.remove(b.vis.mesh); b.vis.geo.dispose();
+    if (spareMat) spareMat.dispose();
+    spareMat = b.vis.mat;
+    b.vis = null;
+  }
+  Sound.forget('b' + b.id);
+  if (held && held.bear === b) held = null;
+}
+
+function spawnBear(flavor, x, y, z, opt) {
+  const b = Core.createBear(world, flavor, x, y, z, opt);
+  attachVisual(b);
+  return b;
+}
+
+let meshH = 0.05, meshMsAvg = 2;
+function meshOne(b) {
+  const v = b.vis; const mb = v.mb;
+  const h = meshH * clamp(b.scale, 0.75, 1.3);
+  const ok = Core.meshBear(b, h, mb);
+  const g = v.geo;
+  setRange(g.attributes.position, mb.nv * 3); setRange(g.attributes.normal, mb.nv * 3);
+  setRange(g.attributes.aThick, mb.nv); setRange(g.attributes.aFace, mb.nv * 3);
+  setRange(g.index, mb.ni);
+  g.setDrawRange(0, mb.ni);
+  const hr = mb.headRot;
+  v.mat.userData.uHeadRot.value.set(hr[0], hr[1], hr[2], hr[3], hr[4], hr[5], hr[6], hr[7], hr[8]);
+  v.meshed = true; v.mesh.visible = mb.ni > 0;
+  b.meshAge = 0; b.dirty = false;
+  return ok;
+}
+
+function updateMeshes() {
+  const t0 = performance.now();
+  const list = [];
+  for (const b of world.bears) {
+    if (!b.vis) continue;
+    if (!b.asleep || b.dirty || !b.vis.meshed) list.push(b);
+  }
+  list.sort((a, c) => score(c) - score(a));
+  for (const b of list) {
+    const must = (held && held.bear === b) || b.dirty || !b.vis.meshed;
+    if (!must && performance.now() - t0 > (b.meshAge >= 3 ? 9 : 5.5)) { b.meshAge++; continue; }
+    meshOne(b);
+  }
+  for (const b of world.bears) {
+    if (b.vis) b.vis.mesh.position.set(b.c[0], b.c[1], b.c[2]);
+  }
+  const dtm = performance.now() - t0;
+  meshMsAvg += (dtm - meshMsAvg) * 0.05;
+  if (meshMsAvg > 6.2 && meshH < 0.072) meshH *= 1.003;
+  else if (meshMsAvg < 3.2 && meshH > 0.05) meshH /= 1.002;
+}
+function score(b) { return (b.meshAge + 1) * (1 + Math.min(4, b.ke * 0.05)) + (held && held.bear === b ? 1e4 : 0) + (b.dirty ? 1e3 : 0); }
+
+function plastic(rgb, rough, coat) {
+  return new THREE.MeshPhysicalMaterial({ color: new THREE.Color(rgb[0], rgb[1], rgb[2]), roughness: rough, metalness: 0, clearcoat: coat, clearcoatRoughness: 0.1, envMapIntensity: 1.0 });
+}
+
+const BALL_PAL = [
+  [[0.90, 0.05, 0.07], [0.95, 0.94, 0.90], [0.05, 0.28, 0.95], [0.95, 0.94, 0.90], [1.0, 0.72, 0.04], [0.95, 0.94, 0.90]],
+  [[1.0, 0.45, 0.62], [0.45, 0.95, 0.75], [1.0, 0.88, 0.40], [0.50, 0.75, 1.0], [0.75, 0.60, 1.0], [1.0, 0.68, 0.50]],
+  [[0.04, 0.62, 0.62], [1.0, 0.42, 0.06], [0.04, 0.62, 0.62], [1.0, 0.42, 0.06], [0.04, 0.62, 0.62], [1.0, 0.42, 0.06]],
+];
+const BALL_TINT = BALL_PAL.map((p) => [0, 1, 2].map((c) => p.reduce((s, col) => s + col[c], 0) / p.length));
+function makeBallGeo(kind) {
+  const g = new THREE.SphereGeometry(1, 36, 24);
+  const pa = g.attributes.position, pos = pa.array, n = pa.count, col = new Float32Array(n * 3), pal = BALL_PAL[kind];
+  for (let i = 0; i < n; i++) {
+    const x = pos[3 * i], y = pos[3 * i + 1], z = pos[3 * i + 2];
+    const c = Math.abs(y) > 0.93 ? [0.96, 0.95, 0.92] : pal[Math.min(5, Math.floor((Math.atan2(z, x) / (Math.PI * 2) + 0.5) * 6))];
+    col[3 * i] = c[0]; col[3 * i + 1] = c[1]; col[3 * i + 2] = c[2];
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}
+const ballGeos = [0, 1, 2].map(makeBallGeo);
+const ballMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.32, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 1.0 });
+const ballMeshes = new Map();
+
+function spawnBall(x, y, z) {
+  const kind = Math.floor(Math.random() * 3);
+  const ba = Core.createBall(world, x, y, z, rand(0.38, 0.5), {
+    kind, grow: 0.05, vx: rand(-0.8, 0.8), vy: -1, vz: rand(-0.8, 0.8), wx: rand(-4, 4), wy: rand(-3, 3), wz: rand(-4, 4),
+  });
+  const mesh = new THREE.Mesh(ballGeos[kind], ballMat);
+  mesh.frustumCulled = false;
+  scene.add(mesh);
+  ballMeshes.set(ba, mesh);
+  return ba;
+}
+function removeBall(ba) {
+  const i = world.balls.indexOf(ba); if (i >= 0) world.balls.splice(i, 1);
+  const m = ballMeshes.get(ba); if (m) { scene.remove(m); ballMeshes.delete(ba); }
+  Sound.forget('ball' + ba.id);
+  if (held && held.ball === ba) held = null;
+}
+function spawnBalls(n) {
+  const alive = world.balls.filter((b) => !b.dying);
+  const over = alive.length + n - MAX_BALLS;
+  for (let i = 0; i < over; i++) { const v = alive[i]; if (v && !(held && held.ball === v)) { v.dying = true; v.growTarget = 0; } }
+  const top = Math.min(4.2, world.ceiling - 0.9);
+  for (let i = 0; i < n; i++) { const a = rand(0, 6.283), r = rand(0, 1.3), y = top + i * 0.9 > world.ceiling - 0.6 ? top - i * 0.9 : top + i * 0.9; spawnBall(Math.cos(a) * r, y, Math.sin(a) * r * 0.8); Sound.sfx({ type: 'spawn', flavor: i + 2, scale: 1 }); }
+}
+
+const PAD_DEF = { x: -2.15, z: 0.55, r: 0.98, h: 0.1 };
+const BUMPER_DEFS = [{ x: 2.25, z: -0.55, r: 0.32, h: 1.0 }, { x: -0.25, z: -2.35, r: 0.32, h: 1.0 }, { x: 1.55, z: 1.75, r: 0.32, h: 1.0 }];
+const BUMPER_COL = [[1.0, 0.62, 0.02], [0.02, 0.58, 0.9], [1.0, 0.1, 0.4]];
+
+const padGroup = new THREE.Group(), padTop = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.86, 0.03, 64), plastic([0.95, 0.08, 0.32], 0.22, 1));
+{
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.05, 0.1, 64), plastic([0.03, 0.55, 0.55], 0.34, 0.7)); base.position.y = 0.05;
+  padTop.position.y = 0.105;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.93, 0.04, 16, 72), plastic([0.95, 0.95, 0.92], 0.3, 0.8)); ring.rotation.x = Math.PI / 2; ring.position.y = 0.1;
+  padGroup.add(base, padTop, ring);
+  padGroup.position.set(PAD_DEF.x, 0, PAD_DEF.z); padGroup.visible = false; padGroup.scale.set(0.001, 0.001, 0.001);
+  scene.add(padGroup);
+}
+const bumperGroups = BUMPER_DEFS.map((d, i) => {
+  const col = BUMPER_COL[i], grp = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.86, 40), plastic(col, 0.3, 0.9)); body.position.y = 0.43;
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.315, 0.035, 14, 48), plastic([0.95, 0.95, 0.92], 0.3, 0.8)); band.rotation.x = Math.PI / 2; band.position.y = 0.64;
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.3, 36, 18, 0, Math.PI * 2, 0, Math.PI / 2), plastic(col, 0.25, 1)); cap.position.y = 0.86;
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.42, 0.06, 40), plastic([0.95, 0.95, 0.92], 0.35, 0.6)); foot.position.y = 0.03;
+  grp.add(body, band, cap, foot);
+  grp.position.set(d.x, 0, d.z); grp.visible = false; grp.scale.set(0.001, 0.001, 0.001);
+  scene.add(grp);
+  return { grp, amt: 0, vel: 0 };
+});
+const propAnim = { pad: { amt: 0, vel: 0 } };
+function springTo(o, target, dt) { o.vel += ((target - o.amt) * 170 - o.vel * 14) * dt; o.amt += o.vel * dt; if (Math.abs(o.vel) < 1e-4 && Math.abs(target - o.amt) < 1e-4) o.amt = target; }
+
+function padSpeed() { return Math.sqrt(2 * Math.abs(GRAVITY[state.gravity].g) * 2.7); }
+function setPad(on, quiet) {
+  state.pad = on;
+  world.pad = on ? { x: PAD_DEF.x, z: PAD_DEF.z, r: PAD_DEF.r, h: PAD_DEF.h, v: padSpeed(), hit: 0 } : null;
+  $('#tPad').setAttribute('aria-pressed', on ? 'true' : 'false');
+  Core.wakeAll(world);
+  if (!quiet) { Sound.sfx({ type: on ? 'on' : 'tick' }); toast(on ? 'Trampoline on' : 'Trampoline off'); }
+}
+function setBumpers(on, quiet) {
+  state.bumpers = on;
+  world.bumpers = on ? BUMPER_DEFS.map((d) => ({ x: d.x, z: d.z, r: d.r, h: d.h, hit: 0 })) : [];
+  $('#tBump').setAttribute('aria-pressed', on ? 'true' : 'false');
+  Core.wakeAll(world);
+  if (!quiet) { Sound.sfx({ type: on ? 'on' : 'tick' }); toast(on ? 'Bumpers on' : 'Bumpers off'); }
+}
+function updateProps(dt) {
+  springTo(propAnim.pad, state.pad ? 1 : 0, dt);
+  const pa = Math.max(0, propAnim.pad.amt), hit = world.pad ? world.pad.hit : 0;
+  padGroup.visible = pa > 0.02;
+  padGroup.scale.set(pa, pa, pa);
+  padTop.scale.y = 1 - 0.55 * hit; padTop.position.y = 0.105 - 0.025 * hit;
+  bumperGroups.forEach((bg, i) => {
+    springTo(bg, state.bumpers ? 1 : 0, dt);
+    const a = Math.max(0, bg.amt), hh = world.bumpers[i] ? world.bumpers[i].hit : 0;
+    bg.grp.visible = a > 0.02;
+    bg.grp.scale.set(a * (1 + 0.2 * hh), a * (1 - 0.07 * hh), a * (1 + 0.2 * hh));
+  });
+  for (const ba of world.balls) {
+    const m = ballMeshes.get(ba); if (!m) continue;
+    const r = Core.ballRadius(ba);
+    m.position.set(ba.x, ba.y, ba.z); m.scale.set(r, r, r); m.quaternion.set(ba.q[0], ba.q[1], ba.q[2], ba.q[3]);
+  }
+}
+
+const heap = [
+  [-0.80, 0.60, 0.10, 0], [0.35, 0.60, 0.72, 1], [0.88, 0.60, -0.50, 2], [-0.15, 0.60, -0.78, 3],
+  [0.02, 1.90, 0.02, 5], [-0.55, 2.80, 0.42, 6], [0.58, 3.60, -0.10, 4],
+];
+for (const h of heap) spawnBear(h[3], h[0], h[1], h[2], {});
+for (let i = 0; i < 240 * 5; i++) { Core.stepWorld(world, DT); world.events.length = 0; }
+world.bounces = 0;
+for (const b of world.bears) { b.dirty = true; b.hopT = Core.rand(0.8, 4.5); }
+
+const pourQueue = [];
+function pickScale() {
+  switch (state.size) {
+    case 'baby': return rand(0.58, 0.68);
+    case 'mama': return rand(1.34, 1.48);
+    case 'mix': { const r = Math.random(); return r < 0.3 ? rand(0.58, 0.68) : r < 0.8 ? undefined : rand(1.34, 1.48); }
+    default: return undefined;
+  }
+}
+function makeRoom(n) {
+  const alive = world.bears.filter((b) => !b.dying);
+  const over = alive.length + n - MAX_BEARS;
+  for (let i = 0; i < over; i++) { const v = alive[i]; if (v && !(held && held.bear === v)) { v.dying = true; v.growTarget = 0; v.asleep = false; } }
+}
+function pour(n = 5) {
+  n = Math.min(n, MAX_BEARS - pourQueue.length);
+  if (n <= 0) return;
+  makeRoom(n + pourQueue.length);
+  const now = performance.now();
+  for (let i = 0; i < n; i++) pourQueue.push({ at: now + i * 130 + Math.random() * 60, flavor: [...active][Math.floor(Math.random() * active.size)], i });
+}
+function dropOne(flavor, i, spread) {
+  const a = Math.random() * 6.283, r = Math.random() * (spread || 0.9);
+  const top = Math.min(4.6, world.ceiling - 1.1);
+  const y = world.ceiling - 1.0 - top >= 1.4 ? top + (i % 3) * 0.7 : top - (i % 3) * 0.7;
+  const scale = pickScale();
+  const b = spawnBear(flavor, Math.cos(a) * r, y, Math.sin(a) * r * 0.7, {
+    scale, pitch: rand(-0.9, 0.9), roll: rand(-0.9, 0.9),
+    vel: [rand(-0.6, 0.6), -2, rand(-0.5, 0.5)], spin: [rand(-3, 3), rand(-3, 3), rand(-3, 3)],
+  });
+  Sound.sfx({ type: 'spawn', flavor, scale: b.scale });
+  return b;
+}
+function processPour(now) {
+  while (pourQueue.length && pourQueue[0].at <= now) { const q = pourQueue.shift(); dropOne(q.flavor, q.i); }
+}
+let rainT = 0;
+function processRain(dt) {
+  if (!state.rain) return;
+  rainT -= dt;
+  if (rainT <= 0) {
+    rainT = rand(0.26, 0.46);
+    makeRoom(1);
+    dropOne([...active][Math.floor(Math.random() * active.size)], Math.floor(Math.random() * 3), 1.9);
+  }
+}
+
+let toastTimer = 0;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1300);
+}
+function setTool(name) {
+  state.tool = name;
+  document.querySelectorAll('[data-tool]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.tool === name ? 'true' : 'false'));
+  updateCursorClass();
+  Sound.sfx({ type: 'tick' });
+}
+function cycleGravity() {
+  state.gravity = (state.gravity + 1) % GRAVITY.length;
+  const G = GRAVITY[state.gravity];
+  world.gravity = G.g; world.ceiling = G.ceil;
+  if (world.pad) world.pad.v = padSpeed();
+  $('#gravLabel').textContent = G.name;
+  $('#tGrav').setAttribute('aria-label', 'Gravity: ' + G.name);
+  Core.wakeAll(world);
+  Sound.sfx({ type: 'on' }); toast('Gravity: ' + G.name);
+}
+function setSlow(on) { state.slow = on; $('#tSlow').setAttribute('aria-pressed', on ? 'true' : 'false'); Sound.sfx({ type: 'tick' }); toast(on ? 'Slow motion on' : 'Slow motion off'); }
+function setRain(on, quiet) {
+  state.rain = on; $('#tRain').setAttribute('aria-pressed', on ? 'true' : 'false'); rainT = 0;
+  if (!quiet) { Sound.sfx({ type: on ? 'on' : 'tick' }); toast(on ? 'Rain on' : 'Rain off'); }
+}
+function setSound(on) {
+  state.sound = on; Sound.setOn(on);
+  $('#tSound').setAttribute('aria-pressed', on ? 'true' : 'false');
+  if (on) { Sound.unlock(); Sound.sfx({ type: 'on' }); }
+  toast(on ? 'Sound on' : 'Sound off');
+}
+function shake() {
+  Core.shakeWorld(world, 1);
+  shakeAmp = 1; Sound.sfx({ type: 'shake' }); toast('Shake!');
+}
+function clearAll() {
+  pourQueue.length = 0;
+  if (state.rain) setRain(false, true);
+  for (const b of world.bears) if (!b.dying) { b.dying = true; b.growTarget = 0; b.asleep = false; }
+  for (const ba of world.balls) { ba.dying = true; ba.growTarget = 0; }
+  setPad(false, true); setBumpers(false, true);
+  if (held) releaseHeld(true);
+  Sound.sfx({ type: 'tick' }); toast('Cleared');
+}
+
+let held = null;
+let orbit = null, toolDown = false, pinch = null;
+const pointers = new Map();
+const cursor = $('#cursor');
+let cursorOn = false, overUI = false, hoverHot = false, shownD = '';
+const toolPt = { have: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
+const TOOL_R = { poke: 0.55, magnet: 1.25, gust: 1.0 };
+
+function updateCursorClass() {
+  const c = cursor.classList;
+  c.toggle('tool', state.tool !== 'grab' && !overUI);
+  c.toggle('hot', state.tool === 'grab' && hoverHot && !held && !overUI);
+  c.toggle('ui', overUI);
+  c.toggle('grab', !!held && !overUI);
+  c.toggle('orbit', !!orbit && !overUI);
+  c.toggle('down', toolDown);
+}
+
+function planeHit(h, px, py) {
+  const r = rayFromPixel(px, py);
+  const p = h.plane;
+  const den = p.nx * r.d[0] + p.ny * r.d[1] + p.nz * r.d[2];
+  if (Math.abs(den) < 1e-4) return null;
+  const t = (p.d - (p.nx * r.o[0] + p.ny * r.o[1] + p.nz * r.o[2])) / den;
+  if (t < 0) return null;
+  return [r.o[0] + r.d[0] * t, r.o[1] + r.d[1] * t, r.o[2] + r.d[2] * t];
+}
+
+function beginDrag(h, px, py) {
+  h.mode = 'drag';
+  const f = cam.fwd;
+  if (h.ball) {
+    const ba = h.ball;
+    h.plane = { nx: f[0], ny: f[1], nz: f[2], d: f[0] * ba.x + f[1] * ba.y + f[2] * ba.z };
+    const hit = planeHit(h, px, py) || [ba.x, ba.y, ba.z];
+    h.off = [ba.x - hit[0], ba.y - hit[1], ba.z - hit[2]];
+    h.hist = []; ba.grab = true; ba.gt = [ba.x, ba.y, ba.z];
+    return;
+  }
+  const b = h.bear, i = h.idx;
+  b.pressing = false; b.press = 0;
+  b.asleep = false; b.still = 0; b.grab = i;
+  const P = [b.P[3 * i], b.P[3 * i + 1], b.P[3 * i + 2]];
+  h.plane = { nx: f[0], ny: f[1], nz: f[2], d: f[0] * P[0] + f[1] * P[1] + f[2] * P[2] };
+  const hit = planeHit(h, px, py) || P;
+  h.off = [P[0] - hit[0], P[1] - hit[1], P[2] - hit[2]];
+  h.hist = [];
+  b.gt[0] = P[0]; b.gt[1] = P[1]; b.gt[2] = P[2];
+}
+
+function updateDrag(h, px, py, now) {
+  const hit = planeHit(h, px, py); if (!hit) return;
+  let tx = hit[0] + h.off[0], ty = hit[1] + h.off[1], tz = hit[2] + h.off[2];
+  const rad = h.ball ? Core.ballRadius(h.ball) : Core.CR[h.idx] * h.bear.scale;
+  if (ty < rad) ty = rad;
+  if (ty > world.ceiling - rad) ty = world.ceiling - rad;
+  const rr = Math.hypot(tx, tz * 1.5), lim = world.arena - 0.1;
+  if (rr > lim) { const k = lim / rr; tx *= k; tz *= k; }
+  const tgt = h.ball ? h.ball.gt : h.bear.gt;
+  tgt[0] = tx; tgt[1] = ty; tgt[2] = tz;
+  h.hist.push([now, tx, ty, tz]);
+  while (h.hist.length > 2 && now - h.hist[0][0] > 110) h.hist.shift();
+}
+
+function beginPinch() {
+  const [a, b] = [...pointers.values()];
+  pinch = { d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), z0: zoomT };
+}
+
+function startOrbit(e) {
+  orbit = { pid: e.pointerId, x: e.clientX, y: e.clientY };
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  updateCursorClass();
+}
+
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const dy = clamp(e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1), -120, 120);
+  zoomT = clamp(zoomT * Math.exp(dy * 0.0012), 0.55, 1.5);
+}, { passive: false });
+
+canvas.addEventListener('pointerdown', (e) => {
+  Sound.unlock();
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  mouse.px = e.clientX; mouse.py = e.clientY;
+  if (pointers.size >= 2) {
+    releaseHeld(true); toolDown = false; orbit = null;
+    if (!pinch) beginPinch();
+    updateCursorClass();
+    return;
+  }
+  if (e.pointerType === 'mouse' && e.button !== 0) { if (e.button === 2 || e.button === 1) { startOrbit(e); e.preventDefault(); } return; }
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  if (state.tool !== 'grab') {
+    toolDown = true; toolPt.have = false; held = null;
+    updateCursorClass(); e.preventDefault(); return;
+  }
+  const r = rayFromPixel(e.clientX, e.clientY);
+  const hb = Core.pick(world, r.o[0], r.o[1], r.o[2], r.d[0], r.d[1], r.d[2]);
+  const hl = Core.pickBall(world, r.o[0], r.o[1], r.o[2], r.d[0], r.d[1], r.d[2]);
+  if (hl && (!hb || hl.t <= hb.t + 0.05)) {
+    held = { ball: hl.ball, mode: 'drag', pid: e.pointerId };
+    beginDrag(held, e.clientX, e.clientY);
+  } else if (hb) {
+    const b = hb.bear;
+    b.asleep = false; b.still = 0;
+    held = { bear: b, idx: hb.idx, mode: 'press', x0: e.clientX, y0: e.clientY, pid: e.pointerId };
+    if (hb.idx === Core.IDX.HEAD) { b.pressing = true; b.press = Math.max(b.press, 0.05); }
+    else beginDrag(held, e.clientX, e.clientY);
+  } else {
+    startOrbit(e);
+    return;
+  }
+  updateCursorClass();
+  e.preventDefault();
+});
+
+addEventListener('pointermove', (e) => {
+  mouse.x = (e.clientX / W) * 2 - 1; mouse.y = (e.clientY / H) * 2 - 1;
+  mouse.px = e.clientX; mouse.py = e.clientY;
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (!cursorOn) { cursorOn = true; mouse.cx = e.clientX; mouse.cy = e.clientY; cursor.classList.add('on'); }
+  if (pinch && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()];
+    zoomT = clamp(pinch.z0 * pinch.d0 / Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), 0.55, 1.5);
+    return;
+  }
+  if (orbit && e.pointerId === orbit.pid) {
+    const dx = e.clientX - orbit.x, dy = e.clientY - orbit.y;
+    orbit.x = e.clientX; orbit.y = e.clientY;
+    camAz -= dx * 0.0055; camEl = clamp(camEl + dy * 0.004, 0.22, 1.0);
+    camAzV = -dx * 0.0055 * 50;
+    return;
+  }
+  if (held && e.pointerId === held.pid) {
+    if (held.mode === 'press' && Math.hypot(e.clientX - held.x0, e.clientY - held.y0) > 9) beginDrag(held, e.clientX, e.clientY);
+    if (held.mode === 'drag') updateDrag(held, e.clientX, e.clientY, performance.now());
+  } else if (!held && !toolDown && state.tool === 'grab' && e.target === canvas) {
+    const r = rayFromPixel(e.clientX, e.clientY);
+    hoverHot = !!(Core.pick(world, r.o[0], r.o[1], r.o[2], r.d[0], r.d[1], r.d[2]) || Core.pickBall(world, r.o[0], r.o[1], r.o[2], r.d[0], r.d[1], r.d[2]));
+    updateCursorClass();
+  }
+});
+
+function flingVelocity(hist, cap) {
+  let vx = 0, vy = 0, vz = 0;
+  if (hist && hist.length > 1) {
+    const a = hist[0], c = hist[hist.length - 1], dt = Math.max(0.016, (c[0] - a[0]) / 1000);
+    vx = (c[1] - a[1]) / dt; vy = (c[2] - a[2]) / dt; vz = (c[3] - a[3]) / dt;
+  }
+  const sp = Math.hypot(vx, vy, vz);
+  if (sp > cap) { const k = cap / sp; vx *= k; vy *= k; vz *= k; }
+  return [vx, vy, vz];
+}
+
+function releaseHeld(cancel) {
+  if (!held) return;
+  const h = held; held = null;
+  if (h.ball) {
+    const ba = h.ball; ba.grab = false;
+    const v = cancel ? [0, 0, 0] : flingVelocity(h.hist, 20);
+    ba.vx = v[0] * 0.95; ba.vy = v[1] * 0.95; ba.vz = v[2] * 0.95;
+  } else {
+    const b = h.bear;
+    if (h.mode === 'press') {
+      if (cancel) { b.pressing = false; b.press = 0; }
+      else {
+        const p = b.press;
+        Core.launchFromPress(world, b);
+        if (p > 0.1) Sound.sfx({ type: 'launch' });
+      }
+    } else {
+      const v = cancel ? [0, 0, 0] : flingVelocity(h.hist, 18);
+      const stretch = b.gStretch;
+      b.grab = -1;
+      for (let i = 0; i < Core.NP; i++) { b.V[3 * i] += v[0] * 0.75; b.V[3 * i + 1] += v[1] * 0.75; b.V[3 * i + 2] += v[2] * 0.75; }
+      b.flash = Math.max(b.flash, Math.min(0.4, 0.12 + stretch * 0.4));
+      b.asleep = false; b.still = 0; b.hopT = Core.rand(2, 5);
+    }
+  }
+  Sound.squeak(1, 0, false);
+  updateCursorClass();
+}
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (pinch) { if (pointers.size < 2) pinch = null; else beginPinch(); }
+  if (orbit && e.pointerId === orbit.pid) orbit = null;
+  if (held && e.pointerId === held.pid) releaseHeld(e.type === 'pointercancel');
+  if (toolDown && (e.pointerType !== 'touch' || pointers.size === 0)) { toolDown = false; toolPt.have = false; }
+  updateCursorClass();
+}
+addEventListener('pointerup', endPointer);
+addEventListener('pointercancel', endPointer);
+addEventListener('blur', () => { releaseHeld(true); toolDown = false; orbit = null; pointers.clear(); pinch = null; updateCursorClass(); });
+document.addEventListener('mouseleave', () => { cursor.classList.remove('on'); cursorOn = false; });
+
+function computeFields(dt) {
+  const F = world.fields; F.length = 0;
+  if (!toolDown || state.tool === 'grab') { toolPt.have = false; return; }
+  const r = rayFromPixel(mouse.px, mouse.py);
+  if (state.tool === 'poke') {
+    const hb = Core.pick(world, r.o[0], r.o[1], r.o[2], r.d[0], r.d[1], r.d[2]);
+    const hl = Core.pickBall(world, r.o[0], r.o[1], r.o[2], r.d[0], r.d[1], r.d[2]);
+    const t = Math.min(hb ? hb.t : 1e9, hl ? hl.t : 1e9);
+    if (t < 1e8) F.push({ kind: 0, ox: r.o[0], oy: r.o[1], oz: r.o[2], dx: r.d[0], dy: r.d[1], dz: r.d[2], r: TOOL_R.poke, k: 260, tmax: t + 1.1 });
+    return;
+  }
+  const p = pointOnViewPlane(mouse.px, mouse.py, camTarget);
+  p[1] = clamp(p[1], 0.25, world.ceiling - 0.3);
+  const lim = world.arena + 0.5, rr = Math.hypot(p[0], p[2]);
+  if (rr > lim) { p[0] *= lim / rr; p[2] *= lim / rr; }
+  if (state.tool === 'magnet') { F.push({ kind: 1, x: p[0], y: p[1], z: p[2], r: 2.6, k: 95 }); return; }
+  if (toolPt.have && dt > 0) {
+    const a = 0.3;
+    toolPt.vx += ((p[0] - toolPt.x) / dt - toolPt.vx) * a; toolPt.vy += ((p[1] - toolPt.y) / dt - toolPt.vy) * a; toolPt.vz += ((p[2] - toolPt.z) / dt - toolPt.vz) * a;
+  } else { toolPt.vx = toolPt.vy = toolPt.vz = 0; }
+  toolPt.x = p[0]; toolPt.y = p[1]; toolPt.z = p[2]; toolPt.have = true;
+  const vy = toolPt.vy * 0.3, sp = Math.hypot(toolPt.vx, vy, toolPt.vz);
+  if (sp > 0.4) {
+    const s = clamp(sp / 4.5, 0, 1.3);
+    F.push({ kind: 2, x: p[0], y: p[1], z: p[2], dx: toolPt.vx / sp, dy: vy / sp, dz: toolPt.vz / sp, r: 2.0, k: 150 * s, s });
+  }
+}
+
+const swWrap = $('#swatches');
+FLAVORS.forEach((f, i) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'sw' + (f.clear ? ' clear' : ''); b.style.setProperty('--c', f.css);
+  b.title = f.name; b.setAttribute('aria-label', f.name + ' flavor'); b.setAttribute('aria-pressed', 'true');
+  b.addEventListener('click', () => {
+    if (active.has(i)) { if (active.size > 1) active.delete(i); } else active.add(i);
+    b.setAttribute('aria-pressed', active.has(i) ? 'true' : 'false');
+    $('#flavCount').textContent = active.size + ' / ' + FLAVORS.length;
+    Sound.unlock(); if (active.has(i)) Sound.sfx({ type: 'bounce', bear: { id: -1, flavor: i, scale: 1 }, speed: 5 });
+  });
+  swWrap.appendChild(b);
+});
+function bindRange(id, outId, fmt, apply) {
+  const el = $(id), out = $(outId);
+  const set = () => { const v = +el.value, mn = +el.min, mx = +el.max; out.textContent = fmt(v); el.style.setProperty('--p', ((v - mn) / (mx - mn) * 100) + '%'); apply(v); };
+  el.addEventListener('input', set); set();
+}
+bindRange('#wobble', '#wobbleVal', (v) => v.toFixed(2), (v) => { world.wobble = v; });
+bindRange('#bounce', '#bounceVal', (v) => String(Math.round(v)), (v) => { world.restitution = 0.12 + 0.8 * (v / 100); });
+document.querySelectorAll('#sizeSeg button').forEach((b) => b.addEventListener('click', () => {
+  state.size = b.dataset.size;
+  document.querySelectorAll('#sizeSeg button').forEach((o) => o.setAttribute('aria-pressed', o === b ? 'true' : 'false'));
+  Sound.unlock(); Sound.sfx({ type: 'tick' });
+}));
+$('#pour').addEventListener('click', () => { Sound.unlock(); pour(5); });
+document.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => { Sound.unlock(); setTool(b.dataset.tool); }));
+$('#tBall').addEventListener('click', () => { Sound.unlock(); spawnBalls(2); });
+$('#tPad').addEventListener('click', () => { Sound.unlock(); setPad(!state.pad); });
+$('#tBump').addEventListener('click', () => { Sound.unlock(); setBumpers(!state.bumpers); });
+$('#tGrav').addEventListener('click', () => { Sound.unlock(); cycleGravity(); });
+$('#tSlow').addEventListener('click', () => { Sound.unlock(); setSlow(!state.slow); });
+$('#tRain').addEventListener('click', () => { Sound.unlock(); setRain(!state.rain); });
+$('#tShake').addEventListener('click', () => { Sound.unlock(); shake(); });
+$('#tSound').addEventListener('click', () => setSound(!state.sound));
+$('#tClear').addEventListener('click', () => { Sound.unlock(); clearAll(); });
+document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button'); if (b && e.detail > 0) b.blur(); });
+
+const KEYS = {
+  Digit1: () => setTool('grab'), Digit2: () => setTool('poke'), Digit3: () => setTool('magnet'), Digit4: () => setTool('gust'),
+  b: () => spawnBalls(2), p: () => setPad(!state.pad), n: () => setBumpers(!state.bumpers),
+  g: cycleGravity, t: () => setSlow(!state.slow), r: () => setRain(!state.rain), s: shake,
+  m: () => setSound(!state.sound), c: clearAll, ' ': () => pour(5),
+};
+addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.isComposing) return;
+  const k = /^Digit[1-4]$/.test(e.code) ? e.code : /^[1-4]$/.test(e.key) ? 'Digit' + e.key : /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : /^Key[A-Z]$/.test(e.code) ? e.code[3].toLowerCase() : (e.key || '').toLowerCase();
+  const fn = KEYS[k]; if (!fn) return;
+  if (k === ' ' && e.target.closest && e.target.closest('button, input, select, textarea, a')) return;
+  e.preventDefault(); Sound.unlock(); fn();
+});
+
+for (const el of document.querySelectorAll('.card, .dock')) {
+  el.addEventListener('pointerenter', () => { overUI = true; updateCursorClass(); });
+  el.addEventListener('pointerleave', () => { overUI = false; updateCursorClass(); });
+}
+const elStretch = $('#mStretch'), elBounce = $('#mBounce');
+let hudT = 0, shownStretch = 1, shownBounce = -1, stretchSm = 1, lastStretch = 1;
+
+function updateUniforms() {
+  const pos = U.uBearPos.value, col = U.uBearCol.value;
+  let i = 0, flashMax = 0;
+  for (const b of world.bears) {
+    if (i >= MAXB) break;
+    const f = FLAVORS[b.flavor];
+    const gr = Math.min(1, b.grow);
+    pos[4 * i] = b.c[0]; pos[4 * i + 1] = b.c[1]; pos[4 * i + 2] = b.c[2]; pos[4 * i + 3] = 0.58 * b.scale * b.sx * (0.35 + 0.65 * gr);
+    const k = f.clear ? 0.35 : 1;
+    col[3 * i] = f.tint[0] * k * gr; col[3 * i + 1] = f.tint[1] * k * gr; col[3 * i + 2] = f.tint[2] * k * gr;
+    if (b.vis) { b.vis.mat.userData.uSelf.value = i; b.vis.mat.userData.uFlash.value = b.flash; }
+    if (b.flash > flashMax) flashMax = b.flash;
+    i++;
+  }
+  for (const ba of world.balls) {
+    if (i >= MAXB) break;
+    const gr = Math.min(1, ba.grow), t = BALL_TINT[ba.kind];
+    pos[4 * i] = ba.x; pos[4 * i + 1] = ba.y; pos[4 * i + 2] = ba.z; pos[4 * i + 3] = Core.ballRadius(ba) * 1.15;
+    col[3 * i] = t[0] * 0.7 * gr; col[3 * i + 1] = t[1] * 0.7 * gr; col[3 * i + 2] = t[2] * 0.7 * gr;
+    i++;
+  }
+  for (let q = 0; q < bumperGroups.length; q++) {
+    if (i >= MAXB) break;
+    const a = bumperGroups[q].amt; if (a < 0.25) continue;
+    const d = BUMPER_DEFS[q], c = BUMPER_COL[q];
+    pos[4 * i] = d.x; pos[4 * i + 1] = 0.55; pos[4 * i + 2] = d.z; pos[4 * i + 3] = 0.36 * Math.min(1, a);
+    col[3 * i] = c[0] * 0.55; col[3 * i + 1] = c[1] * 0.55; col[3 * i + 2] = c[2] * 0.55;
+    i++;
+  }
+  U.uBearN.value = i;
+  if (bloomPass) bloomPass.strength = BLOOM_BASE + flashMax * 0.12;
+}
+
+let last = performance.now(), acc = 0, frameAvg = 16.7, lowCount = 0, started = false, frameNo = 0, timeScale = 1;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.1) dt = 0.1;
+  frameAvg += ((dt * 1000) - frameAvg) * 0.04;
+
+  updateCamera(dt);
+  processPour(now);
+  processRain(dt);
+  computeFields(dt);
+
+  timeScale += ((state.slow ? 0.25 : 1) - timeScale) * Math.min(1, dt * 7);
+  acc += dt * timeScale; let steps = 0;
+  const evs = [];
+  while (acc >= DT && steps < 14) {
+    Core.stepWorld(world, DT); acc -= DT; steps++;
+    if (world.events.length) { for (const e of world.events) if (evs.length < 24) evs.push(e); world.events.length = 0; }
+  }
+  if (acc > DT * 3) acc = 0;
+  for (let i = 0, n = 0; i < evs.length && n < 6; i++) { Sound.sfx(evs[i]); n++; }
+  for (let i = world.bears.length - 1; i >= 0; i--) { const b = world.bears[i]; if (b.dying && b.grow <= 0.04) removeBear(b); }
+  for (let i = world.balls.length - 1; i >= 0; i--) { const ba = world.balls[i]; if (ba.dying && ba.grow <= 0.06) removeBall(ba); }
+
+  updateProps(dt);
+  updateMeshes();
+  updateUniforms();
+
+  {
+    const hb = held && held.bear && held.mode === 'drag' ? held.bear : null;
+    const s = hb ? stretchOf(hb) : 1;
+    const rate = Math.abs(s - lastStretch) / Math.max(dt, 1e-3); lastStretch = s;
+    Sound.squeak(s, rate, !!hb && s > 1.15);
+  }
+
+  if (cursorOn) {
+    mouse.cx += (mouse.px - mouse.cx) * Math.min(1, dt * 22); mouse.cy += (mouse.py - mouse.cy) * Math.min(1, dt * 22);
+    cursor.style.transform = 'translate3d(' + mouse.cx.toFixed(1) + 'px,' + mouse.cy.toFixed(1) + 'px,0)';
+    if (state.tool !== 'grab') {
+      const d = Math.max(22, TOOL_R[state.tool] * 2 * pxPerUnit() * (state.tool === 'magnet' ? 0.7 : 1)).toFixed(0) + 'px';
+      if (d !== shownD) { shownD = d; cursor.style.setProperty('--d', d); }
+    }
+  }
+
+  hudT += dt;
+  if (hudT > 0.06) {
+    hudT = 0;
+    const target = held && held.bear ? stretchOf(held.bear) : 1;
+    stretchSm += (target - stretchSm) * 0.35;
+    const s = Math.round(stretchSm * 100) / 100;
+    if (s !== shownStretch) { shownStretch = s; elStretch.innerHTML = s.toFixed(2) + '<small>×</small>'; }
+    if (world.bounces !== shownBounce) { shownBounce = world.bounces; elBounce.textContent = world.bounces; }
+  }
+
+  try {
+    if (!contextLost) { if (composer) composer.render(dt); else renderer.render(scene, camera); }
+  } catch (err) {
+    console.warn('Render error', err);
+    dropComposer();
+  }
+  if (shaderFailed) handleShaderFailure();
+
+  if (!started) { started = true; hideVeil(); }
+
+  frameNo++;
+  if (frameNo > 150) {
+    if (frameAvg > 24) { lowCount++; if (lowCount > 70 && dpr > 0.8) { dprScale *= 0.86; dpr = computeDpr(); applySize(); lowCount = 0; frameNo = 100; } }
+    else lowCount = 0;
+  }
+}
+
+let resizePending = false;
+addEventListener('resize', () => {
+  if (resizePending) return;
+  resizePending = true;
+  requestAnimationFrame(() => {
+    resizePending = false;
+    const nd = computeDpr();
+    if (innerWidth === W && innerHeight === H && nd === dpr) return;
+    dpr = nd;
+    applySize();
+  });
+});
+applySize();
+await setupComposer();
+applySize();
+requestAnimationFrame((t) => { last = t; frame(t); });
+window.__gummy = {
+  world, Core, FLAVORS, state, Sound, worldToScreen, rayFromPixel, spawnBall, setPad, setBumpers,
+  glsl: { FRAG_PARS, FRAG_NORMAL, FRAG_COAT, FRAG_GLOW, FRAG_LIMIT, FLOOR_VS, FLOOR_FS, MAXB },
+  get composer() { return composer; }, get zoom() { return zoomT; }, get az() { return camAz; },
+};
+</script>
+</body>
+</html>
