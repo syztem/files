@@ -236,7 +236,7 @@
     <div><span>Crushed</span><b id="mCount">0</b></div>
   </div>
   <button class="pour" id="press" type="button" title="Hold to press (Space)" aria-describedby="pressHint" aria-pressed="false"><span>Hold to press</span><i aria-hidden="true">↓</i></button>
-  <p class="hint" id="pressHint">Hold the button or Space · release to retract · drag to orbit · scroll or pinch to zoom · ← → swap objects · C sweeps up</p>
+  <p class="hint" id="pressHint">Hold the button or Space · release to retract · drag to orbit · scroll or pinch to zoom · ← → swap objects · C sweeps up · J soft bodies</p>
 </main>
 
 <div class="dock" id="dock" role="group" aria-label="Objects and options">
@@ -247,6 +247,8 @@
       <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 9"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-13.7 5.6L4 15"/><path d="M4 20v-5h5"/></svg><span>Auto</span></button>
     <button class="tb" type="button" id="tSlow" aria-pressed="true" aria-label="Slow-mo" aria-keyshortcuts="T" title="High-speed camera: slow motion when it lets go (T)"><kbd aria-hidden="true">T</kbd>
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Slow-mo</span></button>
+    <button class="tb" type="button" id="tSoft" aria-pressed="true" aria-label="Soft bodies" aria-keyshortcuts="J" title="Soft bodies: juicy and rubbery chunks squash, wobble and splat. Off = the original rigid shards (J)"><kbd aria-hidden="true">J</kbd>
+      <svg viewBox="0 0 24 24"><path d="M3.5 17c0-6 3.4-11 8.5-11s8.5 5 8.5 11c0 1.4-.8 2-2 2h-13c-1.2 0-2-.6-2-2z"/><path d="M8.5 12.2c.6-1.3 1.6-2.1 2.9-2.4"/></svg><span>Soft</span></button>
     <button class="tb" type="button" id="tSound" aria-pressed="true" aria-label="Sound" aria-keyshortcuts="M" title="Sound (M)"><kbd aria-hidden="true">M</kbd>
       <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/><path class="slash" d="M3 3l18 18"/></svg><span>Sound</span></button>
     <button class="tb" type="button" id="tLook" aria-pressed="false" aria-controls="look" aria-label="Look" aria-keyshortcuts="L" title="Look: original, cinematic or ultra, with every effect on its own switch (L, V cycles presets)"><kbd aria-hidden="true">L</kbd>
@@ -1078,6 +1080,7 @@ const Press = (() => {
         burstV: 175, burstUp: 0.3, spin: 120, e: 0.6, mu: 0.6, drag: 0.002, dropE: 0.62, squashK: 0.004,
         dustN: 26, dustCol: [0.85, 0.85, 0.85], dustSize: 0.18, debrisN: 70, debrisCol: [[0.95, 0.95, 0.93], [0.1, 0.42, 0.95], [0.05, 0.3, 0.85]], debrisFlat: 0.8, debrisSize: 0.02,
         cakeGap: 0.05, cakeCol: [0.1, 0.4, 0.9], power: 0.7,
+        jelly: { w: TAU * 26, z: 0.18, k: 0.45, set: 0, gMin: 0.5, k0: 0.12 },
       },
     },
     puck: {
@@ -1089,6 +1092,7 @@ const Press = (() => {
         burstV: 55, burstUp: 0.2, spin: 60, e: 0.4, mu: 0.85, drag: 0.001, dropE: 0.3, squashK: 0.002,
         dustN: 36, dustCol: [0.2, 0.2, 0.21], dustSize: 0.3, debrisN: 190, debrisCol: [[0.035, 0.035, 0.04], [0.06, 0.06, 0.065], [0.02, 0.02, 0.022]], debrisFlat: 0.9, debrisSize: 0.032,
         cakeGap: 0.085, cakeCol: [0.04, 0.04, 0.045], power: 0.75,
+        jelly: { w: TAU * 16, z: 0.26, k: 0.32, set: 0, gMin: 0.55, k0: 0.08 },
       },
     },
     diamond: {
@@ -1119,7 +1123,7 @@ const Press = (() => {
     opts = opts || {};
     const DC = opts.debrisCap || 1500, UC = opts.dustCap || 560;
     return {
-      time: 0, pressing: false, F: 0, Fpeak: 0, comp: 0, crushed: 0, stalled: false,
+      time: 0, pressing: false, F: 0, Fpeak: 0, comp: 0, crushed: 0, stalled: false, soft: true,
       ram: { y: 3, v: 0, yUp: 3, vPost: 0.6 }, ramR: RAM_R, anvR: ANV_R,
       objs: [], cur: null, removed: [], events: [],
       pinN: 0, pinTop: 0, impactCD: 0,
@@ -1467,6 +1471,7 @@ const Press = (() => {
       x: [cx, cy, cz], v: [0, 0, 0], q: [0, 0, 0, 1], w: [0, 0, 0],
       A: new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]), T: new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]), R: new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]), M: new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
       lv, relax: false, asleep: false, still: 0, alive: true, dirty: true, minY: 0, maxY: 0, pinned: false, hold: 0, sq: null, pinT: 0, eject: 0, crush: 1, age: 0, impCD: 0, goo: false,
+      jl: null, gnd: false,
     };
     for (const ci of list) { const c = o.cells[ci]; c.rel = true; c.frag = f; }
     o.frags.push(f);
@@ -1482,7 +1487,7 @@ const Press = (() => {
     if (m.mode === 'elastic') {
 
       const g = Math.max(d.dY, 0.08), a = 1 / Math.sqrt(g), s = d.s;
-      f.sq = { u: [0, 1, 0], g, gMin: g, gRest: 1 - m.plast * (1 - g), base: 1, B: new Float64Array([s / a, f.c0[0] * d.dsdy / a, 0, 0, 1, 0, 0, f.c0[2] * d.dsdy / a, s / a]) };
+      f.sq = { u: [0, 1, 0], g, gMin: g, gRest: 1 - m.plast * (1 - g), base: 1, B: new Float64Array([s / a, f.c0[0] * d.dsdy / a, 0, 0, 1, 0, 0, f.c0[2] * d.dsdy / a, s / a]), gV: 0 };
       f.crush = g; f.relax = true;
       applySq(f);
     }
@@ -1590,6 +1595,10 @@ const Press = (() => {
     _n9[0] = R[0] * _i9[0] + R[1] * _i9[1] + R[2] * _i9[2]; _n9[1] = R[0] * _i9[3] + R[1] * _i9[4] + R[2] * _i9[5]; _n9[2] = R[0] * _i9[6] + R[1] * _i9[7] + R[2] * _i9[8];
     _n9[3] = R[3] * _i9[0] + R[4] * _i9[1] + R[5] * _i9[2]; _n9[4] = R[3] * _i9[3] + R[4] * _i9[4] + R[5] * _i9[5]; _n9[5] = R[3] * _i9[6] + R[4] * _i9[7] + R[5] * _i9[8];
     _n9[6] = R[6] * _i9[0] + R[7] * _i9[1] + R[8] * _i9[2]; _n9[7] = R[6] * _i9[3] + R[7] * _i9[4] + R[8] * _i9[5]; _n9[8] = R[6] * _i9[6] + R[7] * _i9[7] + R[8] * _i9[8];
+    if (f.jl && f.jl.g !== 1) {
+      const jg = f.jl.g, is = Math.pow(jg, f.jl.lat), ig = 1 / jg;
+      _n9[0] *= is; _n9[1] *= is; _n9[2] *= is; _n9[3] *= ig; _n9[4] *= ig; _n9[5] *= ig; _n9[6] *= is; _n9[7] *= is; _n9[8] *= is;
+    }
     for (const ci of f.cells) {
       const c = o.cells[ci];
       for (let vi = c.v0; vi < c.v1; vi++) {
@@ -1647,6 +1656,89 @@ const Press = (() => {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────────────────────────────
+  // SOFT-BODY LAYER ("jelly")
+  //
+  // What makes the gummy bear read as a real object is that its chunks are soft bodies: they squash when they
+  // land, wobble on a damped spring, bulge sideways so the volume stays put, and a little of every squash is
+  // never recovered. This layer gives the fragments of any `mat.jelly` material the same behaviour.
+  //
+  //   state    f.jl = { g, gV, gRest, w, z, ... }       g = vertical scale of the chunk, 1 = at rest
+  //   shape    world-space S = diag(s, g, s), s = g^-lat (lat 0.5 keeps the volume); M' = S·R·A
+  //            normals take S^-1 on the existing R·A^-1 normal matrix (see writeFrag)
+  //   drive    ground hits kick gV; gRest drops a little on every hard hit (plastic set, i.e. the splat)
+  //   anchor   a chunk resting on something keeps its footprint while it squashes; otherwise it would
+  //            hover for a frame and fall back, which reads as a jitter
+  //   ram      once the ram has hold of a chunk, the ram squash (f.A) owns its shape and the jelly drains
+  //   spring   the elastic "relax" (golf / puck / balloon pieces springing out of a squash) goes second-order
+  //            too, so they overshoot instead of creeping home
+  //
+  // `world.soft = false` removes the entire layer and the sim is then bit-identical to the original.
+  //
+  //   J = { w: spring rad/s, z: damping ratio, k: impact -> squash, set: plastic set per hit, gMin, gRestMin,
+  //         k0: launch wobble, lat, splat: juice drops per hard landing, squeeze: juice drops while pressed }
+  // ─────────────────────────────────────────────────────────────────────────────────────────────────────
+  const jScale = (o, f) => clamp(Math.sqrt(0.45 * o.spec.size / Math.max(f.rb0, 1e-3)), 0.6, 2.4);
+
+  function newJelly(J, o, f) {
+    return { g: 1, gV: 0, gRest: 1, w: J.w * jScale(o, f), z: J.z, gMin: J.gMin, lat: J.lat === undefined ? 0.5 : J.lat, cd: 0, act: false };
+  }
+
+  function jellyM(f) {
+    const jl = f.jl, g = jl.g;
+    if (g === 1) return;
+    const M = f.M, s = Math.pow(g, -jl.lat);
+    M[0] *= s; M[1] *= s; M[2] *= s; M[3] *= g; M[4] *= g; M[5] *= g; M[6] *= s; M[7] *= s; M[8] *= s;
+  }
+  function unJellyM(f) {
+    const jl = f.jl;
+    if (!jl || jl.g === 1) return;
+    const M = f.M, g = jl.g, is = Math.pow(g, jl.lat), ig = 1 / g;
+    M[0] *= is; M[1] *= is; M[2] *= is; M[3] *= ig; M[4] *= ig; M[5] *= ig; M[6] *= is; M[7] *= is; M[8] *= is;
+  }
+
+  function jellyStep(f, dt) {
+    const jl = f.jl, g0 = jl.g;
+    jl.cd -= dt;
+    if (f.hold > 0) {
+      jl.g = 1 - (1 - jl.g) * Math.exp(-dt * 60); jl.gV = 0;
+    } else {
+      const wn = Math.min(jl.w, 1.1 / dt);
+      jl.gV += (-(jl.g - jl.gRest) * wn * wn - 2 * jl.z * wn * jl.gV) * dt;
+      jl.g += jl.gV * dt;
+      if (jl.g < jl.gMin) { jl.g = jl.gMin; if (jl.gV < 0) jl.gV *= -0.2; }
+      else if (jl.g > 1.45) { jl.g = 1.45; if (jl.gV > 0) jl.gV *= -0.2; }
+    }
+    if (f.gnd) { const d = f.x[1] - f.minY; if (d > 0 && d < 1.6 * f.rb) f.x[1] -= d * (1 - jl.g / g0); }
+    jl.act = Math.abs(jl.g - jl.gRest) > 0.004 || Math.abs(jl.gV) > 0.05;
+    if (!jl.act) { jl.g = jl.gRest; jl.gV = 0; }
+  }
+
+  function jellyKick(w, o, f, J, imp, vref) {
+    if (imp < 0.55 * vref) return;
+    const jl = f.jl || (f.jl = newJelly(J, o, f));
+    if (jl.cd > 0) return;
+    jl.cd = 0.07; jl.act = true;
+    const k = J.k * clamp(imp / (5 * vref), 0, 1.4);
+    jl.gV -= jl.w * k * 1.1;
+    if (J.set) jl.gRest = Math.max(J.gRestMin === undefined ? 0.5 : J.gRestMin, jl.gRest - J.set * k);
+    if (J.splat && o.spec.mat.dropN && imp > 1.4 * vref) {
+      const m = o.spec.mat, n = Math.min(4, Math.round(J.splat * k * 1.6 + Math.random()));
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * TAU, sp = imp * 0.22 * rnd(0.25, 1);
+        spawnDrop(w, f.x[0] + Math.cos(a) * f.rb * 0.5, f.minY + 0.01, f.x[2] + Math.sin(a) * f.rb * 0.5, Math.cos(a) * sp, sp * rnd(0.3, 0.9), Math.sin(a) * sp, m.dropSize * rnd(0.35, 1), pickCol(m.dropCol));
+      }
+    }
+  }
+
+  function squeezeJuice(w, o, x, z, gBase, space, lost) {
+    const m = o.spec.mat, J = m.jelly;
+    if ((o.juiceN | 0) >= 240 || !(lost > 0) || Math.random() >= J.squeeze * lost / (o.vol * 0.005)) return;
+    o.juiceN = (o.juiceN | 0) + 1;
+    const rho = Math.hypot(x, z), a = (rho > 0.05 ? Math.atan2(z, x) : Math.random() * TAU) + rnd(-0.8, 0.8), sp = 3 + Math.min(3, Math.max(0, -w.ram.v)) * rnd(3, 9);
+    spawnDrop(w, x, gBase + space * Math.random(), z, Math.cos(a) * sp, sp * rnd(-0.1, 0.3), Math.sin(a) * sp, m.dropSize * rnd(0.35, 0.9), pickCol(m.dropCol));
+  }
+
   function crumbs(w, o, x, y, z, n, speed, sizeK) {
     const m = o.spec.mat, sz = m.debrisSize * (sizeK || 1);
     for (let i = 0; i < n; i++) {
@@ -1681,7 +1773,8 @@ const Press = (() => {
       k.q[0] = f.q[0]; k.q[1] = f.q[1]; k.q[2] = f.q[2]; k.q[3] = f.q[3];
       for (let i = 0; i < 9; i++) { k.A[i] = f.A[i]; k.T[i] = f.T[i]; }
       k.relax = f.relax; k.age = f.age; k.crush = f.crush; k.hold = f.hold;
-      if (f.sq) k.sq = { u: f.sq.u.slice(), g: f.sq.g, gMin: f.sq.gMin, gRest: f.sq.gRest, base: f.sq.base, B: new Float64Array(f.sq.B), lat: f.sq.lat };
+      if (f.sq) k.sq = { u: f.sq.u.slice(), g: f.sq.g, gMin: f.sq.gMin, gRest: f.sq.gRest, base: f.sq.base, B: new Float64Array(f.sq.B), lat: f.sq.lat, gV: f.sq.gV || 0 };
+      if (f.jl) k.jl = Object.assign({}, f.jl);
       quatToMat(k.q, k.R); mul3(k.R, k.A, k.M);
       kids.push(k);
     }
@@ -1691,6 +1784,7 @@ const Press = (() => {
   }
 
   function squashFrag(f, fac, lat, gBase) {
+    if (f.jl) unJellyM(f);
     const M = f.M, R = f.R;
     _t9[0] = M[0] * lat; _t9[1] = M[1] * lat; _t9[2] = M[2] * lat; _t9[3] = M[3] * fac; _t9[4] = M[4] * fac; _t9[5] = M[5] * fac; _t9[6] = M[6] * lat; _t9[7] = M[7] * lat; _t9[8] = M[8] * lat;
     const A = f.A;
@@ -1705,12 +1799,18 @@ const Press = (() => {
 
   function stepFrag(w, o, f, dt) {
     const m = o.spec.mat, ram = w.ram, x = f.x, v = f.v, wv = f.w;
+    const J = w.soft ? m.jelly : null;
     f.age += dt; f.impCD -= dt;
     if (f.eject > 0) f.eject -= dt;
     if (f.hold > 0) f.hold -= dt;
+    if (f.jl) jellyStep(f, dt);
     if (f.relax && f.sq && !(f.hold > 0 && ram.v <= 1e-6)) {
       const q = f.sq, dg = q.gRest - q.g;
-      if (Math.abs(dg) < 1e-3) { q.g = q.gRest; f.relax = false; } else q.g += dg * (1 - Math.exp(-dt / Math.max(m.tau, 1e-4)));
+      if (J) {
+        const wn = Math.min(J.w * jScale(o, f), 1.1 / dt), qv = (q.gV || 0) + (dg * wn * wn - 2 * J.z * wn * (q.gV || 0)) * dt;
+        q.gV = qv; q.g = clamp(q.g + qv * dt, 0.015, 1.6);
+        if (Math.abs(q.gRest - q.g) < 2e-3 && Math.abs(q.gV) < 0.05) { q.g = q.gRest; q.gV = 0; f.relax = false; }
+      } else if (Math.abs(dg) < 1e-3) { q.g = q.gRest; f.relax = false; } else q.g += dg * (1 - Math.exp(-dt / Math.max(m.tau, 1e-4)));
       applySq(f);
     }
     if (f.shrT && f.shr > f.shrT) {
@@ -1725,6 +1825,7 @@ const Press = (() => {
     x[0] += v[0] * dt; x[1] += v[1] * dt; x[2] += v[2] * dt;
     integrateQuat(f.q, wv, dt);
     quatToMat(f.q, f.R); mul3(f.R, f.A, f.M);
+    if (f.jl) jellyM(f);
     const M = f.M, lv = f.lv, n = lv.length / 3, cy = x[1];
     const underRam = x[0] * x[0] + x[2] * x[2] < (RAM_R + 0.25 * f.rb) * (RAM_R + 0.25 * f.rb) && f.eject <= 0;
     let minY = 1e9, maxY = -1e9, pg = -1e9, pr = -1e9, rx2 = 0, ry2 = 0, rz2 = 0;
@@ -1752,6 +1853,7 @@ const Press = (() => {
         if (c > imp) imp = c;
       }
       if (imp > 0.9 * vref && f.impCD <= 0) { f.impCD = 0.06; ev(w, 'impact', Math.min(1, imp / (8 * vref)) * Math.min(1, f.m / (o.vol * 0.02)), o, x[0], x[1], x[2]); }
+      if (J) jellyKick(w, o, f, J, imp, vref);
       const slow = v[0] * v[0] + v[1] * v[1] + v[2] * v[2] < 0.05 * G * f.rb0 ? 1 : 0;
       const kd = Math.exp(-(6 + 22 * slow) * dt), kv = Math.exp(-(0.6 + 3 * slow) * dt);
       wv[0] *= kd; wv[1] *= kd; wv[2] *= kd; v[0] *= kv; v[2] *= kv;
@@ -1774,9 +1876,10 @@ const Press = (() => {
     }
     sideWalls(f, m.e);
     f.dirty = true;
+    f.gnd = grounded;
 
     const v2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2], w2 = (wv[0] * wv[0] + wv[1] * wv[1] + wv[2] * wv[2]) * f.rb0 * f.rb0, lim2 = Math.max(0.006 * G * f.rb0, 0.64 * G * G * dt * dt);
-    if (grounded && !(f.hold > 0) && !f.relax && v2 < lim2 * 8 && w2 < lim2 * 8) {
+    if (grounded && !(f.hold > 0) && !f.relax && !(f.jl && f.jl.act) && v2 < lim2 * 8 && w2 < lim2 * 8) {
 
       f.still += (v2 < lim2 && w2 < lim2) ? dt : dt * 0.3;
       if (f.still > 0.18) { f.asleep = true; v[0] = v[1] = v[2] = 0; wv[0] = wv[1] = wv[2] = 0; }
@@ -1804,6 +1907,7 @@ const Press = (() => {
       f.crush *= fac;
       squashFrag(f, fac, 1 + 0.12 * (1 - fac), gBase);
       o.cakeV += lost * 0.85;
+      if (w.soft && m.jelly && m.jelly.squeeze) squeezeJuice(w, o, x[0], x[2], gBase, space, lost);
       if (lost > o.vol * 2e-5 && Math.random() < 0.5) { crumbs(w, o, x[0], gBase + space * Math.random(), x[2], 1 + ((Math.random() * 2) | 0), 6 + 10 * Math.random(), 1); if (Math.random() < 0.3) puff(w, o, x[0], gBase + space * 0.5, x[2], 1, 4, 0.5); }
       if (f.crush < m.crushMin) {
         o.cakeV += f.m * f.crush * 0.85;
@@ -1877,6 +1981,8 @@ const Press = (() => {
     f.v[1] = sp * rnd(-0.2, m.burstUp + 0.25) + (d.y > o.h * 0.6 + o.yOff ? w.ram.v : 0);
     const sw = Math.min(m.spin, sp / Math.max(f.rb, 1e-4) * 0.6) * rnd(0.3, 1);
     f.w[0] = rnd(-1, 1) * sw; f.w[1] = rnd(-1, 1) * sw; f.w[2] = rnd(-1, 1) * sw;
+    const J = w.soft ? m.jelly : null;
+    if (J && J.k0) { const jl = f.jl = newJelly(J, o, f); jl.gV = rnd(-1, 1) * jl.w * J.k0; jl.act = true; }
   }
 
   function burstPoly(w, o) {
@@ -2337,6 +2443,16 @@ const Press = (() => {
     ev(w, 'sweep', 0.5, null, 0, 0, 0);
   }
 
+  // Soft-body layer on/off. Switching it off mid-flight drops every chunk's jelly state so the sim carries on as the original would.
+  function setSoft(w, on) {
+    w.soft = !!on;
+    if (w.soft) return;
+    for (const o of w.objs) for (const f of o.frags) {
+      if (f.jl) { f.jl = null; f.dirty = true; f.asleep = false; f.still = 0; }
+      if (f.sq && f.sq.gV) f.sq.gV = 0;
+    }
+  }
+
   function setObject(w, id) {
     if (w.objs.length) sweep(w);
     const had = w.objs.length > 0;
@@ -2438,6 +2554,7 @@ const Press = (() => {
     burstV: 40, burstUp: 0.3, spin: 40, e: 0.2, mu: 0.6, drag: 0.001, dropE: 0.1, squashK: 0,
     dustN: 0, dustCol: [1, 1, 1], dustSize: 0.3, debrisN: 0, debrisCol: [[1, 1, 1]], debrisFlat: 1, debrisSize: 0.04, cakeGap: 0.04, cakeCol: [1, 1, 1], power: 0.7,
     dropN: 0, dropCol: [[1, 1, 1]], dropSize: 0.05, puddle: 0, puddleCol: [1, 1, 1], wet: false, ductile: false, pop: false, postF: 0.6, postSpeed: 2, shed: 0, wrinkle: null, rimCracks: false, slowFrac: 0, shrink: 0, sqLat: undefined,
+    jelly: null,
   };
   const mat = (o) => Object.assign({}, MAT0, o);
   const curve = (n, f) => Array.from({ length: n + 1 }, (_, i) => f(i / n));
@@ -2452,6 +2569,7 @@ const Press = (() => {
         burstV: 36, burstUp: 0.35, spin: 12, e: 0.06, mu: 0.9, drag: 0.0005, dropE: 0.08,
         debrisN: 260, debrisCol: [[0.8, 0.05, 0.09], [0.92, 0.16, 0.2], [0.72, 0.03, 0.07], [0.03, 0.02, 0.02]], debrisFlat: 0.9, debrisSize: 0.06,
         cakeGap: 0.06, cakeCol: [0.78, 0.06, 0.1], power: 0.95, dropN: 420, dropCol: [[0.8, 0.04, 0.09], [0.95, 0.2, 0.24]], dropSize: 0.065, puddle: 1.2, puddleCol: [0.7, 0.03, 0.07], wet: true,
+        jelly: { w: TAU * 5.5, z: 0.22, k: 0.65, set: 0.3, gMin: 0.4, k0: 0.14, splat: 3, squeeze: 0.9 },
       }),
     },
     bottle: {
@@ -2481,6 +2599,7 @@ const Press = (() => {
         mode: 'elastic', kappa: 0.05, nu: 0.5, b0: 0.5, cCrack: 0.5, cFail: 0.62, Ffail: 0.03, pExp: 2, plast: 0, omega: TAU * 3, zeta: 0.15, pressT: 3.4, tau: 0.01,
         cracks: 0, chips: 0, merge: 0.5, eject: 0, burstV: 110, burstUp: 0.4, spin: 60, e: 0.05, mu: 0.9, drag: 0.03, squashK: 0.012, dropE: 0.3, shrink: 0.4, sqLat: 0.04, slowFrac: 0.25,
         dropN: 560, dropCol: [[0.72, 0.86, 0.96], [0.85, 0.93, 0.99]], dropSize: 0.06, puddle: 9, puddleCol: [0.6, 0.75, 0.85], wet: true, cakeGap: 0.02, power: 0.6,
+        jelly: { w: TAU * 9, z: 0.18, k: 0.55, set: 0.1, gMin: 0.4, k0: 0.16 },
       }),
     },
     playdoh: {
@@ -2510,6 +2629,7 @@ const Press = (() => {
         cracks: 3, crackW: 0.03, chips: 2, chipV: 8, merge: 0.45, crushMin: 0.35, eject: 0.25, burstV: 30, spin: 20, e: 0.08, mu: 0.9, dropE: 0.25,
         debrisN: 120, debrisCol: [[1, 0.5, 0.05], [1, 0.62, 0.1], [0.95, 0.4, 0.02]], debrisSize: 0.035,
         cakeGap: 0.04, cakeCol: [0.95, 0.5, 0.06], power: 0.6, dropN: 170, dropCol: [[1, 0.55, 0.05], [1, 0.7, 0.15]], dropSize: 0.045, puddle: 1.5, puddleCol: [0.95, 0.5, 0.05], wet: true,
+        jelly: { w: TAU * 6.5, z: 0.26, k: 0.55, set: 0.2, gMin: 0.45, k0: 0.12, splat: 2, squeeze: 0.8 },
       }),
     },
     stress: {
@@ -2544,7 +2664,7 @@ const Press = (() => {
 
   return {
     UNIT_M, G, RAM_BODY, ANV_H, BED_Y, BED_X, BED_Z, BED_T, FLOOR_Y, COLS, COL_R, F_MAX, SPECS, ORDER,
-    createWorld, setObject, step, update, sweep, groundAt, dmap, MAXBLOB,
+    createWorld, setObject, step, update, sweep, groundAt, dmap, MAXBLOB, setSoft,
   };
 })();
 
@@ -2606,7 +2726,7 @@ const FLAVORS = [
   { tint: [0.03, 0.78, 0.70],  deep: [0.0, 0.30, 0.30],  atten: [0.05, 0.82, 0.76],  dist: 0.60, glow: 1.0,  base: [0.62, 1.0, 0.95] },
 ];
 
-const state = { auto: false, slow: true, sound: true, cur: 'watermelon' };
+const state = { auto: false, slow: true, sound: true, soft: true, cur: 'watermelon' };
 
 const canvas = $('#gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', alpha: false });
@@ -4503,15 +4623,17 @@ P.ORDER.forEach((id, i) => {
 });
 function setAuto(on, quiet) { state.auto = on; auto.phase = 'wait'; auto.t = 0; if (on && latch) { latch = false; pressBtn.setAttribute('aria-pressed', 'false'); pressBtn.classList.toggle('down', pressHeld || spaceHeld); } $('#tAuto').setAttribute('aria-pressed', on ? 'true' : 'false'); if (!quiet) { Sound.sfx({ t: 'tick' }); toast(on ? 'Auto — sit back' : 'Auto off'); } }
 function setSlow(on) { state.slow = on; if (!on) slowLeft = 0; $('#tSlow').setAttribute('aria-pressed', on ? 'true' : 'false'); Sound.sfx({ t: 'tick' }); toast(on ? 'Slow-mo on' : 'Slow-mo off'); }
+function setSoft(on) { state.soft = on; P.setSoft(world, on); $('#tSoft').setAttribute('aria-pressed', on ? 'true' : 'false'); Sound.sfx({ t: 'tick' }); toast(on ? 'Soft bodies on — chunks squash, wobble and splat' : 'Soft bodies off — rigid shards'); }
 function setSound(on) { state.sound = on; Sound.setOn(on); $('#tSound').setAttribute('aria-pressed', on ? 'true' : 'false'); if (on) { Sound.unlock(); Sound.sfx({ t: 'tick' }); } toast(on ? 'Sound on' : 'Sound off'); }
 function reload() { if (world.cur && world.cur.hidden) return; selectObject(state.cur, true); toast('Swept — fresh ' + P.SPECS[state.cur].name.toLowerCase()); }
 $('#tAuto').addEventListener('click', () => { Sound.unlock(); setAuto(!state.auto); });
 $('#tSlow').addEventListener('click', () => { Sound.unlock(); setSlow(!state.slow); });
 $('#tSound').addEventListener('click', () => setSound(!state.sound));
+$('#tSoft').addEventListener('click', () => { Sound.unlock(); setSoft(!state.soft); });
 $('#tSweep').addEventListener('click', () => { Sound.unlock(); reload(); });
 $('#tLook').addEventListener('click', () => { Sound.unlock(); setLookOpen(!look.open); Sound.sfx({ t: 'tick' }); });
 document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button, input[type=range]'); if (b && e.detail > 0) b.blur(); });
-const KEYS = { KeyA: () => setAuto(!state.auto), KeyT: () => setSlow(!state.slow), KeyM: () => setSound(!state.sound), KeyC: reload, KeyN: nextObject, ArrowRight: nextObject, ArrowLeft: prevObject, KeyL: () => setLookOpen(!look.open),
+const KEYS = { KeyA: () => setAuto(!state.auto), KeyT: () => setSlow(!state.slow), KeyJ: () => setSoft(!state.soft), KeyM: () => setSound(!state.sound), KeyC: reload, KeyN: nextObject, ArrowRight: nextObject, ArrowLeft: prevObject, KeyL: () => setLookOpen(!look.open),
   KeyV: () => setLook(look.name === 'original' ? 'cinematic' : look.name === 'cinematic' ? 'ultra' : 'original') };
 addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
