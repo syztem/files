@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saturn — Gravity, Rings & Resonance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300&display=swap" rel="stylesheet" referrerpolicy="no-referrer">
+<style>
+:root{color-scheme:dark;--ink:#e9e2d2;--dim:#a69f8d;--line:rgba(233,226,210,.22);--gold:#e2c48a;--bg:#04040a}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:300 11px/1.5 "IBM Plex Mono",ui-monospace,monospace;overflow:hidden;-webkit-font-smoothing:antialiased}
+canvas#gpu{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline:none}
+canvas#gpu:active{cursor:grabbing}
+canvas#gpu.kb:focus-visible,button:focus-visible,input:focus-visible{outline:1px solid var(--gold);outline-offset:2px;border-radius:0}
+canvas#gpu.kb:focus-visible{outline-width:2px;outline-offset:-4px}
+.panel{position:fixed;background:rgba(6,6,12,.8);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);padding:14px 16px;transition:opacity .4s,visibility 0s}
+body.hide .panel,body.hide #labels{opacity:0;pointer-events:none;visibility:hidden;transition:opacity .4s,visibility 0s .4s}
+#bShow{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;background:rgba(6,6,12,.8);opacity:0;visibility:hidden}
+body.hide #bShow{opacity:1;visibility:visible;transition:opacity .4s .3s}
+[hidden]{display:none!important}
+#head{top:18px;left:18px;width:292px;max-height:calc(100vh - 36px);overflow:auto}
+h1{font:300 30px/1 "Cormorant Garamond",serif;letter-spacing:.14em;margin:0 0 4px;text-transform:uppercase}
+.sub{color:var(--dim);font-style:italic;font-family:"Cormorant Garamond",serif;font-size:14px;margin-bottom:12px;text-wrap:balance}
+.k{letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-size:10px;font-weight:400;margin:12px 0 5px;border-top:1px solid var(--line);padding-top:9px}
+.row{display:flex;justify-content:space-between;gap:10px;white-space:nowrap}
+.row b{font-weight:400;color:var(--gold);font-variant-numeric:tabular-nums}
+#ctl{top:18px;right:18px;width:268px;max-height:calc(100vh - 36px);overflow:auto;scroll-padding-bottom:124px;scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
+label,.lbl{display:block;margin:7px 0 2px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;font-size:10px;font-weight:400}
+label span,.lbl span{float:right;color:var(--gold);text-transform:none;letter-spacing:0;font-size:11px}
+.lbl span.h{color:var(--dim);font-size:10px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:14px;background:none;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--dim)}
+input[type=range]::-moz-range-track{height:1px;background:var(--dim)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;border-radius:50%;background:var(--gold);margin-top:-4px;cursor:pointer}
+input[type=range]::-moz-range-thumb{width:9px;height:9px;border:0;border-radius:50%;background:var(--gold);cursor:pointer}
+.foot{position:sticky;bottom:-14px;margin:6px -16px -14px;padding:2px 16px 14px;background:#06060c;border-top:1px solid var(--line)}
+.btns{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+button{font:inherit;color:var(--ink);background:none;border:1px solid var(--line);padding:4px 8px;cursor:pointer;letter-spacing:.06em;font-size:10px;font-weight:400}
+@media (hover:hover){button:hover{border-color:var(--gold)}}
+button:active{background:rgba(226,196,138,.22)}
+button:disabled{opacity:.5;cursor:default}
+input:disabled{opacity:.4}
+input:disabled::-webkit-slider-thumb{cursor:default}
+input:disabled::-moz-range-thumb{cursor:default}
+button.on{background:rgba(226,196,138,.14);border-color:var(--gold);color:var(--gold)}
+.note{color:var(--dim);font-size:10px;line-height:1.45;margin-top:4px}
+#spec{bottom:18px;left:18px;width:292px;padding:10px 16px 8px}
+#spec canvas{width:100%;height:54px;display:block}
+#spec .ax{position:relative;height:13px;color:var(--dim);font-size:10px;font-weight:400;margin-top:3px}
+#spec .ax span{position:absolute;top:0;white-space:nowrap}
+#spec .ax .m{transform:translateX(-50%)}
+#labels{position:fixed;inset:0;pointer-events:none;transition:opacity .4s,visibility 0s}
+#labels div{position:absolute;transform:translate(8px,-50%);font-size:10px;font-weight:400;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,226,210,.9);white-space:nowrap;text-shadow:0 0 2px #000,0 0 6px #000,0 0 12px rgba(0,0,0,.8)}
+#intro{position:fixed;inset:0;display:flex;overflow:auto;background:radial-gradient(ellipse at 50% 60%,#14110c 0,#04040a 70%);z-index:10;transition:opacity 1.2s,visibility 0s}
+#intro.gone{opacity:0;pointer-events:none;visibility:hidden;transition:opacity 1.2s,visibility 0s 1.2s}
+#intro .box{max-width:520px;text-align:center;padding:24px;margin:auto}
+#intro h1{font-size:clamp(30px,8vw,54px);letter-spacing:.3em;padding-left:.3em;margin-bottom:18px}
+#intro p{color:var(--dim);font-size:12px;line-height:1.7;text-wrap:balance}
+#intro p.lead{color:var(--ink);font-size:13.5px}
+#intro p.keys{color:var(--gold)}
+#intro button{margin-top:22px;padding:11px 34px 11px calc(34px + .3em);font-size:12px;letter-spacing:.3em;border-color:var(--gold);color:var(--gold)}
+@media (hover:hover){#intro button:hover:not(:disabled){background:rgba(226,196,138,.12)}}
+#err{color:#e79a7a;margin-top:14px;font-size:12px;line-height:1.6;text-wrap:balance}
+@media (max-width:760px),(max-height:620px){.row{white-space:normal}.row b{white-space:nowrap}#head{width:250px}#head .phys{display:none}#spec{display:none}}
+@media (max-width:760px){#ctl{top:auto;bottom:18px;max-height:46vh;width:min(340px,calc(100vw - 36px))}h1{font-size:22px}.panel{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(6,6,12,.86)}}
+@media (max-width:760px),(max-height:480px){#ctl{display:flex;flex-direction:column}#ctl>*{flex-shrink:0}.foot{position:static;order:-1;background:none;margin:-14px -16px 10px;padding:8px 16px 12px;border-top:0;border-bottom:1px solid var(--line)}}
+@media (pointer:coarse){#ctl{scroll-padding-bottom:164px}input[type=range]{height:30px}input[type=range]::-webkit-slider-thumb{width:18px;height:18px;margin-top:-8.5px}input[type=range]::-moz-range-thumb{width:18px;height:18px}button{padding:9px 12px;font-size:11px}}
+@media (max-width:760px),(max-height:480px){#ctl{scroll-padding-bottom:0}}
+@media (prefers-reduced-motion:reduce){.panel,#labels,#intro,body.hide #bShow{transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="gpu" inert tabindex="0" role="application" aria-label="Saturn and its rings, simulated live. Arrow keys orbit, plus and minus zoom."></canvas>
+<div id="ui" inert>
+<div id="labels" aria-hidden="true"></div>
+
+<div class="panel" id="head">
+  <h1>Saturn</h1>
+  <div class="sub">gravity, rings &amp; resonance</div>
+  <div class="row">Since ring reset <b id="hT">0.0 h</b></div>
+  <div class="row">Saturn rotations <b id="hRot">0.00</b></div>
+  <div class="row">Mimas orbits <b id="hMim">0.00</b></div>
+  <div class="row">Particles · steps <b id="hN">—</b></div>
+  <div class="row">Frame rate <b id="hF">—</b></div>
+  <div class="row" id="rAudio" role="status"></div>
+  <div class="phys">
+  <h2 class="k">Gravity field (Cassini)</h2>
+  <div class="row">GM <b>37.931 × 10⁶ km³ s⁻²</b></div>
+  <div class="row">J₂ · J₄ · J₆ <b>16,291 · −935 · 86 × 10⁻⁶</b></div>
+  <div class="row">J reference radius <b>60,330 km</b></div>
+  <h2 class="k">Shape at 1 bar</h2>
+  <div class="row">R eq / pol <b>60,268 / 54,364 km</b></div>
+  <h2 class="k">Computed from the model</h2>
+  <div class="row">Roche limit, icy body <b id="hRoche">—</b></div>
+  <div class="row">Mimas 2:1 resonance <b id="hRes">—</b></div>
+  <div class="row">2:1, spherical Saturn <b id="hResK">—</b></div>
+  <div class="row">B-ring period (105,000 km) <b id="hPer">—</b></div>
+  </div>
+</div>
+
+<div class="panel" id="ctl">
+  <div class="lbl" id="lV" style="margin-top:0">View</div>
+  <div class="btns" id="bV" role="group" aria-labelledby="lV"></div>
+  <label for="sWarp">Time warp <span id="vWarp" aria-hidden="true"></span></label>
+  <input type="range" id="sWarp" min="0" max="24" step="0.1" value="1.5" autocomplete="off">
+  <label for="sBoost">Inner-moon mass <span id="vBoost" aria-hidden="true"></span></label>
+  <input type="range" id="sBoost" min="0" max="3" step="0.05" value="2" autocomplete="off">
+  <div class="note">× 1 is real mass. The default × 100 exaggerates Pan, Daphnis, Prometheus, Pandora and Mimas so their wakes and resonant waves show on a watchable timescale; raise Time warp to see them sooner. The ring gaps themselves are built into the ring model.</div>
+  <label for="sSun">Sun above ring plane <span id="vSun" aria-hidden="true"></span></label>
+  <input type="range" id="sSun" min="-26.7" max="26.7" step="0.1" value="17" autocomplete="off">
+  <label for="sExp">Exposure <span id="vExp" aria-hidden="true"></span></label>
+  <input type="range" id="sExp" min="-2" max="2" step="0.05" value="0" autocomplete="off">
+  <label for="sRing">Ring brightness <span id="vRing" aria-hidden="true"></span></label>
+  <input type="range" id="sRing" min="-2" max="2" step="0.05" value="0" autocomplete="off">
+  <div class="lbl" id="lN">Particles <span class="h">resets rings</span></div>
+  <div class="btns" id="bN" role="group" aria-labelledby="lN"></div>
+  <div class="lbl" id="lP">Physics <span class="h">resets rings</span></div>
+  <div class="btns" role="group" aria-labelledby="lP"><button id="tJ" class="on" aria-pressed="true">Oblate gravity (J₂–J₆)</button></div>
+  <div class="lbl" id="lO">Overlays</div>
+  <div class="btns" role="group" aria-labelledby="lO">
+    <button id="tO" class="on" aria-pressed="true">Orbits, Roche, 2:1</button>
+    <button id="tB" aria-pressed="false">Magnetic field</button>
+    <button id="tL" class="on" aria-pressed="true">Labels</button>
+  </div>
+  <div class="note">Roche limit: inside it, tides stop loose ice from clumping into a moon. Mimas 2:1: where ring particles orbit twice for each orbit of Mimas, at the outer edge of the B ring.</div>
+  <div class="foot">
+    <label for="sVol">Volume <span id="vVol" aria-hidden="true"></span></label>
+    <input type="range" id="sVol" min="0" max="1" step="0.01" value="0.8" autocomplete="off">
+    <div class="btns"><button id="bRe">Reset rings</button><button id="bHit">Bass hit</button><button id="bHide">Hide controls · H</button></div>
+  </div>
+</div>
+
+<div class="panel" id="spec" aria-hidden="true">
+  <canvas id="sp" width="536" height="108"></canvas>
+  <div class="ax"><span style="left:0">20 Hz</span><span class="m" style="left:23.3%">100 Hz</span><span class="m" style="left:56.6%">1 kHz</span><span class="m" style="left:90%">10 kHz</span></div>
+</div>
+<button id="bShow" type="button">Show controls · H</button>
+</div>
+
+<div id="intro"><div class="box">
+  <h1>Saturn</h1>
+  <p class="lead">Watch up to a million icy ring particles orbit Saturn under real physics, with sound.</p>
+  <p>Simulated live on your GPU in Saturn's measured gravity field (GM, J₂, J₄, J₆) and pulled on by eight moons; Mimas and the small ring moons are boosted in mass so their effects show. Rendered with WebGPU. The score is a synthesized drone built from Saturn's rotation and its moons' orbital frequencies, raised by whole octaves until you can hear them.</p>
+  <p class="keys">Drag or arrow keys to orbit · scroll, pinch or + − to zoom · H hides the controls</p>
+  <p>Headphones or a subwoofer recommended. The low end reaches 27 Hz.</p>
+  <div id="err" role="alert"></div>
+  <button id="go">Enter with sound</button>
+</div></div>
+
+<script>
+"use strict";
+/* ───────────────────────── constants (units: Mm, ks) ───────────────────────── */
+const GM = 37931.0;            // 37.931e6 km^3/s^2
+const REQ = 60.268, RPOL = 54.364, RREF = 60.330;
+const J2 = 16291e-6, J4 = -935e-6, J6 = 86e-6;
+const ROT_PERIOD = 10.7 * 3.6;  // ks
+const TAU_R0 = 66.0, TAU_SPAN = 76.0, TAU_N = 4096;
+const DT_MAX = 0.12, MAX_SUB = 16;
+const $ = id => document.getElementById(id);
+const TAU = Math.PI * 2;
+// name, a [Mm], GM [km^3/s^2], radius [Mm], colour, boostable, audio octave shift
+const MOONS = [
+  ["Pan",        133.584, 3.3e-4,  0.014, [0.8,0.8,0.8], 1, 24],
+  ["Daphnis",    136.505, 5.1e-6,  0.004, [0.8,0.8,0.8], 1, 24],
+  ["Prometheus", 139.380, 0.01074, 0.043, [0.8,0.78,0.75], 1, 24],
+  ["Pandora",    141.720, 0.00924, 0.040, [0.8,0.78,0.75], 1, 24],
+  ["Mimas",      185.539, 2.5026,  0.198, [0.85,0.85,0.85], 1, 24],
+  ["Enceladus",  238.042, 7.2103,  0.252, [1.0,1.0,1.0], 0, 24],
+  ["Tethys",     294.619, 41.21,   0.531, [0.9,0.9,0.88], 0, 24],
+  ["Titan",      1221.87, 8978.14, 2.575, [0.95,0.68,0.32], 0, 26],
+];
+
+/* radial acceleration magnitude in the equatorial plane, with/without zonal harmonics */
+function gEq(r, harm) {
+  const q2 = (RREF / r) ** 2;
+  const h = harm ? 1.5 * J2 * q2 - (15 / 8) * J4 * q2 * q2 + (35 / 16) * J6 * q2 * q2 * q2 : 0;
+  return GM / (r * r) * (1 + h);
+}
+const meanMotion = (r, harm) => Math.sqrt(gEq(r, harm) / r);
+MOONS.forEach(m => { m.n = meanMotion(m[1], true); m.phase0 = Math.random() * TAU; });
+const kappa = (r, harm) => { const d = 1e-4 * r, f = x => x ** 3 * gEq(x, harm); return Math.sqrt((f(r + d) - f(r - d)) / (2 * d) / r ** 3); };   // epicyclic frequency: κ² = r⁻³ d(r³ g)/dr
+function solveRes(harm, lindblad) { // radius of the Mimas 2:1 resonance: Ω = 2 Ω_M (point mass, κ = Ω), or 2(Ω − Ω_M) = κ in the oblate field
+  const nM = MOONS[4].n; let lo = 90, hi = 140;   // Mimas keeps its measured rate in both modes, as it does in the simulation
+  for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2, n = meanMotion(mid, harm); if (2 * (n - nM) - (lindblad ? kappa(mid, harm) : n) > 0) lo = mid; else hi = mid; }
+  return (lo + hi) / 2;
+}
+const R_RES = solveRes(true, true), R_RES_K = solveRes(false, false);
+const R_ROCHE = 2.44 * REQ * Math.cbrt(687 / 917);
+
+/* ───────────────────────── ring optical-depth model ───────────────────────── */
+function h1(n) { n = Math.imul(n ^ 0x9E3779B9, 0x85EBCA6B); n ^= n >>> 13; n = Math.imul(n, 0xC2B2AE35); n ^= n >>> 16; return (n >>> 0) / 4294967296; }
+function vn(x) { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return h1(i) * (1 - u) + h1(i + 1) * u; }
+function ringTau(r) {
+  const fine = (0.6 + 0.8 * vn(r * 2.7)) * (0.7 + 0.6 * vn(r * 13.0));
+  if (r < 66.9) return 0;
+  if (r < 74.658) return 0.004 * (0.5 + vn(r * 1.5));                        // D
+  if (r < 92.0) { let t = (0.05 + 0.08 * (r - 74.658) / 17.3) * fine; if (vn(r * 1.9 + 40) > 0.72) t += 0.28; return t; } // C + plateaus
+  if (r < 117.58) { const s = Math.min(1, Math.max(0, (r - 92) / 14)); return (0.9 + 1.6 * s * s * (3 - 2 * s)) * fine; } // B
+  if (r < 122.17) { if (Math.abs(r - 117.9) < 0.15) return 0; return 0.06 * fine + 0.04 * vn(r * 4); }                    // Cassini Division
+  if (r < 136.775) {                                                          // A
+    if (Math.abs(r - 133.589) < 0.1625) return 0;                             // Encke
+    if (Math.abs(r - 136.505) < 0.03) return 0;                               // Keeler
+    return (0.75 - 0.25 * (r - 122.17) / 14.6) * (0.8 + 0.4 * vn(r * 5));
+  }
+  if (Math.abs(r - 140.18) < 0.05) return 0.12;                               // F
+  return 0;
+}
+const tauTab = new Float32Array(TAU_N);
+const invCdf = new Float32Array(65536);
+(function buildTau() {
+  const cdf = new Float64Array(TAU_N + 1);
+  for (let i = 0; i < TAU_N; i++) {
+    const r = TAU_R0 + TAU_SPAN * i / (TAU_N - 1); const t = ringTau(r); tauTab[i] = t;
+    cdf[i + 1] = cdf[i] + r * (1 - Math.exp(-2 * t));
+  }
+  let j = 0; const tot = cdf[TAU_N];
+  for (let k = 0; k < 65536; k++) {
+    const u = (k + 0.5) / 65536 * tot; while (cdf[j + 1] < u) j++;
+    invCdf[k] = TAU_R0 + TAU_SPAN * (j + (u - cdf[j]) / (cdf[j + 1] - cdf[j])) / (TAU_N - 1);
+  }
+})();
+
+/* ───────────────────────── WGSL ───────────────────────── */
+const W_G = /* wgsl */`
+const REQ = ${REQ}; const RPOL = ${RPOL};
+struct Globals {
+  camPos: vec4f, camRight: vec4f, camUp: vec4f, camFwd: vec4f, sunDir: vec4f,
+  p1: vec4f, p2: vec4f, moons: array<vec4f, 8>, moonCol: array<vec4f, 8>,
+};
+@group(0) @binding(0) var<uniform> G: Globals;
+fn hitPlanet(o: vec3f, d: vec3f) -> f32 {
+  let k = REQ / RPOL;
+  let oo = vec3f(o.x, o.y, o.z * k); let dd = vec3f(d.x, d.y, d.z * k);
+  let a = dot(dd, dd); let b = dot(oo, dd); let c = dot(oo, oo) - REQ * REQ;
+  let h = b * b - a * c;
+  if (h <= 0.0) { return -1.0; }
+  let t = (-b - sqrt(h)) / a;
+  if (t <= 0.0) { return -1.0; }
+  return t;
+}
+fn project(p: vec3f) -> vec4f {
+  let d = p - G.camPos.xyz; let w = dot(d, G.camFwd.xyz);
+  return vec4f(dot(d, G.camRight.xyz) / (G.camRight.w * G.camUp.w), dot(d, G.camUp.xyz) / G.camRight.w, 0.5 * w, w);
+}
+`;
+const W_TAU = /* wgsl */`
+@group(0) @binding(1) var<storage, read> tauTab: array<f32>;
+fn tauAt(r: f32) -> f32 {
+  let x = (r - ${TAU_R0.toFixed(1)}) / ${TAU_SPAN.toFixed(1)} * ${(TAU_N - 1).toFixed(1)};
+  if (x < 0.0 || x >= ${(TAU_N - 1).toFixed(1)}) { return 0.0; }
+  let i = u32(x); let f = x - f32(i);
+  return mix(tauTab[i], tauTab[i + 1u], f);
+}
+`;
+const W_FS_VS = /* wgsl */`
+struct FSIn { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
+@vertex fn vs(@builtin(vertex_index) i: u32) -> FSIn {
+  var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+  var o: FSIn; o.pos = vec4f(p[i], 0.0, 1.0); o.uv = p[i]; return o;
+}
+`;
+const W_SCENE = W_G + W_TAU + W_FS_VS + /* wgsl */`
+fn hash3(p: vec3f) -> f32 {
+  var q = fract(p * vec3f(0.1031, 0.1030, 0.0973)); q += dot(q, q.yxz + 33.33);
+  return fract((q.x + q.y) * q.z);
+}
+fn vnoise(p: vec3f) -> f32 {
+  let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash3(i), hash3(i + vec3f(1, 0, 0)), u.x), mix(hash3(i + vec3f(0, 1, 0)), hash3(i + vec3f(1, 1, 0)), u.x), u.y),
+             mix(mix(hash3(i + vec3f(0, 0, 1)), hash3(i + vec3f(1, 0, 1)), u.x), mix(hash3(i + vec3f(0, 1, 1)), hash3(i + vec3f(1, 1, 1)), u.x), u.y), u.z);
+}
+fn fbm(p: vec3f) -> f32 {
+  var s = 0.0; var a = 0.5; var q = p;
+  for (var i = 0; i < 5; i++) { s += a * vnoise(q); q = q * 2.03 + vec3f(17.1, 3.7, 9.2); a *= 0.5; }
+  return s;
+}
+fn stars(d: vec3f) -> vec3f {
+  let s = d * 240.0; let c = floor(s); let h = hash3(c);
+  if (h > 0.986) {
+    let ctr = c + 0.5 + (vec3f(hash3(c + 1.7), hash3(c + 5.3), hash3(c + 9.1)) - 0.5) * 0.6;
+    let b = (1.0 - smoothstep(0.0, 0.32, length(s - ctr))) * (h - 0.986) / 0.014;
+    return b * b * 1.4 * mix(vec3f(1.0, 0.85, 0.7), vec3f(0.72, 0.84, 1.0), hash3(c + 3.1));
+  }
+  return vec3f(0.0);
+}
+// zonal wind as angular rate relative to the deep rotation [rad/ks]
+fn zonal(lat: f32) -> f32 {
+  let u = 0.42 * exp(-(lat * lat) / 0.045) + 0.09 * cos(lat * 11.0) * smoothstep(0.2, 0.5, abs(lat)); // Mm/ks = km/s
+  return u / (REQ * max(cos(lat), 0.15));
+}
+fn bands(lat: f32, lon: f32) -> vec3f {
+  let cl = cos(lat);
+  let q = vec3f(cl * cos(lon), cl * sin(lon), sin(lat));
+  let warp = fbm(q * vec3f(5.0, 5.0, 9.0)) - 0.5;
+  let y = lat + 0.035 * warp;
+  var b = 0.5 + 0.32 * sin(y * 21.0 + 0.4) + 0.15 * sin(y * 47.0 + 1.3) + 0.09 * sin(y * 96.0 + 0.7);
+  let streak = fbm(vec3f(q.x * 9.0, q.y * 9.0, y * 70.0));
+  b += 0.28 * (streak - 0.5);
+  b += 0.16 * exp(-(lat * lat) / 0.02);
+  var c = mix(vec3f(0.60, 0.47, 0.30), vec3f(0.93, 0.83, 0.62), clamp(b, 0.0, 1.0));
+  c = mix(c, vec3f(0.86, 0.74, 0.50), 0.25 * fbm(q * 3.0));
+  let pol = smoothstep(0.95, 1.45, abs(lat));
+  c = mix(c, vec3f(0.52, 0.56, 0.55), pol * 0.55);
+  return c;
+}
+fn shadePlanet(p: vec3f, rd: vec3f) -> vec3f {
+  let k = REQ / RPOL; let sun = G.sunDir.xyz;
+  let n = normalize(vec3f(p.x, p.y, p.z * k * k));
+  let lat = asin(clamp(n.z, -1.0, 1.0));
+  let lon = atan2(p.y, p.x) - G.p1.x;
+  let w = zonal(lat);
+  var alb = mix(bands(lat, lon - w * G.p1.z), bands(lat, lon - w * G.p1.y), G.p1.w);
+  // north polar hexagon: wavenumber-6 standing wave on the ~76 N jet
+  let a6 = fract(lon * 0.9549297) * 1.0471976 - 0.5235988;
+  let latH = 1.5708 - mix(0.205, 0.19 / cos(a6), 0.8);
+  let inside = smoothstep(latH - 0.006, latH + 0.006, lat);
+  alb = mix(alb, alb * vec3f(0.62, 0.70, 0.74), inside * 0.7);
+  let hq = (lat - latH) / 0.012;
+  alb += vec3f(0.16, 0.13, 0.07) * exp(-hq * hq);
+  alb *= 1.0 - 0.6 * smoothstep(1.535, 1.56, lat);
+  let ndl = dot(n, sun); let mu = max(dot(n, -rd), 0.0);
+  var diff = pow(clamp(ndl, 0.0, 1.0), 0.8);
+  // ring shadow
+  if (abs(sun.z) > 1e-4) {
+    let s = -p.z / sun.z;
+    if (s > 0.0) { let h = p + sun * s; diff *= exp(-tauAt(length(h.xy)) / max(abs(sun.z), 0.03)); }
+  }
+  var col = alb * diff * (0.5 + 0.5 * pow(mu, 0.45));
+  col += vec3f(0.45, 0.58, 0.85) * 0.22 * pow(max(1.0 - mu, 0.0), 4.0) * clamp(ndl + 0.15, 0.0, 1.0);
+  col += alb * 0.004;
+  return col;
+}
+@fragment fn fs(in: FSIn) -> @location(0) vec4f {
+  let cam = G.camPos.xyz; let sun = G.sunDir.xyz;
+  let dir = normalize(G.camFwd.xyz + G.camRight.xyz * (in.uv.x * G.camRight.w * G.camUp.w) + G.camUp.xyz * (in.uv.y * G.camRight.w));
+  let sd = max(dot(dir, sun), 0.0);
+  var col = stars(dir) + vec3f(1.0, 0.93, 0.82) * (pow(sd, 30000.0) * 60.0 + pow(sd, 1500.0) * 1.2 + pow(sd, 40.0) * 0.05);
+  var tHit = 1e9;
+  let tp = hitPlanet(cam, dir);
+  if (tp > 0.0) { tHit = tp; col = shadePlanet(cam + dir * tp, dir); }
+  for (var i = 0; i < 8; i++) {
+    let m = G.moons[i]; let oc = cam - m.xyz;
+    let b = dot(oc, dir); let c = dot(oc, oc) - m.w * m.w; let h = b * b - c;
+    if (h > 0.0) {
+      let t = -b - sqrt(h);
+      if (t > 0.0 && t < tHit) {
+        tHit = t; let q = cam + dir * t; let n = normalize(q - m.xyz);
+        var l = max(dot(n, sun), 0.0);
+        if (hitPlanet(q, sun) > 0.0) { l = 0.0; }
+        col = G.moonCol[i].rgb * (l * 0.9 + 0.01);
+      }
+    }
+  }
+  if (abs(dir.z) > 1e-5) {
+    let tr = -cam.z / dir.z;
+    if (tr > 0.0 && tr < tHit) { let q = cam + dir * tr; col *= exp(-tauAt(length(q.xy)) / max(abs(dir.z), 0.03)); }
+  }
+  return vec4f(col, 1.0);
+}
+`;
+const W_PART = W_G + W_TAU + /* wgsl */`
+@group(0) @binding(2) var<storage, read> ppos: array<vec4f>;
+struct VO { @builtin(position) pos: vec4f, @location(0) col: vec3f };
+@vertex fn vs(@builtin(vertex_index) vi: u32) -> VO {
+  let P = ppos[vi]; let p = P.xyz;
+  let cam = G.camPos.xyz; let sun = G.sunDir.xyz;
+  var o: VO;
+  let d = p - cam; let dist = length(d); let dir = d / dist;
+  let w = dot(d, G.camFwd.xyz);
+  let th = hitPlanet(cam, dir);
+  if (w <= 0.01 || (th > 0.0 && th < dist)) { o.pos = vec4f(0.0, 0.0, -1.0, 1.0); o.col = vec3f(0.0); return o; }
+  let r = length(p.xy); let tau = tauAt(r);
+  var lit = 1.0;
+  if (hitPlanet(p, sun) > 0.0) { lit = 0.012; }
+  let mu0 = max(abs(sun.z), 0.03);
+  var b = 1.0;
+  if (cam.z * sun.z < 0.0) { b = exp(-tau / mu0) * 0.9 + 0.025; }       // unlit face: transmitted light only
+  else { b = 0.55 + 0.45 * (1.0 - exp(-tau / mu0)); }
+  let cs = dot(dir, sun);
+  b += 2.5 * exp(-tau * 6.0) * pow(max(cs, 0.0), 10.0);                  // forward scatter from tenuous dust
+  b *= 1.0 + 0.35 * pow(max(-cs, 0.0), 24.0);                            // opposition surge
+  let ice = mix(vec3f(0.60, 0.57, 0.55), vec3f(1.0, 0.90, 0.74), smoothstep(0.08, 0.9, tau));
+  let ppm = G.camFwd.w / (2.0 * G.camRight.w * w);
+  let inten = min(G.p2.y * ppm * ppm * 30000.0 / G.p2.x * clamp(abs(dir.z), 0.05, 1.0), 2.5);
+  o.col = ice * (b * lit * inten * (0.55 + 0.9 * P.w));
+  o.pos = project(p);
+  return o;
+}
+@fragment fn fs(in: VO) -> @location(0) vec4f { return vec4f(in.col, 1.0); }
+`;
+const W_LINE = W_G + /* wgsl */`
+struct LO { @builtin(position) pos: vec4f, @location(0) col: vec4f, @location(1) wp: vec3f };
+@vertex fn vs(@location(0) p: vec3f, @location(1) c: vec4f) -> LO {
+  var o: LO; o.pos = project(p); o.col = c; o.wp = p; return o;
+}
+@fragment fn fs(in: LO) -> @location(0) vec4f {
+  let mask = u32(G.p2.z); let g = u32(in.col.a + 0.5);
+  if (((mask >> g) & 1u) == 0u) { discard; }
+  let d = in.wp - G.camPos.xyz; let dist = length(d);
+  let t = hitPlanet(G.camPos.xyz, d / dist);
+  if (t > 0.0 && t < dist) { discard; }
+  return vec4f(in.col.rgb, 1.0);
+}
+`;
+const W_SIM = /* wgsl */`
+struct Sim { a: vec4f, j: vec4f, moons: array<vec4f, 8> };
+@group(0) @binding(0) var<uniform> S: Sim;
+@group(0) @binding(1) var<storage, read_write> pos: array<vec4f>;
+@group(0) @binding(2) var<storage, read_write> vel: array<vec4f>;
+fn accel(p: vec3f, t: f32) -> vec3f {
+  let inv = inverseSqrt(dot(p, p));
+  let mu = p.z * inv; let m2 = mu * mu;
+  let q = S.j.w * inv; let q2 = q * q; let q4 = q2 * q2; let q6 = q4 * q2;
+  let P2 = 0.5 * (3.0 * m2 - 1.0);                                   let dP2 = 3.0 * mu;
+  let P4 = (35.0 * m2 * m2 - 30.0 * m2 + 3.0) / 8.0;                 let dP4 = (140.0 * m2 * mu - 60.0 * mu) / 8.0;
+  let P6 = (231.0 * m2 * m2 * m2 - 315.0 * m2 * m2 + 105.0 * m2 - 5.0) / 16.0;
+  let dP6 = (1386.0 * m2 * m2 * mu - 1260.0 * m2 * mu + 210.0 * mu) / 16.0;
+  // a = grad( GM/r [1 - sum J_n (R/r)^n P_n(mu)] )
+  let sA = S.a.w * (3.0 * S.j.x * q2 * P2 + 5.0 * S.j.y * q4 * P4 + 7.0 * S.j.z * q6 * P6);
+  let sB = S.a.w * (S.j.x * q2 * dP2 + S.j.y * q4 * dP4 + S.j.z * q6 * dP6);
+  let g = S.a.z * inv * inv;
+  var a = p * (inv * g * (sA - 1.0 + mu * sB));
+  a.z -= g * sB;
+  for (var i = 0; i < 8; i++) {
+    let m = S.moons[i]; let ang = m.z + m.y * t;
+    let pm = vec3f(m.x * cos(ang), m.x * sin(ang), 0.0);
+    let d = pm - p; let d2 = dot(d, d) + 1.0e-4;
+    a += m.w * (d * (inverseSqrt(d2) / d2) - pm / (m.x * m.x * m.x));   // direct + indirect (planet-centred frame)
+  }
+  return a;
+}
+@compute @workgroup_size(256) fn main(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= arrayLength(&pos)) { return; }
+  var P = pos[i]; var V = vel[i];
+  var x = P.xyz; var v = V.xyz;
+  let dt = S.a.x; let n = i32(S.a.y);
+  var t = 0.0;
+  // drift-kick-drift leapfrog: velocities live at whole steps, which is what the seeded circular speeds are
+  for (var k = 0; k < n; k++) { x += v * (0.5 * dt); v += accel(x, t + 0.5 * dt) * dt; x += v * (0.5 * dt); t += dt; }
+  pos[i] = vec4f(x, P.w); vel[i] = vec4f(v, V.w);
+}
+`;
+const W_DOWN = W_FS_VS + /* wgsl */`
+@group(0) @binding(0) var smp: sampler;
+@group(0) @binding(1) var src: texture_2d<f32>;
+@fragment fn fs(in: FSIn) -> @location(0) vec4f {
+  let uv = vec2f(in.uv.x * 0.5 + 0.5, 0.5 - in.uv.y * 0.5);
+  let px = 1.0 / vec2f(textureDimensions(src));
+  var c = textureSample(src, smp, uv + px * vec2f(-1.0, -1.0)).rgb + textureSample(src, smp, uv + px * vec2f(1.0, -1.0)).rgb
+        + textureSample(src, smp, uv + px * vec2f(-1.0, 1.0)).rgb + textureSample(src, smp, uv + px * vec2f(1.0, 1.0)).rgb;
+  c *= 0.25;
+  let l = dot(c, vec3f(0.2126, 0.7152, 0.0722));
+  return vec4f(c * smoothstep(0.55, 1.6, l), 1.0);
+}
+`;
+const W_BLUR = W_FS_VS + /* wgsl */`
+@group(0) @binding(0) var smp: sampler;
+@group(0) @binding(1) var src: texture_2d<f32>;
+@group(0) @binding(2) var<uniform> U: vec4f;
+@fragment fn fs(in: FSIn) -> @location(0) vec4f {
+  let uv = vec2f(in.uv.x * 0.5 + 0.5, 0.5 - in.uv.y * 0.5);
+  let st = U.xy / vec2f(textureDimensions(src));
+  var c = textureSample(src, smp, uv).rgb * 0.2270;
+  c += (textureSample(src, smp, uv + st * 1.3846).rgb + textureSample(src, smp, uv - st * 1.3846).rgb) * 0.3162;
+  c += (textureSample(src, smp, uv + st * 3.2308).rgb + textureSample(src, smp, uv - st * 3.2308).rgb) * 0.0703;
+  return vec4f(c, 1.0);
+}
+`;
+const W_COMP = W_FS_VS + /* wgsl */`
+@group(0) @binding(0) var smp: sampler;
+@group(0) @binding(1) var hdr: texture_2d<f32>;
+@group(0) @binding(2) var blm: texture_2d<f32>;
+@group(0) @binding(3) var<uniform> U: vec4f;
+fn aces(x: vec3f) -> vec3f { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), vec3f(0.0), vec3f(1.0)); }
+@fragment fn fs(in: FSIn) -> @location(0) vec4f {
+  let uv = vec2f(in.uv.x * 0.5 + 0.5, 0.5 - in.uv.y * 0.5);
+  var c = textureSample(hdr, smp, uv).rgb + textureSample(blm, smp, uv).rgb * U.y;
+  c = aces(c * U.x);
+  c = pow(c, vec3f(1.0 / 2.2));
+  let v = in.uv * 0.5; c *= 1.0 - 0.35 * dot(v, v);
+  let n = fract(52.9829189 * fract(dot(in.pos.xy, vec2f(0.06711056, 0.00583715))));
+  return vec4f(c + (n - 0.5) / 255.0, 1.0);
+}
+`;
+
+/* ───────────────────────── state ───────────────────────── */
+const S = {
+  warp: 1.5, boost: 100, sunEl: 17, exp: 1, ring: 1, harm: 1, orbits: 1, field: 0, labels: 1,
+  simT: 0, t0: 0, flowT: 0, capFrom: null, capTo: 0, auto: true, seedF: 0, N: 0, sub: 1, follow: -1, fi: 0, fw: 0, dead: false,
+  cam: { az: 0.7, el: 0.30, dist: 470, tx: 0, ty: 0, tz: 0 },
+  goal: { az: 0.7, el: 0.30, dist: 470, tx: 0, ty: 0, tz: 0 },
+};
+// name, camera goal, options: maxWarp slows the clock for close-ups (restored on leaving); follow rides along with moon #i (az is then relative to its radial direction); unlit keeps the camera on the side of the rings the Sun is not on
+const VIEWS = [
+  ["Overview",         { az: 0.7,  el: 0.30,  dist: 470, tx: 0, ty: 0, tz: 0 }],
+  ["Ring plane",       { az: 1.9,  el: 0.035, dist: 340, tx: 0, ty: 0, tz: 0 }],
+  ["Unlit face",       { az: 2.6,  el: -0.33, dist: 400, tx: 0, ty: 0, tz: 0 }, { unlit: 1 }],
+  ["Cassini Division", { az: -0.5, el: 0.55,  dist: 26,  tx: 119.6, ty: 0, tz: 0 }, { maxWarp: 0.3 }],
+  ["Pan & Encke Gap",  { az: 0.5,  el: 0.7,   dist: 9,   tx: 0, ty: 0, tz: 0 }, { follow: 0, maxWarp: 3 }],
+  ["Polar hexagon",    { az: 0.3,  el: 1.42,  dist: 125, tx: 0, ty: 0, tz: 40 }],
+  ["Backlit",          { az: 2.72, el: -0.12, dist: 300, tx: 0, ty: 0, tz: 0 }],
+];
+const SUN_AZ = -0.45;
+let moonPos = MOONS.map(() => [0, 0, 0]);
+const camV = { pos: [0, 0, 0], right: [1, 0, 0], up: [0, 0, 1], fwd: [0, 1, 0], tanH: Math.tan(0.36), az: 0 };
+
+/* ───────────────────────── audio ───────────────────────── */
+const A = { ctx: null };
+function initAudio() {
+  const ctx = A.raw; if (!ctx) throw new Error("Web Audio is not available");   // A.ctx is only set once the whole graph exists
+  const sr = ctx.sampleRate, now = ctx.currentTime; A.t0 = now;
+  const gain = (v, to) => { const g = ctx.createGain(); g.gain.value = v; if (to) g.connect(to); return g; };
+  const filt = (type, f, q, to) => { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q || 0.7; if (to) b.connect(to); return b; };
+  const osc = (type, f, to) => { const o = ctx.createOscillator(); o.type = type; o.frequency.value = f; o.connect(to); o.start(); return o; };
+  // master chain
+  A.an = ctx.createAnalyser(); A.an.fftSize = 8192; A.an.smoothingTimeConstant = 0.82; A.an.minDecibels = -96; A.an.maxDecibels = -14; A.an.connect(ctx.destination);
+  A.master = gain(0, A.an); A.master.gain.setTargetAtTime(+$("sVol").value, now, 1.5);
+  const lim = ctx.createDynamicsCompressor(); lim.threshold.value = -4; lim.knee.value = 2; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.15; lim.connect(A.master);
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.knee.value = 12; comp.ratio.value = 3.5; comp.attack.value = 0.03; comp.release.value = 0.5; comp.connect(lim);
+  const hi = filt("highshelf", 8500, 0, comp); hi.gain.value = 5;
+  const bus = filt("lowshelf", 85, 0, hi); bus.gain.value = 5;
+  // cavernous reverb: 8 s decaying noise that darkens as it falls
+  const irLen = Math.floor(sr * 8), ir = ctx.createBuffer(2, irLen, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = ir.getChannelData(c); let lp = 0;
+    for (let i = 0; i < irLen; i++) {
+      const t = i / irLen; const k = 0.9 * Math.exp(-5 * t) + 0.04;
+      lp += k * ((Math.random() * 2 - 1) - lp);
+      d[i] = lp * Math.exp(-4.2 * t) * Math.min(1, i / (sr * 0.03)) * (2.2 - 1.2 * Math.exp(-5 * t));
+    }
+  }
+  const rev = ctx.createConvolver(); rev.buffer = ir; rev.connect(gain(0.55, bus));
+  const send = gain(1, rev);
+  // noise sources
+  const mkNoise = (secs, fn) => { const b = ctx.createBuffer(2, Math.floor(sr * secs), sr); for (let c = 0; c < 2; c++) fn(b.getChannelData(c), c); return b; };
+  const play = (buf, to) => { const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(to); s.start(); return s; };
+  const white = mkNoise(5, d => { for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; });
+  const brown = mkNoise(7, d => { let v = 0; for (let i = 0; i < d.length; i++) { v = (v + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = v * 3.5; } });
+  const ice = ctx.createBuffer(2, Math.floor(sr * 9), sr);
+  { const L = ice.getChannelData(0), R = ice.getChannelData(1);
+    for (let g = 0; g < 5200; g++) {
+      const st = Math.floor(Math.random() * (L.length - sr * 0.05)), f = 2200 * Math.pow(8, Math.random()), len = Math.floor(sr * (0.002 + 0.03 * Math.random() ** 2));
+      const amp = 0.5 * Math.random() ** 3, pan = Math.random(), w = 2 * Math.PI * f / sr;
+      for (let i = 0; i < len; i++) { const e = Math.exp(-6 * i / len) * amp * Math.sin(w * i); L[st + i] += e * (1 - pan); R[st + i] += e * pan; }
+    } }
+  // 1 · SUB — Saturn's 10.7 h rotation raised 20 octaves (27.2 Hz) and its octave
+  const fRot = Math.pow(2, 20) / (ROT_PERIOD * 1000);
+  A.fRot = fRot;
+  const subG = gain(0.0, bus); subG.gain.setTargetAtTime(0.62, now, 3);
+  osc("sine", fRot, subG); osc("sine", fRot + 0.06, subG);
+  osc("sine", fRot * 2, gain(0.5, subG)); osc("triangle", fRot * 3.004, gain(0.12, subG));
+  const trem = gain(0.16, subG.gain); osc("sine", MOONS[7].n * Math.pow(2, 21) / (2000 * Math.PI), trem);   // Titan's orbit as a 1.5 Hz throb
+  // 2 · BODY — saturated saw stack, the mass of the planet
+  const shaper = ctx.createWaveShaper(); { const c = new Float32Array(1024); for (let i = 0; i < 1024; i++) c[i] = Math.tanh(3.2 * (i / 511.5 - 1)); shaper.curve = c; shaper.oversample = "2x"; }
+  const bodyG = gain(0.0, bus); bodyG.gain.setTargetAtTime(0.2, now, 5); bodyG.connect(gain(0.5, send)); shaper.connect(bodyG);
+  A.bodyLP = filt("lowpass", 170, 2.2, shaper);
+  const bodyIn = gain(0.3, A.bodyLP);
+  [1, 1.0035, 0.9962, 1.5, 0.5].forEach((m, i) => osc(i < 4 ? "sawtooth" : "square", fRot * 2 * m, i === 3 ? gain(0.35, bodyIn) : bodyIn));
+  osc("sine", 0.023, gain(70, A.bodyLP.frequency));
+  // 3 · MOON VOICES — orbital frequencies raised 24 octaves (Titan 26)
+  A.moons = MOONS.map((m, i) => {
+    const f = m.n / (2000 * Math.PI) * Math.pow(2, m[6]);
+    const pan = ctx.createStereoPanner(); pan.connect(bus); pan.connect(gain(1.3, send));
+    const lvl = [0.016, 0.016, 0.02, 0.02, 0.085, 0.075, 0.085, 0.2][i];
+    const g = gain(0, pan); g.gain.setTargetAtTime(lvl, now + 1 + i * 0.7, 4);
+    osc("sine", f, g); osc("sine", f * 1.0018, g); if (i >= 4) osc("triangle", f * 2.001, gain(0.2, g));
+    return { g, pan, f, lvl };
+  });
+  A.resG = gain(0, send); osc("sine", A.moons[4].f * 2, A.resG); osc("sine", A.moons[4].f * 2 + 0.31, A.resG);   // the 2:1 tone
+  // 4 · WIND — the atmosphere, close in
+  A.windG = gain(0.05, bus); A.windG.connect(gain(0.6, send));
+  A.windBP = filt("bandpass", 150, 0.9, A.windG); play(brown, A.windBP);
+  osc("sine", 0.041, gain(60, A.windBP.frequency));
+  const rumble = gain(0.16, bus); play(brown, filt("lowpass", 60, 0.8, rumble)).playbackRate.value = 0.6;
+  // 5 · ICE — ring particles: bright grains, 2–18 kHz
+  A.iceG = gain(0.05, bus); A.iceG.connect(gain(0.7, send));
+  A.iceSrc = play(ice, filt("highpass", 1800, 0.7, A.iceG));
+  const hiss = filt("bandpass", 9000, 0.6, gain(0.11, A.iceG)); play(white, filt("highpass", 5000, 0.7, hiss));
+  // 6 · AIR — top octave
+  play(white, filt("highpass", 12500, 0.7, gain(0.022, bus)));
+  // 7 · RADIO — kilometric-radiation whistles, reverb only
+  [[740, 0.013, 260], [1730, 0.019, 520], [3120, 0.011, 900]].forEach(([f, r, dep]) => {
+    const g = gain(0.012, send); const o = osc("sine", f, g); osc("sine", r, gain(dep, o.frequency)); osc("sine", r * 7.3, gain(0.004, g.gain));
+  });
+  A.bus = bus; A.send = send; A.brown = brown; A.ctx = ctx;
+  setTimeout(() => strike(1), 1400);   // partway into the master fade-in; any earlier and the ignition thump is inaudible
+}
+function openAudio() {   // runs inside the Enter click so every browser lets the context start
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  try { A.raw = new AC({ latencyHint: "playback", sampleRate: 48000 }); } catch (e) { A.raw = new AC({ latencyHint: "playback" }); }   // 48 kHz keeps the buffer build short on 96/192 kHz interfaces
+  A.raw.resume().catch(() => {});
+}
+function stopAudio() {
+  const c = A.raw; A.raw = A.ctx = A.an = A.master = A.moons = A.brown = A.bus = A.send = null; if (c) c.close().catch(() => {});
+  $("rAudio").textContent = "Audio unavailable · reload to retry"; $("bHit").disabled = $("sVol").disabled = true; $("spec").hidden = true;
+}
+function strike(power) {
+  const ctx = A.ctx; if (!ctx) return; const t = ctx.currentTime + 0.02;
+  if (t - (A.lastHit ?? -1) < 0.3) return; A.lastHit = t;   // a held key or autoclicker cannot stack hundreds of voices
+  const g = ctx.createGain(); g.connect(A.bus); g.connect(A.send);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.95 * power, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 4.5);
+  const o = ctx.createOscillator(); o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(A.fRot, t + 0.9); o.connect(g); o.start(t); o.stop(t + 4.6);
+  const o2 = ctx.createOscillator(); o2.type = "triangle"; o2.frequency.setValueAtTime(220, t); o2.frequency.exponentialRampToValueAtTime(A.fRot * 2, t + 0.5);
+  const g2 = ctx.createGain(); g2.gain.setValueAtTime(0.35 * power, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.6); o2.connect(g2); g2.connect(A.bus); o2.start(t); o2.stop(t + 1.7);
+  const n = ctx.createBufferSource(); n.buffer = A.brown; const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.setValueAtTime(2400, t); f.frequency.exponentialRampToValueAtTime(70, t + 1.4);
+  const g3 = ctx.createGain(); g3.gain.setValueAtTime(0.9 * power, t); g3.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+  n.connect(f); f.connect(g3); g3.connect(A.bus); g3.connect(A.send); n.start(t, Math.random() * 3); n.stop(t + 2.7);
+}
+function updateAudio() {
+  const ctx = A.ctx; if (!ctx) return; const t = ctx.currentTime, c = camV.pos;
+  const rho = Math.hypot(c[0], c[1]), rc = Math.hypot(rho, c[2]);
+  const dRing = Math.hypot(Math.max(0, Math.abs(rho - 105) - 35), c[2]);
+  const ringProx = Math.exp(-dRing / 70), planetProx = Math.exp(-Math.max(0, rc - 60) / 110);
+  const w = Math.min(1, S.warp / 12);
+  A.iceG.gain.setTargetAtTime(0.09 + 0.4 * ringProx * (0.45 + 0.55 * w), t, 0.4);
+  A.iceSrc.playbackRate.setTargetAtTime(0.75 + 0.6 * w, t, 0.6);
+  A.windG.gain.setTargetAtTime(0.05 + 0.5 * planetProx, t, 0.5);
+  A.bodyLP.frequency.setTargetAtTime(150 + 260 * planetProx + 120 * w, t, 0.8);
+  A.resG.gain.setTargetAtTime(0.012 + 0.03 * Math.log10(S.boost) / 3, t, 1);
+  A.moons.forEach((m, i) => {
+    const p = moonPos[i], a = MOONS[i][1];
+    const d = [p[0] - c[0], p[1] - c[1], p[2] - c[2]], dl = Math.hypot(d[0], d[1], d[2]) || 1;
+    m.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, 0.9 * (p[0] * camV.right[0] + p[1] * camV.right[1]) / a)), t, 0.1);
+    if (t > A.t0 + 7 + i * 0.7) m.g.gain.setTargetAtTime(m.lvl * (0.7 + 1.3 * Math.exp(-dl / 150)), t, 0.5);   // not before each voice's own entrance has swelled
+  });
+}
+const spc = $("sp").getContext("2d"); let spBuf = null;
+function drawSpectrum() {
+  const W = 536, H = 108; spc.clearRect(0, 0, W, H);
+  if (!A.an || !A.ctx) return; if (!spBuf) spBuf = new Uint8Array(A.an.frequencyBinCount); A.an.getByteFrequencyData(spBuf);
+  const sr = A.ctx.sampleRate, nb = 96, bw = W / nb;
+  for (let b = 0; b < nb; b++) {
+    const f0 = 20 * Math.pow(1000, b / nb), f1 = 20 * Math.pow(1000, (b + 1) / nb);
+    const i0 = Math.max(1, Math.floor(f0 / sr * A.an.fftSize)), i1 = Math.max(i0 + 1, Math.ceil(f1 / sr * A.an.fftSize));
+    let m = 0; for (let i = i0; i < i1 && i < spBuf.length; i++) m = Math.max(m, spBuf[i]);
+    const h = (m / 255) ** 1.6 * H;
+    spc.fillStyle = `rgba(226,196,138,${0.35 + 0.65 * m / 255})`; spc.fillRect(b * bw, H - h, bw - 1.5, h);
+  }
+}
+
+/* ───────────────────────── UI ───────────────────────── */
+const fmtN = n => n >= 1048576 ? (n / 1048576) + "M" : Math.round(n / 1024) + "K";
+const fmtKm = mm => Math.round(mm * 1000).toLocaleString("en-US") + " km";
+$("hRoche").textContent = "≈ " + fmtKm(Math.round(R_ROCHE * 10) / 10); $("hRes").textContent = fmtKm(R_RES); $("hResK").textContent = fmtKm(R_RES_K);
+const setPer = () => { $("hPer").textContent = (TAU / meanMotion(105, !!S.harm) / 3.6).toFixed(2) + " h"; };
+const mn = t => t.replace("-", "−");
+let slow = false;   // true while slow frames hold the clock below the slider; the frame loop then owns the Time warp readout
+function syncUI() {
+  if (!slow) $("vWarp").textContent = S.warp ? S.warp.toFixed(1) + " h / s" + (S.capFrom !== null ? " · close-up" : "") : "paused";
+  $("vBoost").textContent = "× " + (S.boost < 10 ? S.boost.toFixed(1) : Math.round(S.boost));
+  const ev = x => mn((Math.log2(x) >= 0 ? "+" : "") + Math.log2(x).toFixed(2) + " EV");
+  $("vSun").textContent = mn(S.sunEl.toFixed(1) + "°"); $("vExp").textContent = ev(S.exp);
+  $("vRing").textContent = ev(S.ring); $("vVol").textContent = Math.round($("sVol").value * 100) + "%";
+  for (const [sl, v] of [["sWarp", "vWarp"], ["sBoost", "vBoost"], ["sSun", "vSun"], ["sExp", "vExp"], ["sRing", "vRing"], ["sVol", "vVol"]]) if (!slow || sl !== "sWarp") $(sl).setAttribute("aria-valuetext", $(v).textContent);
+  if (S.warp && !slow) $("sWarp").setAttribute("aria-valuetext", S.warp.toFixed(1) + " simulated hours per second");
+}
+const setWarp = w => { S.warp = w; $("sWarp").value = w; syncUI(); };
+$("sWarp").oninput = e => { S.warp = +e.target.value; S.capFrom = null; S.auto = false; syncUI(); };
+$("sBoost").oninput = e => { S.boost = Math.pow(10, +e.target.value); syncUI(); };
+let boostTimer = 0;   // one thump per settled value, not one per arrow-key step
+$("sBoost").onchange = () => { clearTimeout(boostTimer); boostTimer = setTimeout(() => strike(0.45), 300); };
+$("sSun").oninput = e => { S.sunEl = +e.target.value; syncUI(); if (viewBtns[2].classList.contains("on") && S.sunEl * S.goal.el > 0) markView(null); };   // "Unlit face" is no longer true once the Sun crosses to the camera's side
+$("sExp").oninput = e => { S.exp = Math.pow(2, +e.target.value); syncUI(); };
+$("sRing").oninput = e => { S.ring = Math.pow(2, +e.target.value); syncUI(); };
+$("sVol").oninput = e => { if (A.ctx && A.master) A.master.gain.setTargetAtTime(+e.target.value, A.ctx.currentTime, 0.05); syncUI(); };
+const tog = (id, key, after) => { $(id).onclick = () => { S[key] ^= 1; $(id).classList.toggle("on", !!S[key]); $(id).setAttribute("aria-pressed", !!S[key]); if (after) after(); }; };
+// the oblate field changes the circular speed every ring particle needs, so flipping it restarts the rings in the chosen field
+tog("tJ", "harm", () => { setPer(); if (R && S.N) { reseed(S.N, true); strike(0.3); } });   // forced: the rings must always match the field the toggle shows
+tog("tO", "orbits"); tog("tB", "field"); tog("tL", "labels");
+const viewBtns = [];
+const markView = b => viewBtns.forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", x === b); });
+const camMoved = () => { if (S.follow < 0) markView(null); };   // a free view stops being "the" view once the camera is moved; a follow view stays locked on
+VIEWS.forEach(([name, v0, opt = {}]) => {
+  const b = document.createElement("button"); b.textContent = name; viewBtns.push(b);
+  b.onclick = () => {
+    const v = opt.unlit ? { ...v0, el: -Math.sign(S.sunEl || 1) * Math.abs(v0.el) } : v0;
+    S.follow = opt.follow ?? -1; if (S.follow >= 0) S.fi = S.follow;
+    const k = Math.round((S.goal.az - v.az) / TAU) * TAU; S.cam.az -= k;   // take the short way round
+    Object.assign(S.goal, v);
+    const back = S.capFrom !== null && S.warp === S.capTo ? S.capFrom : S.warp;   // give back the speed a close-up took, unless the slider was moved since
+    S.capFrom = null;
+    if (opt.maxWarp && back > opt.maxWarp) { S.capFrom = back; S.capTo = opt.maxWarp; setWarp(opt.maxWarp); } else setWarp(back);
+    markView(b); strike(0.22);
+  };
+  $("bV").appendChild(b);
+});
+markView(viewBtns[0]);
+$("bHit").onclick = () => strike(1);
+let hideFrom = null;
+const setHidden = h => {   // focus only moves when the thing holding it is about to disappear, and comes back to where it was
+  const ae = document.activeElement; document.body.classList.toggle("hide", h);
+  if (h) { hideFrom = $("ui").contains(ae) ? ae : null; if (hideFrom) $("bShow").focus(); }
+  else if (ae === $("bShow")) (hideFrom && hideFrom.isConnected ? hideFrom : cv).focus();
+};
+$("bHide").onclick = () => setHidden(true);
+$("bShow").onclick = () => setHidden(false);
+addEventListener("keydown", e => {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || (e.key !== "h" && e.key !== "H")) return;
+  if (!$("intro").classList.contains("gone")) return;
+  setHidden(!document.body.classList.contains("hide"));
+});
+document.addEventListener("visibilitychange", () => { const c = A.ctx; if (c) (document.hidden ? c.suspend() : c.resume()).catch(() => {}); });
+syncUI(); setPer();
+const labelEls = MOONS.map(m => { const d = document.createElement("div"); d.textContent = m[0]; $("labels").appendChild(d); return d; });
+const extraLabels = [["Roche limit", R_ROCHE], ["Mimas 2:1", R_RES]].map(([t, r]) => { const d = document.createElement("div"); d.textContent = t; d.style.color = "rgba(226,196,138,.8)"; $("labels").appendChild(d); return { d, r }; });
+
+/* camera input */
+const cv = $("gpu"); const ptrs = new Map(); let pinch = 0;
+const clampDist = d => Math.max(1.5, Math.min(4000, d));
+cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (A.ctx && A.ctx.state !== "running") A.ctx.resume().catch(() => {}); });
+cv.addEventListener("pointerup", e => { ptrs.delete(e.pointerId); pinch = 0; });
+cv.addEventListener("pointercancel", e => { ptrs.delete(e.pointerId); pinch = 0; });
+cv.addEventListener("lostpointercapture", e => { ptrs.delete(e.pointerId); pinch = 0; });
+cv.addEventListener("contextmenu", e => e.preventDefault());
+cv.addEventListener("pointermove", e => {
+  if (e.pointerType === "mouse" && !e.buttons) { ptrs.delete(e.pointerId); return; }   // a release we never saw
+  if (!ptrs.has(e.pointerId)) return; const p = ptrs.get(e.pointerId), dx = e.clientX - p[0], dy = e.clientY - p[1]; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  camMoved();
+  if (ptrs.size === 1) { S.goal.az -= dx * 0.005; S.goal.el = Math.max(-1.55, Math.min(1.55, S.goal.el + dy * 0.005)); }
+  else if (ptrs.size === 2) { const a = [...ptrs.values()], d = Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]); if (pinch) S.goal.dist = clampDist(S.goal.dist * pinch / d); pinch = d; }
+});
+cv.addEventListener("wheel", e => { e.preventDefault(); camMoved(); const dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1); S.goal.dist = clampDist(S.goal.dist * Math.exp(dy * 0.0012)); }, { passive: false });
+addEventListener("keydown", e => {   // the keyboard twin of drag and wheel, live wherever focus is except in a slider: arrows move the scene the way a drag would
+  const arrow = !!e.key && e.key.startsWith("Arrow");
+  if (e.ctrlKey || e.metaKey || e.altKey || (arrow && e.target.tagName === "INPUT") || !$("intro").classList.contains("gone")) return;   // a slider keeps its arrows, nothing else
+  const pn = arrow && e.target.closest ? e.target.closest(".panel") : null;
+  if (pn && pn.scrollHeight > pn.clientHeight) return;   // inside a panel that scrolls, arrows keep scrolling it
+  const g = S.goal, st = e.shiftKey ? 0.25 : 0.08; let used = true;
+  if (e.key === "ArrowLeft") g.az += st; else if (e.key === "ArrowRight") g.az -= st;
+  else if (e.key === "ArrowDown") g.el = Math.min(1.55, g.el + st); else if (e.key === "ArrowUp") g.el = Math.max(-1.55, g.el - st);
+  else if (e.key === "+" || e.key === "=") g.dist = clampDist(g.dist / 1.15); else if (e.key === "-" || e.key === "_") g.dist = clampDist(g.dist * 1.15);
+  else used = false;
+  if (used) { e.preventDefault(); camMoved(); }
+});
+// the scene's focus frame is for keyboard users only: a mouse click on Enter must not leave a gold border round the view
+addEventListener("keydown", e => { if (e.key === "Tab" || e.key === "Enter" || e.key === " " || (e.key && e.key.startsWith("Arrow"))) cv.classList.add("kb"); }, true);
+addEventListener("pointerdown", () => cv.classList.remove("kb"), true);
+
+/* ───────────────────────── WebGPU ───────────────────────── */
+const COARSE = matchMedia("(pointer:coarse)").matches, REDUCED = matchMedia("(prefers-reduced-motion: reduce)"), NARROW = matchMedia("(max-width:760px),(max-height:620px)");
+let R = null;
+const friendly = m => Object.assign(new Error(m), { friendly: true });   // messages written for the person, not the console
+const NO_GPU = "WebGPU isn't available in this browser. Open this page in a current Chrome, Edge or Safari on a computer with hardware acceleration turned on.";
+async function initGPU() {
+  if (!navigator.gpu) throw friendly(NO_GPU);
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  if (!adapter) throw friendly("No graphics adapter was found for WebGPU. Turn on hardware acceleration in your browser settings, then reload.");
+  const device = await adapter.requestDevice();
+  device.addEventListener("uncapturederror", e => { console.error("WebGPU:", e.error.message); fail("The graphics device reported an error. Reload to restart."); });
+  device.lost.then(i => fail("The graphics device was lost" + (i.message ? " (" + i.message.replace(/\.$/, "") + ")" : "") + ". Reload to restart."));
+  const ctx = cv.getContext("webgpu"); const fmt = navigator.gpu.getPreferredCanvasFormat();
+  ctx.configure({ device, format: fmt, alphaMode: "opaque" });
+  const maxN = Math.floor(Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize) / 16);
+  const HDR = "rgba16float";
+  const mod = code => device.createShaderModule({ code });
+  const add = { color: { srcFactor: "one", dstFactor: "one" }, alpha: { srcFactor: "one", dstFactor: "one" } };
+  const rp = (code, targets, extra = {}) => { const m = mod(code); return device.createRenderPipelineAsync({ layout: "auto", vertex: { module: m, entryPoint: "vs", buffers: extra.buffers || [] }, fragment: { module: m, entryPoint: "fs", targets }, primitive: { topology: extra.topology || "triangle-list" } }); };
+  let pipes;   // compiled before the intro lifts, so the first frames never stall on shader compilation
+  try {
+    pipes = await Promise.all([
+      rp(W_SCENE, [{ format: HDR }]),
+      rp(W_PART, [{ format: HDR, blend: add }], { topology: "point-list" }),
+      rp(W_LINE, [{ format: HDR, blend: add }], { topology: "line-list", buffers: [{ arrayStride: 28, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }, { shaderLocation: 1, offset: 12, format: "float32x4" }] }] }),
+      rp(W_DOWN, [{ format: HDR }]), rp(W_BLUR, [{ format: HDR }]), rp(W_COMP, [{ format: fmt }]),
+      device.createComputePipelineAsync({ layout: "auto", compute: { module: mod(W_SIM), entryPoint: "main" } }),
+    ]);
+  } catch (e) {   // a browser that rejects a shader must say so, not show a black canvas
+    throw friendly("This browser's WebGPU rejected the shaders (" + String(e && e.message || e).split("\n")[0].slice(0, 160).replace(/\.$/, "") + "). Try the latest Chrome or Edge.");
+  }
+  const [pScene, pPart, pLine, pDown, pBlur, pComp, pSim] = pipes;
+  const ubuf = (n) => device.createBuffer({ size: n, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  const gBuf = ubuf(23 * 16), sBuf = ubuf(10 * 16), bH = ubuf(16), bV = ubuf(16), cBuf = ubuf(16);
+  device.queue.writeBuffer(bH, 0, new Float32Array([1, 0, 0, 0])); device.queue.writeBuffer(bV, 0, new Float32Array([0, 1, 0, 0]));
+  const tBuf = device.createBuffer({ size: TAU_N * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST }); device.queue.writeBuffer(tBuf, 0, tauTab);
+  const smp = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+  // overlay lines: group 0 orbits, 1 Roche, 2 resonance, 3 field
+  const L = []; const seg = (a, b, c, g) => L.push(a[0], a[1], a[2], c[0], c[1], c[2], g, b[0], b[1], b[2], c[0], c[1], c[2], g);
+  const circle = (r, c, g, n = 360, dash = 0) => { for (let i = 0; i < n; i++) { if (dash && i % 2) continue; const a0 = i / n * TAU, a1 = (i + 1) / n * TAU; seg([r * Math.cos(a0), r * Math.sin(a0), 0], [r * Math.cos(a1), r * Math.sin(a1), 0], c, g); } };
+  MOONS.forEach(m => circle(m[1], [0.022, 0.025, 0.034], 0));
+  circle(R_ROCHE, [0.30, 0.10, 0.04], 1, 360, 1); circle(R_RES, [0.28, 0.22, 0.08], 2, 720, 1);
+  for (const Ls of [1.6, 2.2, 3, 4, 5.5, 7.5, 10, 14]) for (let k = 0; k < 12; k++) {
+    const ph = k / 12 * TAU, lm = Math.acos(Math.sqrt(1.02 / Ls)), n = 72; let prev = null;
+    for (let i = 0; i <= n; i++) { const la = -lm + 2 * lm * i / n, r = Ls * REQ * Math.cos(la) ** 2, p = [r * Math.cos(la) * Math.cos(ph), r * Math.cos(la) * Math.sin(ph), r * Math.sin(la)]; if (prev) seg(prev, p, [0.035, 0.07, 0.16], 3); prev = p; }
+  }
+  const lineData = new Float32Array(L); const lBuf = device.createBuffer({ size: lineData.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST }); device.queue.writeBuffer(lBuf, 0, lineData);
+  const bgLine = device.createBindGroup({ layout: pLine.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: gBuf } }] });
+  const bgScene = device.createBindGroup({ layout: pScene.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: gBuf } }, { binding: 1, resource: { buffer: tBuf } }] });
+  R = { dirty: true, device, ctx, fmt, maxN, fallback: !!(adapter.isFallbackAdapter || (adapter.info && adapter.info.isFallbackAdapter)), pScene, pPart, pLine, pDown, pBlur, pComp, pSim, gBuf, sBuf, bH, bV, cBuf, tBuf, smp, lBuf, lineVerts: lineData.length / 7, bgLine, bgScene, W: 0, H: 0 };
+}
+function resize() {
+  const dprNow = window.devicePixelRatio || 1;
+  if (!R.dirty && dprNow === R.dpr) return; R.dirty = false; R.dpr = dprNow;   // dirty is set by a ResizeObserver, so the frame loop never reads layout
+  R.cw = cv.clientWidth || 1; R.ch = cv.clientHeight || 1;   // cached CSS size, so label placement never reads layout
+  const dpr = Math.min(dprNow, R.fallback ? 1 : COARSE ? 1.5 : 2), mx = R.device.limits.maxTextureDimension2D;
+  const w = Math.min(mx, Math.max(8, Math.floor(R.cw * dpr))), h = Math.min(mx, Math.max(8, Math.floor(R.ch * dpr)));
+  if (w === R.W && h === R.H) return;
+  R.W = cv.width = w; R.H = cv.height = h; const d = R.device;
+  [R.hdr, R.ba, R.bb].forEach(t => t && t.destroy());
+  const tex = (w, h) => d.createTexture({ size: [w, h], format: "rgba16float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+  const bw = Math.max(2, w >> 2), bh = Math.max(2, h >> 2);
+  R.hdr = tex(w, h); R.ba = tex(bw, bh); R.bb = tex(bw, bh);
+  R.vHdr = R.hdr.createView(); R.vA = R.ba.createView(); R.vB = R.bb.createView();
+  const bg = (p, e) => d.createBindGroup({ layout: p.getBindGroupLayout(0), entries: e.map((r, i) => ({ binding: i, resource: r })) });
+  R.bgDown = bg(R.pDown, [R.smp, R.vHdr]);
+  R.bgH = bg(R.pBlur, [R.smp, R.vA, { buffer: R.bH }]); R.bgV = bg(R.pBlur, [R.smp, R.vB, { buffer: R.bV }]);
+  R.bgComp = bg(R.pComp, [R.smp, R.vHdr, R.vA, { buffer: R.cBuf }]);
+}
+function seedParticles(N) {
+  const d = R.device; N = Math.min(N, R.maxN);
+  if (R.pos) { R.pos.destroy(); R.vel.destroy(); }
+  const mk = () => d.createBuffer({ size: N * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+  R.pos = mk(); R.vel = mk();
+  const CH = Math.min(1 << 19, N), P = new Float32Array(CH * 4), V = new Float32Array(CH * 4);
+  for (let off = 0; off < N; off += CH) {
+    const n = Math.min(CH, N - off);
+    for (let i = 0; i < n; i++) {
+      const r = invCdf[(Math.random() * 65536) | 0] + (Math.random() - 0.5) * 0.004, th = Math.random() * TAU;
+      const c = Math.cos(th), s = Math.sin(th), vc = Math.sqrt(r * gEq(r, !!S.harm));
+      const e = 2e-4 * Math.random(), w = Math.random() * TAU;
+      const vr = vc * e * Math.sin(w), vt = vc * (1 + e * Math.cos(w)), j = i * 4;
+      P[j] = r * c; P[j + 1] = r * s; P[j + 2] = (Math.random() + Math.random() - 1) * 0.004; P[j + 3] = Math.random();
+      V[j] = vr * c - vt * s; V[j + 1] = vr * s + vt * c; V[j + 2] = (Math.random() - 0.5) * 4e-6 * vc; V[j + 3] = 0;
+    }
+    d.queue.writeBuffer(R.pos, off * 16, P, 0, n * 4); d.queue.writeBuffer(R.vel, off * 16, V, 0, n * 4);
+  }
+  const b = e => e.map((r, i) => ({ binding: i, resource: { buffer: r } }));
+  R.bgSim = d.createBindGroup({ layout: R.pSim.getBindGroupLayout(0), entries: b([R.sBuf, R.pos, R.vel]) });
+  R.bgPart = d.createBindGroup({ layout: R.pPart.getBindGroupLayout(0), entries: b([R.gBuf, R.tBuf, R.pos]) });
+  S.N = N; S.seedF = frameNo; S.seedTs = performance.now(); S.autoT = 0;
+  [...$("bN").children].forEach(el => { const on = +el.dataset.n === N; el.classList.toggle("on", on); el.setAttribute("aria-pressed", on); });
+}
+function reseed(n = S.N, force = false) {
+  const now = performance.now(); if (!force && now - S.seedTs < 300) return;   // a held key cannot re-seed a million particles on every repeat
+  seedParticles(n); S.t0 = S.simT;
+}   // fresh rings get their own clock; the moons keep going
+
+/* ───────────────────────── frame ───────────────────────── */
+const gArr = new Float32Array(23 * 4), sArr = new Float32Array(10 * 4);
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+function hitPlanetJS(o, d) {
+  const k = REQ / RPOL, oo = [o[0], o[1], o[2] * k], dd = [d[0], d[1], d[2] * k];
+  const a = dd[0] ** 2 + dd[1] ** 2 + dd[2] ** 2, b = oo[0] * dd[0] + oo[1] * dd[1] + oo[2] * dd[2], c = oo[0] ** 2 + oo[1] ** 2 + oo[2] ** 2 - REQ * REQ, h = b * b - a * c;
+  if (h <= 0) return -1; const t = (-b - Math.sqrt(h)) / a; return t > 0 ? t : -1;
+}
+function place(el, p, show) {
+  const c = camV, d = [p[0] - c.pos[0], p[1] - c.pos[1], p[2] - c.pos[2]], w = d[0] * c.fwd[0] + d[1] * c.fwd[1] + d[2] * c.fwd[2];
+  const asp = R.cw / R.ch; let vis = show && w > 0.1;
+  if (vis) { const dl = Math.hypot(d[0], d[1], d[2]), t = hitPlanetJS(c.pos, [d[0] / dl, d[1] / dl, d[2] / dl]); if (t > 0 && t < dl) vis = false; }
+  if (!vis) { el.style.display = "none"; return; }
+  const x = (d[0] * c.right[0] + d[1] * c.right[1] + d[2] * c.right[2]) / (c.tanH * asp * w), y = (d[0] * c.up[0] + d[1] * c.up[1] + d[2] * c.up[2]) / (c.tanH * w);
+  if (Math.abs(x) > 1.05 || Math.abs(y) > 1.05) { el.style.display = "none"; return; }
+  el.style.display = "block"; el.style.left = ((x * 0.5 + 0.5) * R.cw) + "px"; el.style.top = ((0.5 - y * 0.5) * R.ch) + "px";
+}
+let last = 0, fps = 60, frameNo = 0;
+function frame(ts) {
+  if (S.dead) return;
+  requestAnimationFrame(frame);
+  const raw = Math.max(0, (ts - last) / 1000) || 0.016, dtReal = Math.min(0.05, raw); last = ts; fps += (1 / Math.max(raw, 1e-3) - fps) * 0.05; frameNo++;   // the readout uses the true frame time
+  resize(); const d = R.device;
+  // camera easing (the pose itself is computed after the clock advances)
+  const cm = S.cam, gl = S.goal, kk = REDUCED.matches ? 1 : 1 - Math.exp(-dtReal * 3.2);
+  for (const key in cm) cm[key] += (gl[key] - cm[key]) * kk;
+  // simulation step
+  let dtSim = S.warp * 3.6 * dtReal; const sub = Math.max(1, Math.min(MAX_SUB, Math.ceil(dtSim / DT_MAX))); dtSim = Math.min(dtSim, sub * DT_MAX); S.sub = dtSim > 0 ? sub : 0;
+  sArr.set([dtSim / sub, sub, GM, S.harm, J2, J4, J6, RREF]);
+  MOONS.forEach((m, i) => { const ph = (m.phase0 + m.n * S.simT) % TAU; sArr.set([m[1], m.n, ph, m[2] * 1e-3 * (m[5] ? S.boost : 1)], 8 + i * 4); });
+  d.queue.writeBuffer(R.sBuf, 0, sArr);
+  S.simT += dtSim; S.flowT += Math.min(dtSim, 5.4 * dtReal);   // cloud drift follows the clock but never faster than its default pace, so high warp cannot make the bands pulse
+  // camera pose, from the clock as drawn: a followed moon is exactly where it renders
+  S.fw += ((S.follow >= 0 ? 1 : 0) - S.fw) * kk;
+  const fm = MOONS[S.fi], fa = fm.phase0 + fm.n * S.simT, fw = S.fw;
+  const tgt = [cm.tx + (fm[1] * Math.cos(fa) - cm.tx) * fw, cm.ty + (fm[1] * Math.sin(fa) - cm.ty) * fw, cm.tz];
+  const az = Math.atan2((1 - fw) * Math.sin(cm.az) + fw * Math.sin(cm.az + fa), (1 - fw) * Math.cos(cm.az) + fw * Math.cos(cm.az + fa));   // a follow view's azimuth is relative to the moon's radial direction; blending directions has no 2π seam
+  const dist = cm.dist * Math.max(1, R.ch / R.cw), ce = Math.cos(cm.el);     // portrait screens pull back so the rings still fit
+  let pos = [tgt[0] + dist * ce * Math.cos(az), tgt[1] + dist * ce * Math.sin(az), tgt[2] + dist * Math.sin(cm.el)];
+  const qp = Math.hypot(pos[0], pos[1], pos[2] * REQ / RPOL) / REQ;
+  if (qp > 1e-6 && qp < 1.04) pos = pos.map(v => v * 1.04 / qp);               // the camera never sinks into Saturn
+  camV.az = az; camV.pos = pos; camV.fwd = norm([tgt[0] - pos[0], tgt[1] - pos[1], tgt[2] - pos[2]]);
+  camV.right = norm(cross(camV.fwd, [0, 0, 1])); camV.up = cross(camV.right, camV.fwd);
+  // globals
+  const se = S.sunEl * Math.PI / 180, sun = [Math.cos(se) * Math.cos(SUN_AZ), Math.cos(se) * Math.sin(SUN_AZ), Math.sin(se)];
+  const asp = R.W / R.H, PW = 80, f1 = (S.flowT / PW) % 1, f2 = (f1 + 0.5) % 1;
+  gArr.set([...camV.pos, 0, ...camV.right, camV.tanH, ...camV.up, asp, ...camV.fwd, R.H, ...sun, 0,
+    (S.simT * 2 * Math.PI / ROT_PERIOD) % (2 * Math.PI), (f1 - 0.5) * PW, (f2 - 0.5) * PW, 1 - Math.abs(2 * f1 - 1),
+    S.N, 0.85 * S.ring, (S.orbits ? (S.harm ? 7 : 3) : 0) | (S.field ? 8 : 0), 0]);
+  MOONS.forEach((m, i) => {
+    const a = m.phase0 + m.n * S.simT, p = [m[1] * Math.cos(a), m[1] * Math.sin(a), 0]; moonPos[i] = p;
+    const dist = Math.hypot(p[0] - camV.pos[0], p[1] - camV.pos[1], p[2] - camV.pos[2]);
+    gArr.set([...p, Math.max(m[3], 0.0022 * dist)], 28 + i * 4); gArr.set([...m[4], 0], 60 + i * 4);
+  });
+  d.queue.writeBuffer(R.gBuf, 0, gArr); d.queue.writeBuffer(R.cBuf, 0, new Float32Array([1.15 * S.exp, 0.55, 0, 0]));
+  // encode
+  const enc = d.createCommandEncoder();
+  if (dtSim > 0) { const cp = enc.beginComputePass(); cp.setPipeline(R.pSim); cp.setBindGroup(0, R.bgSim); cp.dispatchWorkgroups(Math.ceil(S.N / 256)); cp.end(); }
+  const pass = (view, fn) => { const p = enc.beginRenderPass({ colorAttachments: [{ view, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }] }); fn(p); p.end(); };
+  pass(R.vHdr, p => {
+    p.setPipeline(R.pScene); p.setBindGroup(0, R.bgScene); p.draw(3);
+    p.setPipeline(R.pPart); p.setBindGroup(0, R.bgPart); p.draw(S.N);
+    if (S.orbits || S.field) { p.setPipeline(R.pLine); p.setBindGroup(0, R.bgLine); p.setVertexBuffer(0, R.lBuf); p.draw(R.lineVerts); }
+  });
+  pass(R.vA, p => { p.setPipeline(R.pDown); p.setBindGroup(0, R.bgDown); p.draw(3); });
+  pass(R.vB, p => { p.setPipeline(R.pBlur); p.setBindGroup(0, R.bgH); p.draw(3); });
+  pass(R.vA, p => { p.setPipeline(R.pBlur); p.setBindGroup(0, R.bgV); p.draw(3); });
+  pass(R.ctx.getCurrentTexture().createView(), p => { p.setPipeline(R.pComp); p.setBindGroup(0, R.bgComp); p.draw(3); });
+  d.queue.submit([enc.finish()]);
+  // HUD
+  const shown = !document.body.classList.contains("hide");
+  if (shown) {
+    MOONS.forEach((m, i) => place(labelEls[i], moonPos[i], S.labels));
+    const la = camV.az + 0.35; extraLabels.forEach((e, i) => place(e.d, [e.r * Math.cos(la + i * 0.5), e.r * Math.sin(la + i * 0.5), 0], S.labels && S.orbits && (i === 0 || S.harm)));   // the drawn 2:1 ring is the oblate-field one
+  }
+  if (frameNo % 6 === 0) {
+    const t = S.simT - S.t0, h = t / 3.6; $("hT").textContent = h < 48 ? h.toFixed(1) + " h" : (h / 24).toFixed(2) + " d";
+    $("hRot").textContent = (t / ROT_PERIOD).toFixed(2); $("hMim").textContent = (t * MOONS[4].n / TAU).toFixed(2);
+    $("hN").textContent = fmtN(S.N) + " · " + S.sub; $("hF").textContent = fps.toFixed(0) + " fps";
+    // the clock can fall behind the slider when frames are slow (16 steps of 0.12 ks at most per frame): say so instead of overstating
+    const eff = dtSim / 3.6 / raw, capped = S.warp > 0 && eff < S.warp * 0.9;   // measured against the true frame time
+    const was = slow; slow = capped;
+    if (capped) { const m = eff.toFixed(1) + " of " + S.warp.toFixed(1); $("vWarp").textContent = m + " h / s"; $("sWarp").setAttribute("aria-valuetext", m + " simulated hours per second"); }
+    else if (was) syncUI();
+    updateAudio();
+  }
+  if (frameNo % 2 === 0 && shown && !NARROW.matches) drawSpectrum();
+  // one-time courtesy at startup: a GPU that cannot hold 20 fps is moved straight to a particle count it can, down to 128K.
+  // Judged on summed frame times (after 150 frames, or 2.5 s on a machine too slow to get there), and only until the user picks a tier or a speed.
+  // Each frame counts for half a second at most, so a hidden tab or a one-off stall is not mistaken for a slow GPU.
+  const nf = frameNo - S.seedF; S.autoT += Math.min(raw, 0.5); const el = S.autoT;
+  if (S.auto && nf >= 20 && el > 0 && (nf >= 150 || el > 2.5)) {
+    const rate = nf / el;
+    if (rate < 20 && S.N > 131072) reseed(Math.max(131072, S.N >> Math.min(3, Math.ceil(Math.log2(20 / rate)))), true); else S.auto = false;
+  }
+}
+
+/* ───────────────────────── boot ───────────────────────── */
+function fail(msg) {   // one way out of every failure: stop the sound, say what happened, offer a reload. The first message stands.
+  if (S.dead) return;
+  S.dead = true; stopAudio(); if (R) R.device.destroy(); $("ui").inert = cv.inert = true; $("intro").inert = false; $("intro").classList.remove("gone");
+  $("err").textContent = msg;
+  const b = $("go"); b.disabled = false; b.textContent = "Reload"; b.onclick = () => location.reload(); b.focus({ preventScroll: true });
+}
+$("go").onclick = async () => {
+  $("go").disabled = true; $("go").textContent = "Igniting…";
+  try { openAudio(); } catch (e) { console.error(e); }
+  await new Promise(r => requestAnimationFrame(() => setTimeout(r)));   // let the label paint before the heavy audio build
+  try { initAudio(); } catch (e) { console.error(e); stopAudio(); }
+  try {
+    await initGPU();
+    if (S.dead) return;   // the device was lost while starting: fail() has already put up the message
+    const opts = [1, 2, 4, 8, 16].map(m => m * 65536).filter(n => n <= R.maxN);
+    opts.forEach(n => { const b = document.createElement("button"); b.textContent = fmtN(n); b.dataset.n = n; b.setAttribute("aria-pressed", "false"); b.onclick = () => { S.auto = false; reseed(n); strike(0.3); }; $("bN").appendChild(b); });
+    // phones, small windows and software adapters start at 128K. Operator knob: #n<K> starts with K×1024 particles (1M at most, 128K on those).
+    const small = COARSE || innerWidth <= 760 || R.fallback, q = +(location.hash.match(/^#n(\d+)$/) || [])[1];
+    if (q) S.auto = false;
+    seedParticles(q ? Math.max(1024, Math.min(q * 1024, small ? 131072 : 1048576)) : small && opts.includes(131072) ? 131072 : opts[opts.length - 1]);
+    $("bRe").onclick = () => { reseed(); strike(0.5); };
+    resize(); new ResizeObserver(() => { R.dirty = true; }).observe(cv); addEventListener("resize", () => { R.dirty = true; });
+    last = performance.now(); requestAnimationFrame(frame);
+    $("ui").inert = cv.inert = false; $("intro").inert = true;
+    if (!A.ctx) { const r = $("rAudio"), m = r.textContent; r.textContent = ""; setTimeout(() => { r.textContent = m; }, 150); }   // re-announce now that the status row is reachable
+    $("intro").classList.add("gone"); cv.focus({ preventScroll: true });
+  } catch (e) {
+    console.error(e);
+    if (!S.dead) fail(e.friendly ? e.message : "Saturn couldn't start: " + String(e && e.message ? e.message : e).replace(/\.$/, "") + ". Reload the page to try again.");
+  }
+};
+if (!navigator.gpu) { $("err").textContent = NO_GPU; $("go").disabled = true; }   // say so before anyone clicks
+else $("go").focus({ preventScroll: true });   // not autofocus: that would scroll a short screen past the title
+</script>
+</body>
+</html>
