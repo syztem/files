@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#04050a">
+<meta name="description" content="A real-time Kerr black hole with an accretion disk, ray traced in the browser with WebGPU, with a synthesized soundtrack.">
+<link rel="icon" href="data:,">
+<title>Gargantua Kerr Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;800&family=IBM+Plex+Mono:wght@400;500&display=swap" referrerpolicy="no-referrer" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;800&family=IBM+Plex+Mono:wght@400;500&display=swap" referrerpolicy="no-referrer"></noscript>
+<style>
+/* Layout idea: the render fills the frame; instruments sit on the edges like a flight deck
+   (title top-left, controls right rail, spectrum along the bottom). */
+:root{
+  color-scheme: dark;
+  --void:#04050a;
+  --ink:#ece6d8;
+  --dim:#918d84;
+  --ember:#ffb766;
+  --line:rgba(236,230,216,.16);
+  --edge:rgba(236,230,216,.42);
+  --panel:rgba(7,8,12,.88);
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--void);color:var(--ink);font-family:var(--mono);font-size:12px;overflow:hidden;overscroll-behavior:none}
+#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;background:var(--void)}
+#view:active{cursor:grabbing}
+.hud{position:fixed;pointer-events:none;z-index:2;transition:opacity .9s ease;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+body.idle .hud{opacity:0}
+body.idle #view{cursor:none}
+.hud *{pointer-events:auto}
+#title h1,#title p{pointer-events:none}   /* the title text must not swallow a drag or a wheel */
+body.idle .hud *{pointer-events:none}
+body.clean .hud{display:none!important}
+
+#title{top:20px;left:22px;display:flex;flex-direction:column;gap:6px;max-width:min(440px,calc(100% - 44px));text-shadow:0 0 3px #000,0 0 9px rgba(0,0,0,.9),0 0 18px rgba(0,0,0,.75)}
+#title h1{font-family:var(--display);font-weight:800;font-size:clamp(34px,5vw,58px);letter-spacing:.06em;line-height:.9;margin:0;text-wrap:balance}
+#title p{margin:0;color:var(--ink);line-height:1.5;max-width:46ch}
+#soundBtn{align-self:flex-start;margin-top:8px;font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:.1em;
+  color:var(--void);background:var(--ember);border:0;border-radius:2px;padding:9px 16px 8px;cursor:pointer}
+#soundBtn.on{background:rgba(4,5,10,.72);color:var(--ember);box-shadow:inset 0 0 0 1px var(--ember)}
+#soundBtn{text-shadow:none}
+@media (hover:hover){#soundBtn:hover:not(:disabled){filter:brightness(1.12)}#soundBtn.on:hover{background:rgba(255,183,102,.14);filter:none}}
+#soundBtn:focus-visible{outline:2px solid #fff;outline-offset:2px;box-shadow:0 0 0 2px var(--void)}   /* two-tone ring: it must read over the bright disk too */
+#soundBtn.on:focus-visible{box-shadow:0 0 0 2px var(--void),inset 0 0 0 1px var(--ember)}
+#soundBtn:disabled{opacity:.45;cursor:default}
+
+#spectrumWrap{left:22px;right:22px;bottom:14px;height:40px;display:flex;align-items:flex-end;gap:10px}
+#spectrum{flex:1;min-width:0;height:40px;display:block}
+#spectrumWrap span{color:var(--ink);white-space:nowrap;padding-bottom:1px;text-shadow:0 0 3px #000,0 0 9px rgba(0,0,0,.9),0 0 18px rgba(0,0,0,.75)}
+#spectrumWrap,#spectrumWrap *{pointer-events:none}
+
+#panel{top:20px;right:22px;bottom:64px;width:320px;display:flex;flex-direction:column;gap:0;
+  background:var(--panel);border:1px solid var(--line);border-radius:2px;backdrop-filter:blur(8px)}
+#panelHead{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line)}
+#headBtns{display:flex;gap:6px}
+#panelHead .chip{flex:0 0 auto}
+#panelHead strong{font-family:var(--display);font-weight:800;font-size:18px;letter-spacing:.12em}
+#panelBody{overflow-y:auto;overscroll-behavior:contain;scroll-padding-block:6px;padding:4px 12px 12px;display:flex;flex-direction:column;gap:0;scrollbar-width:thin;scrollbar-color:rgba(236,230,216,.45) transparent}
+#panel.closed{bottom:auto}
+#panel.closed #panelBody{display:none}
+#panel.closed #panelHead{border-bottom:0}
+fieldset{border:0;margin:0;padding:10px 0 8px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px;min-width:0}
+fieldset:last-of-type{border-bottom:0}
+legend{font-family:var(--display);font-weight:500;font-size:14px;letter-spacing:.16em;color:var(--ember);padding:0;float:left;width:100%;margin-bottom:2px}
+.row{display:grid;grid-template-columns:92px 1fr 62px;align-items:center;gap:8px}
+.row label{color:var(--dim)}
+.row output{text-align:right;font-variant-numeric:tabular-nums}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+#camSeg,#toneSeg{display:grid;grid-template-columns:1fr 1fr}
+#qualitySeg{display:grid;grid-template-columns:repeat(4,1fr)}
+button.chip{font:inherit;color:var(--ink);background:transparent;border:1px solid var(--edge);border-radius:2px;padding:6px 9px;cursor:pointer;flex:1 1 auto}
+@media (hover:hover){button.chip:hover:not(:disabled){border-color:var(--ember)}}
+button.chip:active:not(:disabled){transform:translateY(1px)}
+button.chip:disabled{opacity:.45;cursor:default}
+button.chip[aria-pressed="true"]{background:var(--ember);color:var(--void);border-color:var(--ember)}
+.check{display:flex;align-items:flex-start;gap:8px;min-height:24px;padding-top:4px;color:var(--ink);cursor:pointer}
+.check input{accent-color:var(--ember);width:14px;height:14px;margin:1px 0 0;flex:none}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--edge)}
+input[type=range]::-moz-range-track{height:2px;background:var(--edge)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:16px;margin-top:-7px;background:var(--ember);border-radius:1px}
+input[type=range]::-moz-range-thumb{width:10px;height:16px;background:var(--ember);border:0;border-radius:1px}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
+.hint{color:var(--dim);line-height:1.5;margin:0}
+#keysHint{margin-top:10px}
+@media (hover:none){#keysHint{display:none}}
+#boot{position:fixed;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;color:var(--dim);letter-spacing:.16em;z-index:1;pointer-events:none}
+#nojs{position:fixed;inset:0;z-index:5;margin:0;padding:24px;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--void)}
+#fatal{position:fixed;inset:0;z-index:5;display:none;align-items:center;justify-content:center;padding:24px;background:var(--void)}
+#fatal div{max-width:520px;border:1px solid var(--line);padding:22px;line-height:1.6}
+#fatal div:focus{outline:none}
+#fatal h2{font-family:var(--display);font-size:28px;letter-spacing:.08em;line-height:1.1;margin:0 0 8px;color:var(--ember)}
+#fatal pre:empty{display:none}
+#fatal pre{white-space:pre-wrap;color:var(--dim);margin:10px 0 0;max-height:40vh;overflow:auto}
+#toast{position:fixed;left:50%;bottom:66px;transform:translateX(-50%);z-index:4;width:max-content;max-width:calc(100% - 32px);padding:8px 14px;text-align:center;
+  background:rgba(4,5,10,.92);border:1px solid var(--edge);border-radius:2px;pointer-events:none;opacity:0;transition:opacity .25s ease}
+#toast.show{opacity:1}
+@media (max-width:760px){
+  #title{left:16px;top:14px}
+  #spectrumWrap{left:16px;right:16px}
+  body:has(#panel:not(.closed)) #title p{display:none}   /* the sheet needs the room, and the hole needs the picture */
+}
+@media (max-width:599px), (max-width:760px) and (min-height:421px){
+  #toast{bottom:122px}
+  #panel{left:16px;right:16px;top:auto;bottom:62px;width:auto;max-height:min(56%,calc(100% - 62px - 190px))}
+  #panel.closed{top:auto;bottom:62px}
+}
+@media (max-width:760px) and (max-height:300px){
+  #title p{display:none}
+  #title h1{font-size:26px}
+  #soundBtn{margin-top:2px;padding:5px 12px 4px;font-size:16px}
+}
+@media (max-width:760px) and (max-height:640px){
+  #panel{max-height:min(56%,calc(100% - 62px - 112px))}
+}
+@media (max-width:760px) and (max-height:300px){#panel{max-height:calc(100% - 62px - 84px)}}
+@media (max-height:420px){#title p{display:none}}
+@media (min-width:761px){body:has(#panel:not(.closed)) #boot{right:342px}}
+@media (min-width:600px) and (max-width:760px) and (max-height:420px){   /* a phone on its side: controls go to the right, like a desktop */
+  #title p{display:none}
+  #panel{left:auto;right:16px;top:14px;bottom:62px;width:300px;max-height:none}
+  #panel.closed{top:14px;bottom:auto}
+}
+@media (forced-colors:active){
+  button[aria-pressed="true"],#soundBtn.on{background:Highlight;color:HighlightText;border-color:Highlight;forced-color-adjust:none}
+  button[aria-pressed="true"]:focus-visible,#soundBtn.on:focus-visible{outline-color:CanvasText}
+  input[type=range]::-webkit-slider-runnable-track{background:CanvasText;forced-color-adjust:none}
+  input[type=range]::-moz-range-track{background:CanvasText;forced-color-adjust:none}
+  input[type=range]::-webkit-slider-thumb{background:Highlight;forced-color-adjust:none}
+  input[type=range]::-moz-range-thumb{background:Highlight;forced-color-adjust:none}
+  #title h1,#title p,#spectrumWrap span,#boot{background:Canvas}   /* the picture is dark whatever the theme, so the text carries its own ground */
+}
+@media (prefers-reduced-motion:reduce){.hud,#toast{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="view" role="img" aria-label="Real-time render of a spinning black hole with an accretion disk"></canvas>
+<div id="boot" role="status" hidden>Starting the simulation…</div>
+<noscript><p id="nojs">This simulation needs JavaScript and a browser with WebGPU.</p></noscript>
+
+<header class="hud" id="title">
+  <h1>GARGANTUA</h1>
+  <p>A Kerr black hole of 100 million suns. Light rays are traced through curved spacetime on your GPU, one for every pixel it renders.</p>
+  <button id="soundBtn" type="button">TURN SOUND ON</button>
+</header>
+
+<aside class="hud" id="panel" aria-label="Controls">
+  <div id="panelHead"><strong>CONTROLS</strong><div id="headBtns"><button class="chip" id="resetBtn" type="button" aria-label="Reset settings, keeping camera position, render quality and volume">Reset</button><button class="chip" id="panelToggle" type="button" aria-expanded="true" aria-controls="panelBody" aria-label="Hide controls">Hide</button></div></div>
+  <div id="panelBody">
+    <fieldset>
+      <legend>RENDER</legend>
+      <div class="seg" id="qualitySeg" role="group" aria-label="Render quality">
+        <button class="chip" data-q="draft" type="button" aria-pressed="false">Draft</button>
+        <button class="chip" data-q="low" type="button" aria-pressed="false">Low</button>
+        <button class="chip" data-q="medium" type="button" aria-pressed="false">Medium</button>
+        <button class="chip" data-q="high" type="button" aria-pressed="true">High</button>
+      </div>
+      <label class="check"><input id="govern" type="checkbox"> Hold frame rate by scaling resolution</label>
+      <label class="check" id="hdrRow"><input id="hdr" type="checkbox"> HDR output</label>
+      <label class="check"><input id="idle" type="checkbox" checked> Fade controls when idle</label>
+    </fieldset>
+    <fieldset>
+      <legend>PHYSICS</legend>
+      <div class="seg" role="group" aria-label="Physics preset">
+        <button class="chip" id="presetFilm" type="button" aria-pressed="true">Film cut · a 0.6</button>
+        <button class="chip" id="presetScience" type="button" aria-pressed="false">Full relativity · a 0.998</button>
+      </div>
+      <p class="hint">Film cut: a symmetric disk, as in the film. Full relativity: Doppler and gravitational shift on, spin near the limit, a hotter disk, one stop brighter.</p>
+      <div class="row"><label for="spin">Spin a/M</label><input id="spin" type="range" min="0" max="0.998" step="0.002" value="0.6"><output id="spinO" for="spin"></output></div>
+      <label class="check"><input id="shift" type="checkbox"> Doppler and gravitational shift</label>
+      <div class="row"><label for="speed">Disk speed</label><input id="speed" type="range" min="0" max="12" step="0.1" value="3"><output id="speedO" for="speed"></output></div>
+      <label class="check"><input id="pause" type="checkbox"> Pause motion (Space)</label>
+    </fieldset>
+    <fieldset>
+      <legend>ACCRETION DISK</legend>
+      <div class="row"><label for="rout">Outer edge</label><input id="rout" type="range" min="6" max="30" step="0.5" value="15"><output id="routO" for="rout"></output></div>
+      <div class="row"><label for="temp">Peak temp</label><input id="temp" type="range" min="2000" max="14000" step="100" value="4400"><output id="tempO" for="temp"></output></div>
+      <div class="row"><label for="thick">Thickness</label><input id="thick" type="range" min="0.05" max="0.8" step="0.01" value="0.2"><output id="thickO" for="thick"></output></div>
+      <div class="row"><label for="opac">Density</label><input id="opac" type="range" min="0.2" max="6" step="0.1" value="2.2"><output id="opacO" for="opac"></output></div>
+      <p class="hint">Distances are in M, one gravitational radius (about 1 AU for 100 million suns).</p>
+    </fieldset>
+    <fieldset>
+      <legend>CAMERA</legend>
+      <div class="seg" id="camSeg" role="group" aria-label="Camera preset">
+        <button class="chip" data-c="film" type="button">Film</button>
+        <button class="chip" data-c="tilt" type="button">Tilted</button>
+        <button class="chip" data-c="pole" type="button">Pole-on</button>
+        <button class="chip" data-c="close" type="button">Close pass</button>
+      </div>
+      <div class="row"><label for="dist">Distance</label><input id="dist" type="range" min="12" max="120" step="0.5" value="38"><output id="distO" for="dist"></output></div>
+      <div class="row"><label for="inc">Inclination</label><input id="inc" type="range" min="2" max="178" step="0.25" value="86"><output id="incO" for="inc"></output></div>
+      <div class="row"><label for="fov">View angle</label><input id="fov" type="range" min="12" max="110" step="1" value="36"><output id="fovO" for="fov"></output></div>
+      <label class="check"><input id="orbit" type="checkbox" checked> Slow orbit</label>
+      <label class="check"><input id="drift" type="checkbox"> Cinematic drift (distance and tilt)</label>
+    </fieldset>
+    <fieldset>
+      <legend>LENS AND FILM</legend>
+      <div class="seg" id="toneSeg" role="group" aria-label="Tone mapping">
+        <button class="chip" data-t="agx" type="button" aria-pressed="true">AgX punchy</button>
+        <button class="chip" data-t="aces" type="button" aria-pressed="false">ACES filmic</button>
+      </div>
+      <div class="row"><label for="expo">Exposure</label><input id="expo" type="range" min="-3" max="3" step="0.05" value="0"><output id="expoO" for="expo"></output></div>
+      <div class="row"><label for="bloom">Bloom</label><input id="bloom" type="range" min="0" max="0.5" step="0.005" value="0.07"><output id="bloomO" for="bloom"></output></div>
+      <div class="row"><label for="glow">Glow</label><input id="glow" type="range" min="0" max="0.5" step="0.005" value="0.06"><output id="glowO" for="glow"></output></div>
+      <div class="row"><label for="streak">Streak</label><input id="streak" type="range" min="0" max="2" step="0.01" value="0.35"><output id="streakO" for="streak"></output></div>
+      <div class="row"><label for="chroma">Fringe</label><input id="chroma" type="range" min="0" max="0.08" step="0.001" value="0.012"><output id="chromaO" for="chroma"></output></div>
+      <div class="row"><label for="grain">Film grain</label><input id="grain" type="range" min="0" max="0.12" step="0.002" value="0.03"><output id="grainO" for="grain"></output></div>
+      <div class="row"><label for="vign">Vignette</label><input id="vign" type="range" min="0" max="1" step="0.01" value="0.35"><output id="vignO" for="vign"></output></div>
+      <label class="check"><input id="spikes" type="checkbox" checked> Diffraction spikes on bright stars</label>
+    </fieldset>
+    <fieldset>
+      <legend>SOUND</legend>
+      <div class="row"><label for="vol">Volume</label><input id="vol" type="range" min="0" max="1" step="0.01" value="0.8"><output id="volO" for="vol"></output></div>
+      <div class="row"><label for="weight">Low end</label><input id="weight" type="range" min="0" max="1" step="0.01" value="0.75"><output id="weightO" for="weight"></output></div>
+      <label class="check"><input id="react" type="checkbox" checked> Light pulses with the bass and impacts</label>
+      <p class="hint">Press the sound button at the top left to start. Synthesized live: sub-bass, organ pad, disk rumble, air and slow impacts. Moving closer makes it heavier.</p>
+    </fieldset>
+    <p class="hint" id="keysHint">Keys: Space pauses, H hides everything, F toggles fullscreen, Esc closes this panel.</p>
+  </div>
+</aside>
+
+<div class="hud" id="spectrumWrap" aria-hidden="true"><span>20 Hz</span><canvas id="spectrum"></canvas><span>20 kHz</span></div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div id="fatal"><div role="alert" tabindex="-1"><h2 id="fatalTitle">WEBGPU NEEDED</h2><span id="fatalMsg"></span><pre id="fatalLog"></pre></div></div>
+
+<script type="x-shader/wgsl" id="geoWGSL">
+struct U {
+  camPos: vec4f,  // xyz, w = animation time
+  camR: vec4f,    // xyz, w = tan(fov/2)*aspect
+  camU: vec4f,    // xyz, w = tan(fov/2)
+  camF: vec4f,    // xyz, w = diffraction spikes on
+  bh: vec4f,      // internal spin, horizon radius, disk inner, disk outer
+  disk: vec4f,    // peak temperature K, thickness, opacity, shifts on
+  q: vec4f,       // max steps, step scale, history blend, escape radius
+  jit: vec4f,     // jitter x, jitter y, res x, res y
+  look: vec4f,    // star gain, disk gain, intensity exponent, user spin
+  tm: vec4f,      // tauA, tauB, weightA, principal-point shift x
+  pp: vec4f,      // x = principal-point shift y, y = capture radius
+};
+@group(0) @binding(0) var<uniform> u: U;
+@group(0) @binding(1) var hist: texture_2d<f32>;
+@group(0) @binding(2) var ntex: texture_3d<f32>;
+@group(0) @binding(3) var nsmp: sampler;
+
+@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
+  return vec4f(p * 2.0 - 1.0, 0.0, 1.0);
+}
+
+fn hash31(p: vec3f) -> f32 {
+  var q = fract(p * 0.1031);
+  q = q + vec3f(dot(q, q.zyx + vec3f(31.32)));
+  return fract((q.x + q.y) * q.z);
+}
+fn hash33(p: vec3f) -> vec3f {
+  var q = fract(p * vec3f(0.1031, 0.1030, 0.0973));
+  q = q + vec3f(dot(q, q.yxz + vec3f(33.33)));
+  return fract((q.xxy + q.yxx) * q.zyx);
+}
+fn vnoise(p: vec3f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let w = f * f * (3.0 - 2.0 * f);
+  let a = mix(hash31(i), hash31(i + vec3f(1.0, 0.0, 0.0)), w.x);
+  let b = mix(hash31(i + vec3f(0.0, 1.0, 0.0)), hash31(i + vec3f(1.0, 1.0, 0.0)), w.x);
+  let c = mix(hash31(i + vec3f(0.0, 0.0, 1.0)), hash31(i + vec3f(1.0, 0.0, 1.0)), w.x);
+  let d = mix(hash31(i + vec3f(0.0, 1.0, 1.0)), hash31(i + vec3f(1.0, 1.0, 1.0)), w.x);
+  return mix(mix(a, b, w.y), mix(c, d, w.y), w.z);
+}
+// The disk samples its texture many times per ray, so its noise is one filtered fetch from a 64^3 lattice of random values
+// instead of eight hashes. The sky is sampled once per pixel and keeps the hashed noise above.
+fn vnoiseT(p: vec3f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let w = f * f * (3.0 - 2.0 * f);
+  return textureSampleLevel(ntex, nsmp, (i + w + vec3f(0.5)) * 0.015625, 0.0).r;
+}
+fn fbm4T(p0: vec3f) -> f32 {
+  var p = p0;
+  var s = 0.0;
+  var amp = 0.5;
+  for (var i = 0; i < 4; i++) {
+    s += amp * vnoiseT(p);
+    p = p * 2.13 + vec3f(11.7, 3.1, 7.3);
+    amp *= 0.5;
+  }
+  return s / 0.9375;
+}
+fn fbm4(p0: vec3f) -> f32 {
+  var p = p0;
+  var s = 0.0;
+  var amp = 0.5;
+  for (var i = 0; i < 4; i++) {
+    s += amp * vnoise(p);
+    p = p * 2.13 + vec3f(11.7, 3.1, 7.3);
+    amp *= 0.5;
+  }
+  return s / 0.9375;
+}
+
+// Blackbody chromaticity, white-balanced at 6500 K, normalised to its brightest channel.
+fn blackbody(T: f32) -> vec3f {
+  let lam = vec3f(610.0, 550.0, 465.0);
+  let ex = exp(min(vec3f(1.4388e7) / (lam * max(T, 400.0)), vec3f(50.0))) - vec3f(1.0);
+  let raw = vec3f(0.5959, 1.0, 2.3151) / ex;
+  let c = raw / vec3f(0.016255, 0.018195, 0.019996);
+  return c / max(c.x, max(c.y, c.z));
+}
+
+// Kerr spacetime in Kerr-Schild Cartesian coordinates, G = c = M = 1, spin axis = z.
+// Hamiltonian H = (-pt^2 + |p|^2)/2 - f (l.p - pt)^2 / 2 with pt = -1.
+struct D { dx: vec3f, dp: vec3f, r: f32 };
+fn deriv(x: vec3f, p: vec3f, a: f32) -> D {
+  let a2 = a * a;
+  let b = dot(x, x) - a2;
+  let disc = max(sqrt(b * b + 4.0 * a2 * x.z * x.z), 1e-6);
+  let r2 = max(0.5 * (b + disc), 1e-6);
+  let r = sqrt(r2);
+  let ra = r2 + a2;
+  let ira = 1.0 / ra;
+  let ir = 1.0 / r;
+  let az2 = a2 * x.z * x.z;
+  let iden = 1.0 / (r2 * r2 + az2);
+  let l = vec3f((r * x.x + a * x.y) * ira, (r * x.y - a * x.x) * ira, x.z * ir);
+  let f = 2.0 * r2 * r * iden;
+  let ph = 1.0 + dot(l, p);
+  let gr = vec3f(x.x * r, x.y * r, x.z * ra * ir) / disc;
+  let k = 2.0 * r2 * iden * iden;
+  let fr = k * (3.0 * az2 - r2 * r2);
+  let fz = -2.0 * k * r * a2 * x.z;
+  let gf = fr * gr + vec3f(0.0, 0.0, fz);
+  let dl = vec3f((x.x - 2.0 * r * l.x) * ira, (x.y - 2.0 * r * l.y) * ira, -x.z * ir * ir);
+  let e = vec3f((r * p.x - a * p.y) * ira, (a * p.x + r * p.y) * ira, p.z * ir);
+  let glp = dot(dl, p) * gr + e;
+  var o: D;
+  o.dx = p - f * ph * l;
+  o.dp = 0.5 * ph * ph * gf + f * ph * glp;
+  o.r = r;
+  return o;
+}
+struct LF { l: vec3f, f: f32, r: f32 };
+fn ksLF(x: vec3f, a: f32) -> LF {
+  let a2 = a * a;
+  let b = dot(x, x) - a2;
+  let disc = sqrt(b * b + 4.0 * a2 * x.z * x.z);
+  let r2 = max(0.5 * (b + disc), 1e-6);
+  let r = sqrt(r2);
+  let ra = r2 + a2;
+  var o: LF;
+  o.l = vec3f((r * x.x + a * x.y) / ra, (r * x.y - a * x.x) / ra, x.z / r);
+  o.f = 2.0 * r2 * r / (r2 * r2 + a2 * x.z * x.z);
+  o.r = r;
+  return o;
+}
+
+fn starLayer(d: vec3f, scale: f32, seed: f32, density: f32) -> vec3f {
+  let q = d * scale;
+  let c = floor(q);
+  let h = hash33(c + vec3f(seed));
+  let sp = c + vec3f(0.22) + 0.56 * h;
+  let dv = q - sp;
+  let m = hash31(c * 1.7 + vec3f(seed + 3.1));
+  let on = max(m - (1.0 - density), 0.0) / density;
+  let core = exp(-dot(dv, dv) * 520.0);
+  let tcol = blackbody(2800.0 + 11000.0 * h.z * h.z);
+  return tcol * core * on * on * on * 22.0;
+}
+// Hero stars: crisp core, small halo, six long diffraction spikes (one vertical) and two short struts,
+// each with its own slow twinkle. The spikes live on the sky, so the hole bends them too.
+fn heroLayer(d: vec3f, scale: f32, seed: f32, density: f32) -> vec3f {
+  let q = d * scale;
+  let c = floor(q);
+  let m = hash31(c * 1.7 + vec3f(seed + 3.1));
+  if (m < 1.0 - density) { return vec3f(0.0); }
+  let h = hash33(c + vec3f(seed));
+  let sp = c + vec3f(0.3) + 0.4 * h;
+  let dv = q - sp;
+  let t1 = normalize(cross(d, vec3f(0.31, 0.54, 0.78)));
+  let t2 = cross(d, t1);
+  let p = vec2f(dot(dv, t1), dot(dv, t2));
+  let r2 = dot(p, p);
+  let r = sqrt(r2);
+  let on = (m - (1.0 - density)) / density;
+  let energy = 4.0 + 60.0 * on * on * on;
+  let tw = 1.0 + 0.22 * sin(u.camPos.w * (0.7 + h.x * 1.9) + h.y * 40.0);
+  var I = exp(-r2 * 1500.0) + 0.08 * exp(-r * 38.0);
+  var spk = 0.0;
+  for (var k = 0; k < 3; k++) {
+    let a = f32(k) * 1.0471976 + 1.5707963;
+    let ax = vec2f(cos(a), sin(a));
+    let al = abs(dot(p, ax));
+    let pe = abs(dot(p, vec2f(-ax.y, ax.x)));
+    spk += exp(-pe * 130.0) * exp(-al * mix(22.0, 8.0, on)) * 0.55;
+  }
+  let strut = exp(-abs(p.y) * 150.0) * exp(-abs(p.x) * 26.0) * 0.25;
+  I += (spk + strut) * u.camF.w * clamp(1.0 - r / 0.29, 0.0, 1.0) * 0.5;
+  return blackbody(3200.0 + 16000.0 * h.z * h.z) * I * energy * tw;
+}
+fn sky(d: vec3f) -> vec3f {
+  var c = starLayer(d, 46.0, 1.0, 0.10) * 2.4;
+  c += heroLayer(d, 21.0, 29.0, 0.13);
+  c += starLayer(d, 97.0, 7.0, 0.16);
+  c += starLayer(d, 210.0, 13.0, 0.22) * 0.45;
+  // a dusty galactic band, tilted against the spin axis
+  let nrm = normalize(vec3f(0.35, -0.25, 0.9));
+  let lat = dot(d, nrm);
+  let band = exp(-lat * lat * 11.0);
+  let cloud = fbm4(d * 3.1 + vec3f(4.0));
+  let fine = fbm4(d * 9.7 + vec3f(19.0));
+  let dust = smoothstep(0.42, 0.72, fbm4(d * 5.3 + vec3f(41.0)));
+  let glow = band * (0.25 + 1.6 * cloud * cloud) * (0.5 + fine) * (1.0 - 0.8 * dust * band);
+  c += glow * mix(vec3f(0.55, 0.62, 0.85), vec3f(1.0, 0.82, 0.62), cloud) * 0.045;
+  return c * u.look.x;
+}
+
+fn diskH(r: f32) -> f32 { return u.disk.y * (0.35 + 0.65 * r / u.bh.w); }
+
+fn streak(r: f32, ang: f32, z: f32, off: f32) -> f32 {
+  let cs = vec2f(cos(ang), sin(ang));
+  let n = fbm4T(vec3f(cs.x * 2.3, cs.y * 2.3, r * 1.55 + z * 1.2) + vec3f(off));
+  let ring = vnoiseT(vec3f(r * 7.5 + off, cs.x * 0.9, cs.y * 0.9));
+  let wisp = vnoiseT(vec3f(cs.x * 9.0, cs.y * 9.0, r * 3.1 + off));
+  return n * (0.55 + 0.6 * ring) + 0.18 * wisp;
+}
+fn diskDensity(x: vec3f, r: f32, hd: f32) -> f32 {
+  let rin = u.bh.z;
+  let rout = u.bh.w;
+  let win = smoothstep(rin, rin * 1.1 + 0.15, r) * (1.0 - smoothstep(rout * 0.78, rout, r));
+  if (win <= 0.0) { return 0.0; }
+  let zz = x.z / hd;
+  let vert = exp(-zz * zz * 1.4);
+  let ang = atan2(x.y, x.x);
+  let om = 1.0 / (pow(r, 1.5) + u.look.w);
+  let n = u.tm.z * streak(r, ang - om * u.tm.x, x.z, 0.0) + (1.0 - u.tm.z) * streak(r, ang - om * u.tm.y, x.z, 17.0);
+  let tex = 0.12 + 2.6 * n * n;
+  return win * vert * tex;
+}
+
+@fragment fn fs(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  let res = u.jit.zw;
+  let uv = (fc.xy + u.jit.xy) / res;
+  let ndc = vec2f(uv.x * 2.0 - 1.0 + u.tm.w, 1.0 - uv.y * 2.0 + u.pp.x);
+  let n = normalize(u.camF.xyz + ndc.x * u.camR.w * u.camR.xyz + ndc.y * u.camU.w * u.camU.xyz);
+
+  let a = u.bh.x;
+  let rh = u.bh.y;
+  let rin = u.bh.z;
+  let rout = u.bh.w;
+  let rEsc = u.q.w;
+  let stepScale = u.q.y;
+  let maxSteps = i32(u.q.x);
+
+  var x = u.camPos.xyz;
+  // null covector whose spatial direction is n, normalised so pt = -1
+  let c0 = ksLF(x, a);
+  let ln = dot(c0.l, n);
+  let s0 = sqrt(max(c0.f * c0.f * ln * ln + (1.0 - c0.f) * (1.0 + c0.f * ln * ln), 1e-8));
+  let kt = (c0.f * ln + s0) / max(1.0 - c0.f, 1e-4);
+  var p = (n + c0.f * (kt + ln) * c0.l) / s0;
+  let eObs = 1.0 / sqrt(max(1.0 - c0.f, 1e-4));
+
+  var col = vec3f(0.0);
+  var T = 1.0;
+  var status = 0;   // 0 running, 1 captured, 2 escaped
+  var outDir = n;
+  var rLast = c0.r;
+
+  for (var i = 0; i < maxSteps; i++) {
+    let k1 = deriv(x, p, a);
+    let r = k1.r;
+    rLast = r;
+    if (r < max(rh * 1.003, u.pp.y)) { status = 1; break; }
+    let sp = max(length(k1.dx), 1e-6);
+    let nd = k1.dx / sp;
+    outDir = nd;
+    if (r > rEsc && dot(x, k1.dx) > 0.0) { status = 2; break; }
+
+    var sl = stepScale * max(0.14 * (r - rh), 0.2);   // a smaller floor spends the 760 steps crawling near the horizon and paints prograde rays black
+    sl *= 1.0 + clamp((r - 12.0) / 12.0, 0.0, 1.0);   // far out the field is nearly flat, so the steps can double
+    sl = max(sl, min(0.3 * (r - 8.0), select(1e9, r - rout, r >= rout)));   // and at every tier a nearly straight ray takes long steps; none can reach the gas, which ends at rout, and above the disk the limit below still applies
+    let hd = diskH(r);
+    let nearDisk = r > rin * 0.85 && r < rout * 1.12;
+    if (nearDisk) {
+      let az = abs(x.z);
+      let lim = (max(az - 2.6 * hd, 0.0) * 0.8 + 0.4 * hd) / max(abs(nd.z), 0.05);
+      sl = min(sl, lim);
+      if (az < 2.6 * hd) { sl = min(sl, stepScale * (0.22 + 0.035 * r)); }
+    }
+    let h = sl / sp;
+
+    let k2 = deriv(x + 0.5 * h * k1.dx, p + 0.5 * h * k1.dp, a);
+    let k3 = deriv(x + 0.5 * h * k2.dx, p + 0.5 * h * k2.dp, a);
+    let k4 = deriv(x + h * k3.dx, p + h * k3.dp, a);
+    let xn = x + (h / 6.0) * (k1.dx + 2.0 * k2.dx + 2.0 * k3.dx + k4.dx);
+    let pn = p + (h / 6.0) * (k1.dp + 2.0 * k2.dp + 2.0 * k3.dp + k4.dp);
+
+    if (nearDisk) {
+      let xm = 0.5 * (x + xn);
+      let hm = diskH(r);
+      if (abs(xm.z) < 2.6 * hm) {
+        let g0 = ksLF(xm, a);
+        let dens = diskDensity(xm, g0.r, hm);
+        if (dens > 0.0005) {
+          var g = 1.0;
+          if (u.disk.w > 0.5) {
+            // gas on a prograde circular orbit; photon energy seen by the gas vs. by the camera
+            let om = -1.0 / (pow(g0.r, 1.5) - a);
+            let v = om * vec3f(-xm.y, xm.x, 0.0);
+            let lv = 1.0 + dot(g0.l, v);
+            let ut = 1.0 / sqrt(max(1.0 - dot(v, v) - g0.f * lv * lv, 0.002));
+            let eEm = ut * (1.0 - dot(0.5 * (p + pn), v));
+            g = clamp(eObs / max(eEm, 1e-3), 0.05, 4.0);
+          }
+          let rr = max(g0.r, rin * 1.0001);
+          let tprof = pow(rr / rin, -0.75) * pow(1.0 - sqrt(rin / rr) + 0.02, 0.25) / 0.49;
+          let Tobs = u.disk.x * tprof * g;
+          let emis = blackbody(Tobs) * pow(Tobs / u.disk.x, u.look.z) * u.look.y;
+          let att = exp(-dens * u.disk.z * sl);
+          col += T * (1.0 - att) * emis;
+          T *= att;
+          if (T < 0.004) { T = 0.0; status = 1; break; }
+        }
+      }
+    }
+    x = xn;
+    p = pn;
+  }
+  if (status == 0 && rLast < 6.0) { status = 1; }
+  if (status != 1 && T > 0.0) { col += T * sky(outDir); }
+
+  let ok = col.x >= 0.0 && col.y >= 0.0 && col.z >= 0.0 && col.x < 1e6 && col.y < 1e6 && col.z < 1e6;
+  col = select(vec3f(0.0), min(col, vec3f(4000.0)), ok);
+
+  let prev = textureLoad(hist, vec2i(fc.xy), 0).rgb;
+  let al = u.q.z;
+  let outc = select(mix(prev, col, al), col, al > 0.995);
+  return vec4f(outc, 1.0);
+}
+</script>
+
+<script type="x-shader/wgsl" id="postWGSL">
+struct VO { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
+@vertex fn vs(@builtin(vertex_index) i: u32) -> VO {
+  let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
+  var o: VO;
+  o.pos = vec4f(p * 2.0 - 1.0, 0.0, 1.0);
+  o.uv = vec2f(p.x, 1.0 - p.y);
+  return o;
+}
+@group(0) @binding(0) var src: texture_2d<f32>;
+@group(0) @binding(1) var smp: sampler;
+struct SU { dir: vec2f, thr: f32, first: f32 };
+@group(0) @binding(2) var<uniform> su: SU;
+
+fn safe(c: vec3f) -> vec3f {
+  let ok = c.x >= 0.0 && c.y >= 0.0 && c.z >= 0.0 && c.x < 1e30 && c.y < 1e30 && c.z < 1e30;
+  return select(vec3f(0.0), min(c, vec3f(60000.0)), ok);
+}
+fn tap(uv: vec2f, o: vec2f, t: vec2f) -> vec3f { return safe(textureSampleLevel(src, smp, uv + o * t, 0.0).rgb); }
+fn kw(c: vec3f) -> f32 { return 1.0 / (1.0 + dot(c, vec3f(0.2126, 0.7152, 0.0722)) * 0.5); }
+
+// 13-tap downsample. The first level weights each 2x2 group by 1/(1+luma) so single hot pixels cannot flicker.
+fn down13(uv: vec2f, first: bool) -> vec3f {
+  let t = 1.0 / vec2f(textureDimensions(src));
+  let a = tap(uv, vec2f(-2.0, 2.0), t); let b = tap(uv, vec2f(0.0, 2.0), t); let c = tap(uv, vec2f(2.0, 2.0), t);
+  let d = tap(uv, vec2f(-2.0, 0.0), t); let e = tap(uv, vec2f(0.0, 0.0), t); let f = tap(uv, vec2f(2.0, 0.0), t);
+  let g = tap(uv, vec2f(-2.0, -2.0), t); let h = tap(uv, vec2f(0.0, -2.0), t); let i = tap(uv, vec2f(2.0, -2.0), t);
+  let j = tap(uv, vec2f(-1.0, 1.0), t); let k = tap(uv, vec2f(1.0, 1.0), t); let l = tap(uv, vec2f(-1.0, -1.0), t); let m = tap(uv, vec2f(1.0, -1.0), t);
+  if (first) {
+    let g0 = (a + b + d + e) * 0.25; let g1 = (b + c + e + f) * 0.25; let g2 = (d + e + g + h) * 0.25; let g3 = (e + f + h + i) * 0.25; let g4 = (j + k + l + m) * 0.25;
+    let w0 = kw(g0) * 0.125; let w1 = kw(g1) * 0.125; let w2 = kw(g2) * 0.125; let w3 = kw(g3) * 0.125; let w4 = kw(g4) * 0.5;
+    return (g0 * w0 + g1 * w1 + g2 * w2 + g3 * w3 + g4 * w4) / (w0 + w1 + w2 + w3 + w4);
+  }
+  return e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625 + (j + k + l + m) * 0.125;
+}
+@fragment fn fsPre(v: VO) -> @location(0) vec4f { return vec4f(down13(v.uv, true), 1.0); }
+@fragment fn fsDown(v: VO) -> @location(0) vec4f { return vec4f(down13(v.uv, false), 1.0); }
+// 3x3 tent upsample, added onto the level it lands on
+@fragment fn fsUp(v: VO) -> @location(0) vec4f {
+  let t = 1.0 / vec2f(textureDimensions(src));
+  var c = tap(v.uv, vec2f(-1.0, 1.0), t) + 2.0 * tap(v.uv, vec2f(0.0, 1.0), t) + tap(v.uv, vec2f(1.0, 1.0), t);
+  c += 2.0 * tap(v.uv, vec2f(-1.0, 0.0), t) + 4.0 * tap(v.uv, vec2f(0.0, 0.0), t) + 2.0 * tap(v.uv, vec2f(1.0, 0.0), t);
+  c += tap(v.uv, vec2f(-1.0, -1.0), t) + 2.0 * tap(v.uv, vec2f(0.0, -1.0), t) + tap(v.uv, vec2f(1.0, -1.0), t);
+  return vec4f(c / 16.0, 1.0);
+}
+// anamorphic streak: a 15-tap Gaussian along one axis, run three times with a growing stride
+@fragment fn fsStreak(v: VO) -> @location(0) vec4f {
+  var acc = vec3f(0.0);
+  var ws = 0.0;
+  for (var i = -7; i <= 7; i++) {
+    let fi = f32(i);
+    let w = exp(-fi * fi / 18.0);
+    var c = safe(textureSampleLevel(src, smp, v.uv + fi * su.dir, 0.0).rgb);
+    if (su.first > 0.5) { let L = max(c.x, max(c.y, c.z)); c *= max(L - su.thr, 0.0) / max(L, 1e-4); }
+    acc += c * w;
+    ws += w;
+  }
+  return vec4f(acc / ws, 1.0);
+}
+</script>
+
+<script type="x-shader/wgsl" id="compWGSL">
+struct VO { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
+@vertex fn vs(@builtin(vertex_index) i: u32) -> VO {
+  let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
+  var o: VO;
+  o.pos = vec4f(p * 2.0 - 1.0, 0.0, 1.0);
+  o.uv = vec2f(p.x, 1.0 - p.y);
+  return o;
+}
+struct C {
+  a: vec4f,   // exposure, bloom mix, time, hdr
+  b: vec4f,   // grain, vignette, 1/levels, glow
+  c: vec4f,   // streak, chroma, tonemap mix (0 AgX, 1 ACES), saturation
+  d: vec4f,   // res x, res y, contrast, -
+};
+@group(0) @binding(0) var scene: texture_2d<f32>;
+@group(0) @binding(1) var smp: sampler;
+@group(0) @binding(2) var bloomTex: texture_2d<f32>;
+@group(0) @binding(3) var<uniform> c: C;
+@group(0) @binding(4) var streakTex: texture_2d<f32>;
+
+fn hash12(p: vec2f) -> f32 {
+  var p3 = fract(vec3f(p.x, p.y, p.x) * 0.1031);
+  p3 = p3 + vec3f(dot(p3, p3.yzx + vec3f(33.33)));
+  return fract((p3.x + p3.y) * p3.z);
+}
+fn hash13(p: vec3f) -> f32 {
+  var q = fract(p * 0.1031);
+  q = q + vec3f(dot(q, q.zyx + vec3f(31.32)));
+  return fract((q.x + q.y) * q.z);
+}
+fn agxContrast(x: vec3f) -> vec3f {
+  let x2 = x * x;
+  let x4 = x2 * x2;
+  return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - vec3f(0.00232);
+}
+// AgX with a punchy look; returns display-encoded colour
+fn agx(v0: vec3f) -> vec3f {
+  let m = mat3x3f(0.842479062253094, 0.0423282422610123, 0.0423756549057051, 0.0784335999999992, 0.878468636469772, 0.0784336, 0.0792237451477643, 0.0791661274605434, 0.879142973793104);
+  let mi = mat3x3f(1.19687900512017, -0.0528968517574562, -0.0529716355144438, -0.0980208811401368, 1.15190312990417, -0.0980434501171241, -0.0990297440797205, -0.0989611768448433, 1.15107367264116);
+  let lo = -12.47393;
+  let hi = 4.026069;
+  var v = m * max(v0, vec3f(1e-10));
+  v = (clamp(log2(v), vec3f(lo), vec3f(hi)) - vec3f(lo)) / (hi - lo);
+  v = agxContrast(v);
+  let L = dot(v, vec3f(0.2126, 0.7152, 0.0722));
+  v = pow(max(v, vec3f(0.0)), vec3f(1.25));
+  v = vec3f(L) + 1.25 * (v - vec3f(L));
+  return clamp(mi * v, vec3f(0.0), vec3f(1.0));
+}
+fn oetf(x: vec3f) -> vec3f {
+  let lo = x * 12.92;
+  let hi = 1.055 * pow(max(x, vec3f(0.0)), vec3f(1.0 / 2.4)) - vec3f(0.055);
+  return select(hi, lo, x <= vec3f(0.0031308));
+}
+fn aces(c0: vec3f) -> vec3f {
+  let im = mat3x3f(0.59719, 0.07600, 0.02840, 0.35458, 0.90834, 0.13383, 0.04823, 0.01566, 0.83777);
+  let om = mat3x3f(1.60475, -0.10208, -0.00327, -0.53108, 1.10813, -0.07276, -0.07367, -0.00605, 1.07602);
+  let x = im * c0;
+  let a = x * (x + vec3f(0.0245786)) - vec3f(0.000090537);
+  let b = x * (0.983729 * x + vec3f(0.4329510)) + vec3f(0.238081);
+  return oetf(clamp(om * (a / b), vec3f(0.0), vec3f(1.0)));
+}
+// lateral chromatic aberration: red and blue slide apart toward the corners
+fn sceneAt(uv: vec2f) -> vec3f {
+  let d = uv - vec2f(0.5);
+  let off = d * dot(d, d) * c.c.y;
+  let col = vec3f(textureSampleLevel(scene, smp, uv - off, 0.0).r, textureSampleLevel(scene, smp, uv, 0.0).g, textureSampleLevel(scene, smp, uv + off, 0.0).b);
+  return max(col, vec3f(0.0));
+}
+@fragment fn fs(v: VO) -> @location(0) vec4f {
+  var col = sceneAt(v.uv);
+  let bloom = textureSampleLevel(bloomTex, smp, v.uv, 0.0).rgb * c.b.z;
+  col = mix(col, bloom, c.a.y) + bloom * c.b.w;
+  col += textureSampleLevel(streakTex, smp, v.uv, 0.0).rgb * c.c.x * vec3f(0.55, 0.7, 1.0);
+  col *= c.a.x;
+  let mn = min(c.d.x, c.d.y);
+  let vd = (v.uv - vec2f(0.5)) * vec2f(c.d.x / mn, c.d.y / mn);
+  col *= mix(1.0, 1.0 - smoothstep(0.25, 1.25, length(vd)), c.b.y);
+  // scene-linear saturation ahead of the tone curve, so incandescent gas stays gold instead of tan
+  let Ls = dot(col, vec3f(0.2126, 0.7152, 0.0722));
+  col = max(mix(vec3f(Ls), col, 1.35), vec3f(0.0));
+  var tm: vec3f;
+  if (c.a.w > 0.5) {
+    tm = oetf(col / (vec3f(1.0) + col / 5.0));
+  } else {
+    tm = mix(agx(col), aces(col), c.c.z);
+  }
+  let L = dot(tm, vec3f(0.2126, 0.7152, 0.0722));
+  tm = mix(vec3f(L), tm, c.c.w);
+  tm = (tm - vec3f(0.5)) * c.d.z + vec3f(0.5);
+  if (c.a.w < 0.5) { tm = clamp(tm, vec3f(0.0), vec3f(1.0)); }
+  // film grain at 24 frames a second, strongest in the mid-tones
+  let gf = floor(c.a.z * 24.0) % 251.0;
+  let gn = hash13(vec3f(v.pos.xy * 0.7123 + vec2f(0.37), gf * 1.618 + 0.5)) + hash13(vec3f(v.pos.yx * 1.3719 + vec2f(11.1), gf * 0.913 + 17.3)) - 1.0;
+  tm += vec3f(gn * c.b.x * (0.35 + 0.65 * clamp(1.0 - abs(L - 0.45) * 1.6, 0.0, 1.0)));
+  // triangular dither against banding in the dark sky
+  let dn = hash12(v.pos.xy + vec2f(0.37)) + hash12(v.pos.xy * 1.13 + vec2f(7.1 + fract(c.a.z))) - 1.0;
+  tm += vec3f(dn / 255.0);
+  return vec4f(tm, 1.0);
+}
+</script>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+$("boot").hidden = false;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const HOVER = matchMedia("(hover:hover)");
+const SHEET = matchMedia("(max-width:599px), (max-width:760px) and (min-height:421px)");   // phone layout: the controls are a bottom sheet
+
+/* ------------------------------------------------------------------ state */
+const QUALITY = {
+  draft:  { steps: 150, stepScale: 1.6,  cap: 0.6 },
+  low:    { steps: 240, stepScale: 1.15, cap: 0.85 },
+  medium: { steps: 400, stepScale: 0.8,  cap: 1.0 },
+  high:   { steps: 760, stepScale: 0.45, cap: 1.5 },   // 1.5x supersampling, tapered so the internal image stays near 8.3 MP
+};
+const MAXPIX = 8.3e6;
+function capFor(Q, w, h) {
+  const px = Math.max(1, (w || canvas.width) * (h || canvas.height));
+  return Math.min(Q.cap, Math.max(1, Math.sqrt(MAXPIX / px)));
+}
+const S = {
+  a: 0.6, shift: false, speed: 3, rout: 15, temp: 4400, thick: 0.2, opac: 2.2,
+  dist: 38, inc: 86, az: 0.9, fov: 36, orbit: !reduceMotion,
+  quality: "high", govern: false, hdr: false, expo: 0, bloom: 0.07, glow: 0.06,
+  streak: 0.35, chroma: 0.012, grain: 0.03, vign: 0.35, spikes: true, tone: "agx",
+  vol: 0.8, weight: 0.75, paused: false, idle: true, drift: false, react: true,
+  scale: 1, simTime: 0,
+};
+if (reduceMotion) { S.speed = 0.5; S.grain = 0; S.react = false; }
+const DEFAULTS = { ...S };   // what Reset returns to
+matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", e => {   // honour a mid-session change of the OS setting
+  if (e.matches) { S.orbit = false; S.drift = false; S.speed = Math.min(S.speed, 0.5); S.grain = 0; S.react = false; INTRO.on = false; INTRO.fade = 99; cam.dist = S.dist; cam.inc = S.inc;
+    Object.assign(DEFAULTS, { orbit: false, drift: false, speed: Math.min(DEFAULTS.speed, 0.5), grain: 0, react: false }); syncUI(); }
+});
+// smoothed camera actually rendered
+const INTRO = { on: !reduceMotion, fade: reduceMotion ? 99 : 0 };   // slow fly-in from far out, and a fade up from black
+const cam = { dist: INTRO.on ? 118 : S.dist, inc: INTRO.on ? 62 : S.inc, az: S.az, fov: S.fov };
+let driftT = 0, idleT = 0;
+
+/* ---------------------------------------------------------- Kerr numbers */
+function kerr(a) {
+  const rh = 1 + Math.sqrt(1 - a * a);
+  const z1 = 1 + Math.cbrt(1 - a * a) * (Math.cbrt(1 + a) + Math.cbrt(1 - a));
+  const z2 = Math.sqrt(3 * a * a + z1 * z1);
+  const root = Math.sqrt((3 - z1) * (3 + z1 + 2 * z2));
+  return { rh, iscoPro: 3 + z2 - root };
+}
+
+/* ------------------------------------------------------------------ audio */
+const Sound = (() => {
+  let ctx = null, on = false, N = {}, timer = 0, chordIx = 0, nextChord = 0, nextImpact = 0;
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  const CHORDS = [
+    { root: 26, pad: [38, 45, 50, 52, 57, 65] },
+    { root: 22, pad: [34, 41, 50, 53, 57, 62] },
+    { root: 29, pad: [41, 48, 53, 57, 60, 67] },
+    { root: 24, pad: [36, 43, 50, 52, 55, 64] },
+    { root: 26, pad: [38, 45, 50, 53, 57, 64] },
+    { root: 31, pad: [43, 50, 55, 58, 62, 69] },
+    { root: 22, pad: [34, 46, 50, 53, 58, 65] },
+    { root: 33, pad: [45, 52, 57, 61, 64, 69] },
+  ];
+  function noiseBuffer(kind, seconds) {
+    const len = Math.floor(ctx.sampleRate * seconds);
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      let b = 0, p0 = 0, p1 = 0, p2 = 0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        if (kind === "brown") { b = (b + 0.02 * w) / 1.02; d[i] = b * 3.5; }
+        else if (kind === "pink") { p0 = 0.99765 * p0 + w * 0.099046; p1 = 0.963 * p1 + w * 0.2965164; p2 = 0.57 * p2 + w * 1.0526913; d[i] = (p0 + p1 + p2 + w * 0.1848) * 0.2; }
+        else d[i] = w;
+      }
+      // crossfade the loop seam
+      const xf = Math.floor(ctx.sampleRate * 0.25);
+      for (let i = 0; i < xf; i++) { const t = i / xf; d[i] = d[i] * Math.sqrt(t) + d[len - xf + i] * Math.sqrt(1 - t); }
+    }
+    return buf;
+  }
+  function impulse(seconds) {
+    const len = Math.floor(ctx.sampleRate * seconds);
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        const k = 0.75 - 0.68 * Math.min(1, t * 1.6);      // the tail gets darker as it decays
+        lp += k * ((Math.random() * 2 - 1) - lp);
+        const env = Math.pow(1 - t, 2.2) * Math.min(1, i / (ctx.sampleRate * 0.02));
+        d[i] = lp * env;
+      }
+    }
+    return buf;
+  }
+  function loopNoise(buf) { const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true; s.loopEnd = (buf.length - Math.floor(ctx.sampleRate * 0.25)) / ctx.sampleRate; s.start(); return s; }
+  function gain(v) { const g = ctx.createGain(); g.gain.value = v; return g; }
+  function filt(type, f, q) { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; if (q !== undefined) b.Q.value = q; return b; }
+  function lfo(rate, depth, target) { const o = ctx.createOscillator(); o.frequency.value = rate; const g = gain(depth); o.connect(g).connect(target); o.start(); return o; }
+
+  function build() {
+    const t0 = ctx.currentTime;
+    // master chain
+    N.out = gain(0);
+    N.analyser = ctx.createAnalyser(); N.analyser.fftSize = 8192; N.analyser.smoothingTimeConstant = 0.82;
+    const lim = ctx.createDynamicsCompressor(); lim.threshold.value = -5; lim.knee.value = 2; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.12;
+    const shaper = ctx.createWaveShaper(); const curve = new Float32Array(2049);
+    for (let i = 0; i < 2049; i++) { const x = (i / 1024 - 1) * 2.2; curve[i] = Math.tanh(x) / Math.tanh(2.2); }
+    shaper.curve = curve; shaper.oversample = "4x";
+    const glue = ctx.createDynamicsCompressor(); glue.threshold.value = -22; glue.knee.value = 12; glue.ratio.value = 3.5; glue.attack.value = 0.04; glue.release.value = 0.5;
+    N.low = filt("lowshelf", 75); N.low.gain.value = 5;
+    const hi = filt("highshelf", 8500); hi.gain.value = 5.5;
+    N.bus = gain(0.9);
+    N.bus.connect(N.low).connect(hi).connect(glue).connect(shaper).connect(lim).connect(N.out).connect(N.analyser).connect(ctx.destination);
+    // a low-passed tap whose level drives the light; muted so it never reaches the speakers
+    N.lowAn = ctx.createAnalyser(); N.lowAn.fftSize = 1024; N.lowAn.smoothingTimeConstant = 0;
+    N.out.connect(filt("lowpass", 110, 0.7)).connect(N.lowAn).connect(gain(0)).connect(ctx.destination);
+    // hall
+    const conv = ctx.createConvolver(); conv.buffer = impulse(7.5);
+    N.send = gain(1); const wet = gain(0.55);
+    N.send.connect(conv).connect(wet).connect(N.bus);
+
+    // 1. sub: two sines beating, plus a quiet octave so small speakers still read the root
+    N.sub = gain(0.5); N.sub.connect(N.bus);
+    N.subA = ctx.createOscillator(); N.subB = ctx.createOscillator(); N.subC = ctx.createOscillator();
+    N.subC.type = "triangle"; const subCg = gain(0.22);
+    N.subA.connect(N.sub); N.subB.connect(N.sub); N.subC.connect(subCg).connect(N.sub);
+    N.subB.detune.value = 14;
+    // 2. bass body: detuned saws under a slow breathing low-pass
+    N.bass = gain(0.2); N.bassLP = filt("lowpass", 150, 5);
+    N.bassOsc = [-9, 0, 8].map(c => { const o = ctx.createOscillator(); o.type = "sawtooth"; o.detune.value = c; o.connect(N.bassLP); return o; });
+    N.bassLP.connect(N.bass); N.bass.connect(N.bus); N.bass.connect(gain(0.3)).connect(N.send);
+    N.bassLfo = lfo(0.11, 70, N.bassLP.frequency);
+    // 3. organ pad
+    const harm = [0, 1, 0.62, 0.34, 0.28, 0.1, 0.16, 0.04, 0.1, 0.02, 0.05, 0.01, 0.04];
+    const wave = ctx.createPeriodicWave(new Float32Array(harm.length), new Float32Array(harm));
+    N.padLP = filt("lowpass", 3400, 0.4); N.pad = gain(0.13);
+    N.padLP.connect(N.pad); N.pad.connect(N.bus); N.pad.connect(gain(1.1)).connect(N.send);
+    N.padOsc = [];
+    for (let i = 0; i < 6; i++) {
+      const pan = ctx.createStereoPanner(); pan.pan.value = (i / 5 - 0.5) * 1.3;
+      const vg = gain(0.55); lfo(0.04 + i * 0.013, 0.3, vg.gain);
+      vg.connect(pan).connect(N.padLP);
+      const pair = [-6, 6].map(c => { const o = ctx.createOscillator(); o.setPeriodicWave(wave); o.detune.value = c + (Math.random() - 0.5) * 3; o.connect(vg); return o; });
+      N.padOsc.push(pair);
+    }
+    // 4. rumble (brown noise) and 5. disk roar (pink noise through a wandering band-pass)
+    N.rumble = gain(0.2); const rumLP = filt("lowpass", 105, 0.7);
+    loopNoise(noiseBuffer("brown", 7)).connect(rumLP).connect(N.rumble).connect(N.bus);
+    lfo(0.07, 0.07, N.rumble.gain);
+    N.roar = gain(0.05); N.roarBP = filt("bandpass", 420, 0.6);
+    loopNoise(noiseBuffer("pink", 6)).connect(N.roarBP).connect(N.roar); N.roar.connect(N.bus); N.roar.connect(N.send);
+    lfo(0.045, 160, N.roarBP.frequency);
+    // 6. air and 7. shimmer
+    N.air = gain(0.034); const airHP = filt("highpass", 6500, 0.5);
+    loopNoise(noiseBuffer("white", 4)).connect(airHP).connect(N.air); N.air.connect(N.bus); N.air.connect(N.send);
+    lfo(0.09, 0.014, N.air.gain);
+    N.shim = [];
+    for (let i = 0; i < 6; i++) {
+      const o = ctx.createOscillator(); const g = gain(0.011); const pan = ctx.createStereoPanner(); pan.pan.value = Math.random() * 1.6 - 0.8;
+      lfo(0.03 + Math.random() * 0.08, 0.009, g.gain);
+      o.connect(g).connect(pan); pan.connect(N.send); pan.connect(gain(0.5)).connect(N.bus);
+      N.shim.push(o);
+    }
+    N.impact = gain(1); N.impact.connect(N.bus); N.impact.connect(gain(0.6)).connect(N.send);
+    N.brown = noiseBuffer("brown", 3);
+
+    setChord(0, t0, 0.01);
+    [N.subA, N.subB, N.subC, ...N.bassOsc, ...N.padOsc.flat(), ...N.shim].forEach(o => o.start());
+    nextChord = t0 + 20; nextImpact = t0 + 2.5;
+  }
+  function setChord(ix, t, tc) {
+    const c = CHORDS[ix % CHORDS.length];
+    const f = mtof(c.root);
+    N.subA.frequency.setTargetAtTime(f, t, tc); N.subB.frequency.setTargetAtTime(f, t, tc); N.subC.frequency.setTargetAtTime(f * 2, t, tc);
+    N.bassOsc.forEach(o => o.frequency.setTargetAtTime(f * 2, t, tc));
+    c.pad.forEach((m, i) => N.padOsc[i].forEach(o => o.frequency.setTargetAtTime(mtof(m), t, tc * (0.7 + i * 0.12))));
+    N.shim.forEach((o, i) => o.frequency.setTargetAtTime(mtof(c.pad[(i * 2 + 1) % 6] + (i % 2 ? 36 : 48)), t, tc));
+  }
+  const imp = [];
+  function impact(t, level) {
+    if (imp.length > 24) imp.splice(0, imp.length - 24);
+    imp.push({ t, level });
+    const c = CHORDS[chordIx % CHORDS.length];
+    const o = ctx.createOscillator(), g = gain(0);
+    o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(mtof(c.root), t + 1.6);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.85 * level, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0008, t + 7.5);
+    o.connect(g).connect(N.impact); o.start(t); o.stop(t + 7.7);
+    const n = ctx.createBufferSource(); n.buffer = N.brown; const ng = gain(0), lp = filt("lowpass", 260, 0.8);
+    lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(90, t + 2.2);
+    ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(0.9 * level, t + 0.008); ng.gain.exponentialRampToValueAtTime(0.0008, t + 2.6);
+    n.connect(lp).connect(ng).connect(N.impact); n.start(t); n.stop(t + 2.8);
+  }
+  function tick() {
+    if (!ctx || !on) return;
+    const t = ctx.currentTime;
+    if (t > nextChord - 0.5) { chordIx++; setChord(chordIx, nextChord, 1.3); impact(nextChord, 0.75); nextChord += 22; nextImpact = nextChord - 11 + Math.random() * 4; }
+    if (t > nextImpact - 0.5 && nextImpact < nextChord - 4) { impact(nextImpact, 0.5 + Math.random() * 0.3); nextImpact = nextChord + 99; }
+  }
+  let busy = false, fadeUntil = 0, lastVol = 0, offT = 0;
+  const settle = p => Promise.race([p, new Promise((_, rj) => setTimeout(() => rj(new Error("audio resume timed out")), 4000))]);   // a resume() that never answers must not leave the button dead
+  async function toggle() {
+    if (busy) return on;
+    busy = true;
+    try {
+      clearTimeout(offT);
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        try { ctx = new AC({ latencyHint: "playback", sampleRate: 48000 }); } catch (e) { ctx = new AC({ latencyHint: "playback" }); }   // one rate for every output device
+        try { build(); } catch (e) { try { ctx.close(); } catch (e2) { /* already gone */ } ctx = null; N = {}; throw e; }   // a half-built graph must not block the next try
+        ctx.onstatechange = () => { if (on && ctx && (ctx.state === "suspended" || ctx.state === "interrupted")) ctx.resume().catch(() => {}); };   // a call, Siri or a route change
+        timer = setInterval(tick, 250);
+      }
+      if (on && ctx.state !== "running") { await settle(ctx.resume()); return on; }   // it was interrupted: a tap brings it back instead of switching it off
+      if (!on) {
+        await settle(ctx.resume());   // if this rejects or times out, `on` is still false and the caller shows the failure
+        on = true; fadeUntil = ctx.currentTime + 3; lastVol = S.vol;
+        N.out.gain.cancelScheduledValues(ctx.currentTime); N.out.gain.setTargetAtTime(S.vol, ctx.currentTime, 1.2); impact(ctx.currentTime + 0.15, 0.8);
+      } else {
+        on = false;
+        N.out.gain.cancelScheduledValues(ctx.currentTime); N.out.gain.setTargetAtTime(0, ctx.currentTime, 0.15);
+        offT = setTimeout(() => { if (!on && ctx.state === "running") ctx.suspend().catch(() => {}); }, 900);
+      }
+    } finally { setTimeout(() => { busy = false; }, 600); }   // the guard stays up, so a held key cannot flash the picture faster than about twice a second
+    return on;
+  }
+  function kill() { clearInterval(timer); on = false; if (ctx && ctx.state !== "closed") ctx.close().catch(() => {}); }
+  function update() {
+    if (!ctx || !on) return;
+    const t = ctx.currentTime, near = clamp((60 - cam.dist) / 50, 0, 1), w = S.weight;
+    if (t > fadeUntil || S.vol !== lastVol) N.out.gain.setTargetAtTime(S.vol, t, 0.1);   // let the slow fade-in finish, unless the volume was touched
+    lastVol = S.vol;
+    N.low.gain.setTargetAtTime(-2 + 10 * w, t, 0.2);
+    N.sub.gain.setTargetAtTime((0.22 + 0.42 * w) * (0.75 + 0.4 * near), t, 0.4);
+    N.rumble.gain.setTargetAtTime((0.08 + 0.2 * w) * (0.5 + near), t, 0.4);
+    N.roar.gain.setTargetAtTime(0.02 + 0.09 * near, t, 0.4);
+    N.roarBP.frequency.setTargetAtTime(300 + 700 * near, t, 0.6);
+    N.bassLP.frequency.setTargetAtTime(110 + 140 * near, t, 0.6);
+    N.subB.detune.setTargetAtTime(6 + 26 * S.a, t, 0.5);
+    N.bassLfo.frequency.setTargetAtTime(0.05 + 0.3 * S.a, t, 0.5);
+    N.padLP.frequency.setTargetAtTime(S.shift ? 4600 : 3200, t, 1);
+  }
+  const tbuf = new Float32Array(1024), po = { kick: 0, bass: 0 };
+  let runMax = 0.02, bassSm = 0;
+  function pulse(dt) {
+    po.kick = 0; po.bass = 0;
+    if (!ctx || !on || ctx.state !== "running" || !N.lowAn) return po;
+    N.lowAn.getFloatTimeDomainData(tbuf);
+    let sum = 0; for (let i = 0; i < tbuf.length; i++) sum += tbuf[i] * tbuf[i];
+    const rms = Math.sqrt(sum / tbuf.length);
+    runMax = Math.max(rms, runMax * Math.exp(-dt * 0.08), 0.01);
+    const n = clamp(rms / runMax, 0, 1);
+    bassSm += (n * n - bassSm) * (1 - Math.exp(-dt * 10));
+    po.bass = bassSm;
+    const t = ctx.currentTime - (ctx.outputLatency || 0);   // what the listener hears now, not what was just rendered
+    let k = 0;
+    for (let i = imp.length - 1; i >= 0; i--) {
+      const d = t - imp[i].t;
+      if (d > 9) { imp.splice(i, 1); continue; }
+      if (d > 0) k += imp[i].level * Math.min(1, d / 0.04) * Math.exp(-d / 0.8);
+    }
+    po.kick = Math.min(k, 1.2);
+    return po;
+  }
+  return { toggle, update, pulse, kill, get on() { return on; }, get analyser() { return N.analyser; }, get rate() { return ctx ? ctx.sampleRate : 48000; } };
+})();
+
+/* --------------------------------------------------------------- spectrum */
+const spec = $("spectrum"), sctx = spec.getContext("2d");
+let specData = null;
+function drawSpectrum() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.floor(spec.clientWidth * dpr)), h = Math.max(1, Math.floor(spec.clientHeight * dpr));
+  if (spec.width !== w || spec.height !== h) { spec.width = w; spec.height = h; }
+  sctx.clearRect(0, 0, w, h);
+  const bars = Math.max(24, Math.floor(spec.clientWidth / 7)), bw = w / bars;
+  const an = Sound.on ? Sound.analyser : null;
+  if (an) { if (!specData || specData.length !== an.frequencyBinCount) specData = new Uint8Array(an.frequencyBinCount); an.getByteFrequencyData(specData); }
+  const nyq = Sound.rate / 2;
+  for (let i = 0; i < bars; i++) {
+    let v = 0;
+    if (an) {
+      const f0 = 20 * Math.pow(1000, i / bars), f1 = 20 * Math.pow(1000, (i + 1) / bars);
+      const b0 = Math.floor(f0 / nyq * specData.length), b1 = Math.max(b0 + 1, Math.ceil(f1 / nyq * specData.length));
+      for (let b = b0; b < b1 && b < specData.length; b++) v = Math.max(v, specData[b]);
+      v /= 255;
+    }
+    const bh = Math.max(dpr, v * v * h);
+    sctx.fillStyle = an ? `rgba(255,183,102,${0.35 + 0.65 * v})` : "rgba(236,230,216,.22)";
+    sctx.fillRect(i * bw + dpr * 0.5, h - bh, Math.max(1, bw - dpr), bh);
+  }
+}
+
+/* ---------------------------------------------------------------- fatal */
+let toastTimer = 0;
+function toast(msg, ms = 2400) {
+  const t = $("toast"), p = $("panel");
+  t.textContent = msg; t.classList.add("show");
+  // keep the message clear of the open controls: left of the side panel, above the sheet on a phone
+  const pr = !document.body.classList.contains("clean") && !p.classList.contains("closed") ? p.getBoundingClientRect() : null;
+  t.style.left = t.style.bottom = t.style.maxWidth = "";
+  if (pr && !SHEET.matches) { t.style.left = pr.left / 2 + "px"; t.style.maxWidth = Math.max(160, pr.left - 32) + "px"; }
+  else if (pr) t.style.bottom = (innerHeight - pr.top + 8) + "px";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.classList.remove("show"); toastTimer = setTimeout(() => { t.textContent = ""; }, 400); }, ms);   // an unseen message must not stay readable
+}
+function fatal(title, msg, log) {
+  G.dead = true; Sound.kill(); $("boot").hidden = true; try { if (G.device) G.device.destroy(); } catch (e) {}
+  $("fatalTitle").textContent = title; $("fatalMsg").textContent = msg; $("fatalLog").textContent = log || "";
+  $("fatal").style.display = "flex";
+  ["view", "title", "panel", "spectrumWrap"].forEach(id => { $(id).inert = true; });
+  $("fatal").firstElementChild.focus();
+}
+
+/* ---------------------------------------------------------------- WebGPU */
+const canvas = $("view");
+const G = { ready: false };
+async function initGPU() {
+  if (!navigator.gpu) { fatal("WEBGPU NEEDED", "This simulation needs WebGPU. Open it in a current Chrome or Edge, or in Safari 26 or later. If you already are, update the browser and reload."); return; }
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  if (!adapter) { fatal("NO GPU ADAPTER", "The browser supports WebGPU but found no usable graphics adapter. Turn on hardware acceleration in the browser settings, update your graphics driver, then reload."); return; }
+  const feats = [];
+  if (adapter.features.has("timestamp-query")) feats.push("timestamp-query");
+  const device = await adapter.requestDevice({ requiredFeatures: feats });
+  G.device = device; G.hasTS = feats.length > 0;
+  device.lost.then(info => { if (info.reason !== "destroyed" && !G.dead) fatal("GPU DEVICE LOST", "The graphics device was reset. Reload the page to start again.", info.message); });
+  device.addEventListener("uncapturederror", e => { console.error(e.error); if (!G.errShown && !G.dead) { G.errShown = true; fatal("GPU ERROR", "The renderer hit an error it could not recover from. Reload the page; if it happens again, update your graphics driver.", e.error.message); } });
+
+  G.headless = !!window.__noCanvas;   // test hook: composite into a texture instead of the canvas
+  G.ctx = G.headless ? null : canvas.getContext("webgpu");
+  G.sdrFormat = G.headless ? "rgba8unorm" : navigator.gpu.getPreferredCanvasFormat();
+  configureCanvas();
+
+  const mod = async (id) => {
+    const m = device.createShaderModule({ code: $(id).textContent });
+    const info = await m.getCompilationInfo();
+    const errs = info.messages.filter(x => x.type === "error");
+    if (errs.length) throw new Error(id + "\n" + errs.map(x => `${x.lineNum}:${x.linePos} ${x.message}`).join("\n"));
+    return m;
+  };
+  let geoM, postM, compM;
+  try { [geoM, postM, compM] = await Promise.all([mod("geoWGSL"), mod("postWGSL"), mod("compWGSL")]); }
+  catch (e) { fatal("SHADER ERROR", "A shader failed to compile on this GPU. Update your graphics driver or try another browser, then reload. Details below.", String(e.message)); return; }
+
+  const HDRF = "rgba16float";
+  G.geoBGL = device.createBindGroupLayout({ entries: [
+    { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+    { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+    { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float", viewDimension: "3d" } },
+    { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } } ] });
+  const nz = new Uint8Array(64 * 64 * 64); let sd = 0x9e3779b9;
+  for (let i = 0; i < nz.length; i++) { sd ^= sd << 13; sd ^= sd >>> 17; sd ^= sd << 5; nz[i] = sd >>> 24; }
+  const nt = device.createTexture({ size: [64, 64, 64], dimension: "3d", format: "r8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  device.queue.writeTexture({ texture: nt }, nz, { bytesPerRow: 64, rowsPerImage: 64 }, [64, 64, 64]);
+  G.noise = nt.createView();
+  G.noiseSmp = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat", addressModeV: "repeat", addressModeW: "repeat" });
+  G.postBGL = device.createBindGroupLayout({ entries: [
+    { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+    { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } } ] });
+  G.compBGL = device.createBindGroupLayout({ entries: [
+    { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+    { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+    { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+    { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+    { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } } ] });
+  G.streakBGL = device.createBindGroupLayout({ entries: [
+    { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+    { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+    { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } } ] });
+  const pl = bgl => device.createPipelineLayout({ bindGroupLayouts: [bgl] });
+  const mk = (m, entry, layout, format, blend) => device.createRenderPipeline({
+    layout, vertex: { module: m, entryPoint: "vs" },
+    fragment: { module: m, entryPoint: entry, targets: [blend ? { format, blend } : { format }] },
+    primitive: { topology: "triangle-list" } });
+  const add = { color: { srcFactor: "one", dstFactor: "one", operation: "add" }, alpha: { srcFactor: "one", dstFactor: "one", operation: "add" } };
+  G.geoPipe = mk(geoM, "fs", pl(G.geoBGL), HDRF);
+  G.prePipe = mk(postM, "fsPre", pl(G.postBGL), HDRF);
+  G.downPipe = mk(postM, "fsDown", pl(G.postBGL), HDRF);
+  G.upPipe = mk(postM, "fsUp", pl(G.postBGL), HDRF, add);
+  G.streakPipe = mk(postM, "fsStreak", pl(G.streakBGL), HDRF);
+  G.sbuf = [0, 1, 2].map(() => device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }));
+  G.mkComp = fmt => mk(compM, "fs", pl(G.compBGL), fmt);
+  G.compPipe = G.mkComp(G.canvasFormat);
+  G.compPipeFormat = G.canvasFormat;
+
+  G.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
+  G.ubuf = device.createBuffer({ size: 176, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  G.cbuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  G.udata = new Float32Array(44); G.cdata = new Float32Array(16);
+  if (G.hasTS) {
+    G.qset = device.createQuerySet({ type: "timestamp", count: 2 });
+    G.qresolve = device.createBuffer({ size: 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    G.qread = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    G.qbusy = false;
+  }
+  G.ready = true; G.t0 = performance.now();
+  if (S.hdr) configureCanvas();   // HDR was ticked while the shaders compiled
+  resize(true);
+  requestAnimationFrame(frame);
+}
+function configureCanvas() {
+  let fmt = G.sdrFormat, ok = false;
+  if (G.headless) { G.canvasFormat = fmt; return; }
+  if (S.hdr) {
+    try { G.ctx.configure({ device: G.device, format: "rgba16float", alphaMode: "opaque", toneMapping: { mode: "extended" } }); fmt = "rgba16float"; ok = true; }
+    catch (e) { S.hdr = false; $("hdr").checked = false; toast("HDR output is not available in this browser."); }
+  }
+  if (!ok) G.ctx.configure({ device: G.device, format: fmt, alphaMode: "opaque" });
+  G.canvasFormat = fmt; G.still = 0; G.sig = "";   // a reconfigured canvas is blank: repaint even if paused
+  if (G.mkComp && G.compPipeFormat !== fmt) { G.compPipe = G.mkComp(fmt); G.compPipeFormat = fmt; }
+}
+
+function resize(force) {
+  if (!G.ready) return;
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  let cw = Math.max(2, Math.floor(canvas.clientWidth * dpr)), ch = Math.max(2, Math.floor(canvas.clientHeight * dpr));
+  const maxT = G.device.limits.maxTextureDimension2D;
+  const lim = Math.min(1, 3840 / cw, maxT / ch, Math.sqrt(2 * MAXPIX / (cw * ch)));   // never ask the device for a texture it cannot make
+  if (lim < 1) { cw = Math.floor(cw * lim); ch = Math.floor(ch * lim); }
+  if (!force && (canvas.width !== cw || canvas.height !== ch)) {   // let a dragged window edge settle before reallocating ~160 MB of textures
+    const key = cw + "x" + ch, t = performance.now();
+    if (G.rsKey !== key) { G.rsKey = key; G.rsAt = t; return; }
+    if (t - G.rsAt < 140) return;
+  } else G.rsKey = null;
+  if (!S.govern) S.scale = capFor(QUALITY[S.quality], cw, ch);
+  const sc = Math.min(S.scale, maxT / Math.max(cw, ch));
+  const iw = Math.max(16, Math.round(cw * sc)), ih = Math.max(16, Math.round(ch * sc));
+  if (!force && canvas.width === cw && canvas.height === ch && G.iw === iw && G.ih === ih) return;
+  if (canvas.width !== cw) canvas.width = cw;
+  if (canvas.height !== ch) canvas.height = ch;
+  if (G.iw === iw && G.ih === ih && !force) return;
+  G.iw = iw; G.ih = ih;
+  const dev = G.device, usage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC;
+  (G.tex || []).forEach(t => t.destroy());
+  G.tex = [];
+  const mkTex = (w, h) => { const t = dev.createTexture({ size: [w, h], format: "rgba16float", usage }); G.tex.push(t); return t.createView(); };
+  G.acc = [mkTex(iw, ih), mkTex(iw, ih)];
+  if (G.headless) { G.off = dev.createTexture({ size: [cw, ch], format: "rgba8unorm", usage }); G.tex.push(G.off); }
+  G.mips = [];
+  let w = iw, h = ih;
+  for (let i = 0; i < 7; i++) { w = Math.max(1, w >> 1); h = Math.max(1, h >> 1); G.mips.push(mkTex(w, h)); if (w <= 4 || h <= 4) break; }
+  const bg = (layout, entries) => dev.createBindGroup({ layout, entries: entries.map((resource, binding) => ({ binding, resource })) });
+  G.geoBG = [0, 1].map(i => bg(G.geoBGL, [{ buffer: G.ubuf }, G.acc[1 - i], G.noise, G.noiseSmp]));   // render into acc[i], read history acc[1-i]
+  G.accBG = G.acc.map(v => bg(G.postBGL, [v, G.sampler]));
+  G.mipBG = G.mips.map(v => bg(G.postBGL, [v, G.sampler]));
+  // quarter-resolution pair for the anamorphic streak
+  const sSrc = G.mips[Math.min(1, G.mips.length - 1)], sw = Math.max(1, iw >> 2), sh = Math.max(1, ih >> 2);
+  G.streak = [mkTex(sw, sh), mkTex(sw, sh)];
+  [1, 4, 14].forEach((step, i) => dev.queue.writeBuffer(G.sbuf[i], 0, new Float32Array([step / sw, 0, 1.1, i === 0 ? 1 : 0])));
+  G.streakBG = [sSrc, G.streak[0], G.streak[1]].map((v, i) => bg(G.streakBGL, [v, G.sampler, { buffer: G.sbuf[i] }]));
+  G.compBG = G.acc.map(v => bg(G.compBGL, [v, G.sampler, G.mips[0], { buffer: G.cbuf }, G.streak[0]]));
+  G.frame = 0; G.cur = 0;
+}
+
+/* ------------------------------------------------------------------ frame */
+const halton = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
+let lastT = 0, frameMs = 16.7, gpuMs = 0, govT = 0, slowT = 0, hudT = 0, prevCam = null;
+const WIND = 44;   // sim-time window over which the disk texture is allowed to shear before it is cross-faded
+
+function frame(now) {
+  if (!G.dead) requestAnimationFrame(frame);
+  if (!G.ready || G.dead || document.hidden) { lastT = now; return; }
+  if (G.headless) { if (G.pending) return; G.pending = true; G.device.queue.onSubmittedWorkDone().then(() => { G.pending = false; }); }
+  const rawMs = lastT ? (now - lastT || 16) : 16, dt = Math.min(0.1, rawMs / 1000), idt = Math.min(0.5, rawMs / 1000); lastT = now;
+  frameMs += (dt * 1000 - frameMs) * 0.06;
+  resize(false);
+
+  // camera
+  if (S.orbit && !S.paused && !drag.active) S.az += dt * 0.012;
+  const kUI = 1 - Math.exp(-dt * 7);
+  let rate = 7, kdt = dt;
+  if (INTRO.on) { INTRO.t = (INTRO.t || 0) + idt; rate = 1.15; kdt = idt; if (INTRO.t > 10 || (Math.abs(cam.dist - S.dist) < 0.4 && Math.abs(cam.inc - S.inc) < 0.2)) INTRO.on = false; }   // the intro runs on wall time, so a slow GPU still gets it in seconds
+  INTRO.fade = Math.min(99, INTRO.fade + (INTRO.fade < 2.8 ? idt : dt));
+  if (S.drift && !S.paused) driftT += dt;
+  const tgtDist = S.drift ? clamp(S.dist * (1 + 0.28 * Math.sin(driftT * 0.045)), 12, 120) : S.dist;
+  const tgtInc = S.drift ? clamp(S.inc + 11 * Math.sin(driftT * 0.031 + 1.3), 2, 178) : S.inc;
+  const k = 1 - Math.exp(-kdt * rate);
+  cam.dist += (tgtDist - cam.dist) * k; cam.inc += (tgtInc - cam.inc) * k; cam.az += (S.az - cam.az) * k; cam.fov += (S.fov - cam.fov) * k;
+  idleT += Math.min(rawMs, 1000) / 1000;   // real time, so a slow GPU does not stretch the idle delay
+  const ae = document.activeElement;
+  if (S.idle && idleT > 10 && !drag.active && !(ae && ae.closest && ae.closest(".hud") && !ptrFocus) && !(HOVER.matches && document.querySelector("#panel:hover"))) document.body.classList.add("idle");
+  const pulseOn = S.react && !S.paused && Sound.on;   // Pause motion stops the light pulses too
+  const pulse = pulseOn ? Sound.pulse(dt) : { kick: 0, bass: 0 };
+  const fadeIn = clamp(INTRO.fade / 2.8, 0, 1), fadeS = fadeIn * fadeIn * (3 - 2 * fadeIn);
+  if (!S.paused) { S.simTime += dt * S.speed; G.vt = ((G.vt || 0) + dt) % 65536; }   // animation clock: stands still while paused, grain and twinkle included
+
+  const th = cam.inc * Math.PI / 180, ph = cam.az;
+  const pos = [cam.dist * Math.sin(th) * Math.cos(ph), cam.dist * Math.sin(th) * Math.sin(ph), cam.dist * Math.cos(th)];
+  const fwd = pos.map(v => -v / cam.dist);
+  let right = [fwd[1], -fwd[0], 0]; const rl = Math.hypot(right[0], right[1]) || 1; right = right.map(v => v / rl);
+  const up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
+  const aspect = G.iw / G.ih, tanF = Math.tan(cam.fov * Math.PI / 360) / Math.min(1, aspect);   // View angle is the narrower side of the picture
+
+  // keep the hole in the middle of the free area: beside the panel on a desktop, above the sheet on a phone
+  const pr = (!document.body.classList.contains("clean") && !$("panel").classList.contains("closed")) ? $("panel").getBoundingClientRect() : null;
+  const wide = !SHEET.matches;
+  const tx = pr && wide ? (innerWidth - pr.left) / Math.max(innerWidth, 1) : 0;
+  const titleBot = pr && !wide ? $("title").getBoundingClientRect().bottom : 0;   // on a phone the hole sits between the title and the sheet
+  const yc = titleBot + Math.max(0, (pr ? pr.top : 0) - titleBot) / 2;
+  const ty = pr && !wide ? -(innerHeight - 2 * yc) / Math.max(innerHeight, 1) : 0;
+  const sx0 = G.shift || 0, sy0 = G.shiftY || 0;
+  G.shift = sx0 + (tx - sx0) * kUI; G.shiftY = sy0 + (ty - sy0) * kUI;
+  // how far the picture moved since the last frame (camera and panel offset) decides how much history we may reuse
+  let motion = Math.abs(G.shift - sx0) * G.iw / 2 + Math.abs(G.shiftY - sy0) * G.ih / 2;
+  if (prevCam) {
+    const dAng = Math.hypot((cam.az - prevCam.az) * Math.sin(th), (cam.inc - prevCam.inc) * Math.PI / 180) + Math.abs(cam.dist - prevCam.dist) / cam.dist + Math.abs(cam.fov - prevCam.fov) * 0.02;
+    motion += dAng / (2 * tanF / G.ih);
+  }
+  prevCam = { ...cam };
+  const alpha = G.frame === 0 ? 1 : clamp(0.14 + motion * 0.3, 0.14, 0.92);
+
+  // a paused picture that has converged costs no GPU time: keep showing it
+  const calm = S.paused && INTRO.fade >= 2.8 && !INTRO.on;
+  const sig = calm ? [JSON.stringify(S), ...[cam.dist, cam.inc, cam.az, cam.fov].map(v => Math.round(v * 1e4)), Math.round(G.shift * 1e3), Math.round(G.shiftY * 1e3), G.iw, G.ih, canvas.width, canvas.height].join("|") : "";
+  G.still = calm && sig === G.sig ? (G.still || 0) + 1 : 0; G.sig = sig;
+  if (G.still > 24) { hudT += dt; if (hudT > 0.2) { hudT = 0; Sound.update(); } drawSpectrum(); return; }
+
+  const K = kerr(S.a), Q = QUALITY[S.quality];
+  const ta = ((S.simTime % WIND) + WIND) % WIND, tb = (ta + WIND / 2) % WIND;
+  const wA = 1 - Math.abs(2 * ta / WIND - 1);
+  const ji = (G.frame % 16) + 1;
+  const u = G.udata;
+  u.set([pos[0], pos[1], pos[2], G.vt || 0], 0);
+  u.set([right[0], right[1], right[2], tanF * aspect], 4);
+  u.set([up[0], up[1], up[2], tanF], 8);
+  u.set([fwd[0], fwd[1], fwd[2], S.spikes ? 1 : 0], 12);
+  u.set([-S.a, K.rh, K.iscoPro, Math.max(S.rout, K.iscoPro + 1.5)], 16);
+  u.set([S.temp, S.thick, S.opac, S.shift ? 1 : 0], 20);
+  u.set([Q.steps, Q.stepScale, alpha, Math.max(60, cam.dist * 1.3)], 24);
+  u.set([halton(ji, 2) - 0.5, halton(ji, 3) - 0.5, G.iw, G.ih], 28);
+  u.set([1.0, (S.shift ? 3.4 : 2.6) * (1 + 0.12 * (pulse.bass - 0.6) * (pulseOn ? 1 : 0) + 0.4 * pulse.kick), S.shift ? 4.0 : 3.4, S.a], 32);
+  u.set([ta - WIND / 2, tb - WIND / 2, wA, G.shift], 36);
+  u.set([G.shiftY, 0.995 * 2 * (1 + Math.cos(2 / 3 * Math.acos(-Math.abs(S.a)))), 0, 0], 40);
+  G.device.queue.writeBuffer(G.ubuf, 0, u);
+  const c = G.cdata;
+  c.set([Math.pow(2, S.expo) * fadeS * (1 + 0.1 * pulse.kick), S.bloom + 0.06 * pulse.kick, G.vt || 0, S.hdr && G.canvasFormat === "rgba16float" ? 1 : 0,
+    S.grain, S.vign, 1 / G.mips.length, S.glow + 0.05 * pulse.kick,
+    S.streak, S.chroma, S.tone === "aces" ? 1 : 0, 1.0,
+    canvas.width, canvas.height, 1.0, 0]);
+  G.device.queue.writeBuffer(G.cbuf, 0, c);
+
+  const enc = G.device.createCommandEncoder();
+  const useTS = S.govern && G.hasTS && !G.qbusy;
+  const pass = (view, pipe, bgrp, load, ts) => {
+    const desc = { colorAttachments: [{ view, loadOp: load ? "load" : "clear", storeOp: "store", clearValue: [0, 0, 0, 1] }] };
+    if (ts) desc.timestampWrites = ts;
+    const p = enc.beginRenderPass(desc); p.setPipeline(pipe); p.setBindGroup(0, bgrp); p.draw(3); p.end();
+  };
+  const cur = G.cur;
+  pass(G.acc[cur], G.geoPipe, G.geoBG[cur], false, useTS ? { querySet: G.qset, beginningOfPassWriteIndex: 0 } : null);
+  pass(G.mips[0], G.prePipe, G.accBG[cur], false);
+  for (let i = 1; i < G.mips.length; i++) pass(G.mips[i], G.downPipe, G.mipBG[i - 1], false);
+  // streak reads the quarter-res level before the upsample chain adds the wider blurs onto it
+  pass(G.streak[0], G.streakPipe, G.streakBG[0], false);
+  pass(G.streak[1], G.streakPipe, G.streakBG[1], false);
+  pass(G.streak[0], G.streakPipe, G.streakBG[2], false);
+  for (let i = G.mips.length - 1; i >= 1; i--) pass(G.mips[i - 1], G.upPipe, G.mipBG[i], true);
+  pass((G.headless ? G.off : G.ctx.getCurrentTexture()).createView(), G.compPipe, G.compBG[cur], false, useTS ? { querySet: G.qset, endOfPassWriteIndex: 1 } : null);
+  if (useTS) { enc.resolveQuerySet(G.qset, 0, 2, G.qresolve, 0); enc.copyBufferToBuffer(G.qresolve, 0, G.qread, 0, 16); }
+  G.device.queue.submit([enc.finish()]);
+  if (useTS) {
+    G.qbusy = true;
+    G.qread.mapAsync(GPUMapMode.READ).then(() => {
+      const t = new BigInt64Array(G.qread.getMappedRange()); const ms = Number(t[1] - t[0]) / 1e6; G.qread.unmap(); G.qbusy = false;
+      if (ms > 0 && ms < 5000) gpuMs = gpuMs ? gpuMs + (ms - gpuMs) * 0.15 : ms;
+    }).catch(() => { G.qbusy = false; });
+  }
+  G.cur = 1 - cur; G.frame++;
+  if (!G.booted) { G.booted = true; G.t0 = now; const done = () => { $("boot").hidden = true; }; G.device.queue.onSubmittedWorkDone().then(done, done); }   // the loading line goes once a picture exists
+
+  // resolution governor
+  govT += dt;
+  if (S.govern && govT > 0.6 && G.frame > 8) {
+    govT = 0;
+    let want = S.scale;
+    if (G.hasTS && gpuMs > 0) want = Math.abs(gpuMs / 11 - 1) < 0.12 ? S.scale : S.scale * Math.sqrt(11 / gpuMs);   // dead band: no hunting around the target
+    else if (frameMs > 21) { want = S.scale * 0.85; G.dn = Math.min(5, (G.dn || 0) + 1); slowT = -6 * G.dn; }   // every cut waits longer before trying a step back up
+    else if (frameMs < 17.4) { slowT += 0.6; if (slowT > 4) { want = S.scale + 0.05; slowT = 0; } }
+    want = clamp(Math.round(want * 20) / 20, 0.25, capFor(Q));
+    if (Math.round(want * 20) !== Math.round(S.scale * 20)) { S.scale = want; gpuMs = 0; resize(false); }
+  } else if (!S.govern) { const cp = capFor(Q); if (S.scale !== cp) { S.scale = cp; resize(false); } }
+
+  // slow-start rescue: if this GPU cannot carry the tier, step down and say so (never overrides a tier the person picked)
+  if (!S.govern && !G.userQ && (!G.headless || window.__rescue) && G.frame > 3 && (G.headless || now - G.t0 < 30000)) {   // only in the first 30 s, so heavy sliders on a fast GPU never trip it
+    G.slowN = rawMs > 70 ? (G.slowN || 0) + 1 : 0;
+    if (G.slowN >= 6 && S.quality !== "draft") {
+      G.slowN = 0;
+      S.quality = { high: "medium", medium: "low", low: "draft" }[S.quality];
+      S.scale = capFor(QUALITY[S.quality]); resize(false); syncUI();
+      toast("This GPU is struggling, so quality dropped to " + S.quality[0].toUpperCase() + S.quality.slice(1) + ". Open Controls, then RENDER, to change it.", 6000);
+    }
+  }
+
+  hudT += dt;
+  if (hudT > 0.2) { hudT = 0; Sound.update(); }
+  drawSpectrum();
+}
+
+/* --------------------------------------------------------------- controls */
+const binds = [
+  ["spin", "a", v => v.toFixed(3)], ["speed", "speed", v => v.toFixed(1) + "×"], ["rout", "rout", v => v.toFixed(1) + " M"],
+  ["temp", "temp", v => Math.round(v) + " K"], ["thick", "thick", v => v.toFixed(2) + " M"], ["opac", "opac", v => v.toFixed(1)],
+  ["dist", "dist", v => v.toFixed(1) + " M"], ["inc", "inc", v => v.toFixed(2) + "°"], ["fov", "fov", v => Math.round(v) + "°"],
+  ["expo", "expo", v => (v >= 0 ? "+" : "") + v.toFixed(2) + " EV"], ["bloom", "bloom", v => v.toFixed(3)],
+  ["glow", "glow", v => v.toFixed(3)], ["streak", "streak", v => v.toFixed(2)], ["chroma", "chroma", v => v.toFixed(3)],
+  ["grain", "grain", v => v.toFixed(3)], ["vign", "vign", v => v.toFixed(2)],
+  ["vol", "vol", v => Math.round(v * 100) + "%"], ["weight", "weight", v => Math.round(v * 100) + "%"],
+];
+function syncUI() {
+  const rmin = Math.max(6, Math.ceil((kerr(S.a).iscoPro + 1.5) * 2) / 2);   // the disk cannot start closer than the ISCO plus a margin
+  $("rout").min = rmin; if (S.rout < rmin) S.rout = rmin;
+  for (const [id, key, fmt] of binds) {
+    const el = $(id), out = $(id + "O"), txt = fmt(+S[key]);
+    el.value = S[key];
+    if (out.textContent !== txt) out.textContent = txt;
+    const vt = / M$/.test(txt) ? txt.slice(0, -2) + " gravitational radii" : txt;   // a screen reader would say "em"
+    if (el.getAttribute("aria-valuetext") !== vt) el.setAttribute("aria-valuetext", vt);
+  }
+  $("pause").checked = S.paused;
+  $("shift").checked = S.shift; $("orbit").checked = S.orbit; $("govern").checked = S.govern; $("hdr").checked = S.hdr; $("spikes").checked = S.spikes; $("idle").checked = S.idle; $("drift").checked = S.drift; $("react").checked = S.react;
+  document.querySelectorAll("#toneSeg button").forEach(b => { b.setAttribute("aria-pressed", !S.hdr && b.dataset.t === S.tone); b.disabled = S.hdr; b.title = S.hdr ? "HDR output uses its own tone curve" : ""; });   // HDR output has its own tone curve
+  document.querySelectorAll("#camSeg button").forEach(b => { const c = CAMS[b.dataset.c]; b.setAttribute("aria-pressed", S.dist === c.dist && S.inc === c.inc && S.fov === c.fov); });
+  const film = Math.abs(S.a - 0.6) < 1e-6 && !S.shift, sci = S.a >= 0.9975 && S.shift;
+  $("presetFilm").setAttribute("aria-pressed", film); $("presetScience").setAttribute("aria-pressed", sci);
+  document.querySelectorAll("#qualitySeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.q === S.quality));
+}
+document.querySelectorAll("output").forEach(o => o.setAttribute("aria-live", "off"));   // the slider itself announces its value
+for (const [id, key] of binds) $(id).addEventListener("input", e => { S[key] = +e.target.value; syncUI(); });
+const coarse = matchMedia("(pointer:coarse)");
+function setPaused(v) { if (v) endIntro(); S.paused = v; syncUI(); toast(v ? (coarse.matches ? "Paused. Uncheck Pause motion to resume." : "Paused. Press Space or uncheck Pause motion.") : "Resumed."); }
+$("pause").addEventListener("change", e => setPaused(e.target.checked));
+$("shift").addEventListener("change", e => { S.shift = e.target.checked; syncUI(); });
+$("orbit").addEventListener("change", e => { S.orbit = e.target.checked; });
+$("spikes").addEventListener("change", e => { S.spikes = e.target.checked; });
+document.querySelectorAll("#toneSeg button").forEach(b => b.addEventListener("click", () => { S.tone = b.dataset.t; syncUI(); }));
+$("govern").addEventListener("change", e => { S.govern = e.target.checked; if (!S.govern) { S.scale = capFor(QUALITY[S.quality]); resize(false); } });
+$("idle").addEventListener("change", e => { S.idle = e.target.checked; if (!S.idle) document.body.classList.remove("idle"); });
+$("drift").addEventListener("change", e => { S.drift = e.target.checked; });
+$("react").addEventListener("change", e => { S.react = e.target.checked; });
+const CAMS = { film: { dist: 38, inc: 86, fov: 36 }, tilt: { dist: 30, inc: 68, fov: 40 }, pole: { dist: 40, inc: 6, fov: 36 }, close: { dist: 16, inc: 80, fov: 56 } };
+document.querySelectorAll("#camSeg button").forEach(b => b.addEventListener("click", () => { INTRO.on = false; Object.assign(S, CAMS[b.dataset.c]); syncUI(); }));
+["dist", "inc", "fov"].forEach(id => $(id).addEventListener("input", () => { INTRO.on = false; }));   // only the camera sliders end the fly-in
+$("hdr").addEventListener("change", e => { S.hdr = e.target.checked; if (G.ready) configureCanvas(); syncUI(); });
+$("presetFilm").addEventListener("click", () => { S.a = 0.6; S.shift = false; S.temp = 4400; S.expo = 0; syncUI(); });
+$("presetScience").addEventListener("click", () => { S.a = 0.998; S.shift = true; S.temp = 6500; S.expo = 1; syncUI(); });
+const RESET_KEYS = ["a", "shift", "speed", "rout", "temp", "thick", "opac", "expo", "bloom", "glow", "streak", "chroma", "grain", "vign", "spikes", "tone", "weight", "orbit", "drift", "react", "idle"];
+$("resetBtn").addEventListener("click", () => { RESET_KEYS.forEach(k => { S[k] = DEFAULTS[k]; }); if (S.paused) setPaused(false); document.body.classList.remove("idle"); syncUI(); toast("Settings reset. Camera position, render quality and volume kept."); });
+document.querySelectorAll("#qualitySeg button").forEach(b => b.addEventListener("click", () => {
+  G.userQ = true; S.quality = b.dataset.q; const cp = capFor(QUALITY[S.quality]); S.scale = S.govern ? Math.min(S.scale, cp) : cp; resize(false); syncUI(); }));
+function setPanel(open) {
+  $("panel").classList.toggle("closed", !open);
+  const b = $("panelToggle"); b.textContent = open ? "Hide" : "Show";
+  b.setAttribute("aria-expanded", open); b.setAttribute("aria-label", open ? "Hide controls" : "Show controls");
+}
+$("panelToggle").addEventListener("click", () => setPanel($("panel").classList.contains("closed")));
+$("soundBtn").addEventListener("click", async () => {
+  const b = $("soundBtn");
+  try { const on = await Sound.toggle(); b.classList.toggle("on", on); b.textContent = on ? "TURN SOUND OFF" : "TURN SOUND ON"; }
+  catch (e) {
+    if (window.AudioContext || window.webkitAudioContext) toast("Sound could not start. Check that this tab is not muted and an audio device is connected, then try again.", 5000);   // transient: the button stays live
+    else { b.disabled = true; b.textContent = "SOUND UNAVAILABLE"; toast("This browser has no Web Audio, so sound is unavailable.", 5000); }
+  }
+});
+if (!(window.AudioContext || window.webkitAudioContext)) { $("soundBtn").disabled = true; $("soundBtn").textContent = "SOUND UNAVAILABLE"; }
+if (!matchMedia("(dynamic-range: high)").matches) $("hdrRow").style.display = "none";
+if (matchMedia("(max-width:760px)").matches) setPanel(false);
+
+// pointer: drag to orbit, pinch or wheel to move in and out
+const drag = { active: false, pts: new Map(), pinch: 0 };
+function endIntro() { if (INTRO.on) { INTRO.on = false; S.dist = cam.dist; S.inc = cam.inc; syncUI(); } }   // stop the glide where it is
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+canvas.addEventListener("pointerdown", e => { if (e.pointerType === "mouse" && e.button !== 0) return; INTRO.on = false; canvas.setPointerCapture(e.pointerId); drag.pts.set(e.pointerId, [e.clientX, e.clientY]); drag.active = true; drag.pinch = 0; });
+canvas.addEventListener("pointermove", e => {
+  const p = drag.pts.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p[0], dy = e.clientY - p[1]; p[0] = e.clientX; p[1] = e.clientY;
+  if (drag.pts.size === 1) {
+    const sens = cam.fov / 36 * 0.22;
+    S.az -= dx * sens * Math.PI / 180; S.inc = clamp(S.inc - dy * sens, 2, 178); syncUI();
+  } else if (drag.pts.size === 2) {
+    const [a, b] = [...drag.pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    if (drag.pinch) { S.dist = clamp(S.dist * drag.pinch / d, 12, 120); syncUI(); }
+    drag.pinch = d;
+  }
+});
+const endPtr = e => { drag.pts.delete(e.pointerId); drag.pinch = 0; drag.active = drag.pts.size > 0; };
+canvas.addEventListener("pointerup", endPtr); canvas.addEventListener("pointercancel", endPtr);
+canvas.addEventListener("wheel", e => {
+  endIntro(); e.preventDefault();
+  const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;   // lines and pages, as Firefox reports a mouse wheel
+  S.dist = clamp(S.dist * Math.exp(dy * 0.0012), 12, 120); syncUI();
+}, { passive: false });
+let ptrFocus = null;   // the control the last click or tap landed on: Space there still means Pause
+document.addEventListener("pointerdown", e => { ptrFocus = e.target; }, true);
+document.addEventListener("keydown", e => { if (e.key === "Tab" || e.key.startsWith("Arrow")) ptrFocus = null; }, true);
+addEventListener("keydown", e => {
+  if (G.dead || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;   // leave Ctrl+F, Cmd+H and held keys to the browser
+  const k = e.key && e.key.length === 1 && /[a-z]/i.test(e.key) ? e.key.toLowerCase() : e.code === "KeyH" ? "h" : e.code === "KeyF" ? "f" : "";   // the letter on the key cap first, the physical key only for non-Latin layouts
+  if (e.code === "Space") {
+    const tg = e.target, bare = tg === document.body || tg === document.documentElement || tg === canvas || tg.type === "range";
+    const byPointer = ptrFocus && tg.contains && (tg.contains(ptrFocus) || [...(tg.labels || [])].some(l => l.contains(ptrFocus)));
+    if (!bare && !byPointer) return;   // Space belongs to a button or checkbox the person reached with the keyboard
+    e.preventDefault(); if (!bare && tg.blur) tg.blur();   // a control left focused by a click must not fire again on key-up
+    setPaused(!S.paused);
+  } else if (e.key === "Escape" && !$("panel").classList.contains("closed") && !document.body.classList.contains("clean")) {
+    const inside = $("panelBody").contains(document.activeElement); setPanel(false); if (inside) $("panelToggle").focus();
+  } else if (k === "h") {
+    const clean = document.body.classList.toggle("clean");
+    const ae = document.activeElement; if (clean && ae && ae.closest && ae.closest(".hud")) ae.blur();
+    toast(clean ? "Controls hidden. Press H to show them." : "Controls shown.", clean ? 6000 : undefined);
+  } else if (k === "f") {
+    const el = document.documentElement;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else if (el.requestFullscreen && document.fullscreenEnabled !== false) el.requestFullscreen().catch(() => {});
+    else toast("Fullscreen is not available here.");
+  }
+});
+addEventListener("resize", () => resize(false));
+document.addEventListener("visibilitychange", () => { G.still = 0; G.sig = ""; idleT = 0; });   // repaint after a tab comes back
+for (const ev of ["pointermove", "pointerdown", "keydown", "wheel", "touchstart", "focusin"]) addEventListener(ev, e => {
+  if (document.body.classList.contains("idle") && (e.pointerType === "touch" || e.type === "touchstart")) G.wakeAt = performance.now();
+  idleT = 0; document.body.classList.remove("idle");
+}, { passive: true });
+// the tap that wakes a faded HUD must not press whatever control is now under the finger
+document.addEventListener("click", e => {
+  if (performance.now() - (G.wakeAt || -1e9) < 500 && e.target.closest && e.target.closest(".hud")) { e.preventDefault(); e.stopPropagation(); }
+}, true);
+
+syncUI();
+window.gargantua = { S, G, QUALITY, INTRO, cam, Sound };
+initGPU().catch(e => fatal("COULD NOT START", "WebGPU failed to initialize. Reload the page; if it keeps failing, update your browser or graphics driver.", String(e && e.message || e)));
+</script>
+</body>
+</html>
