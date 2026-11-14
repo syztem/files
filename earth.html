@@ -1,0 +1,2021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Earth — a WebGPU simulation</title>
+<meta name="color-scheme" content="dark">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+:root{
+  --bg:#04060b; --ink:#e9eff9; --ink2:#a3b3ca; --ink3:#8998af;
+  --panel:rgba(8,12,21,.88); --panel2:rgba(16,23,38,.72);
+  --line:rgba(160,190,235,.14); --line2:rgba(160,190,235,.28);
+  --accent:#6ec1ff; --accent2:#9ad8ff; --accent-ink:#031420; --sun:#ffc36b; --hot:#ff8466;
+  --r-sm:8px;
+  --font:'Familjen Grotesk',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.35;overflow:hidden;overscroll-behavior:none}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas#c:focus{outline:none}
+canvas#c:focus-visible{outline:2px solid var(--accent);outline-offset:-4px}
+canvas#c.drag{cursor:grabbing}
+canvas#c.armed{cursor:crosshair}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ui-hidden #pins,.ui-hidden #probe{visibility:hidden}
+.ui-hidden #hud,.ui-hidden #panel,.ui-hidden #dock,.ui-hidden #panelBtn{opacity:0;pointer-events:none;visibility:hidden;transition:opacity .25s,visibility 0s linear .25s}
+#hud,#panel,#dock,#panelBtn{transition:opacity .25s}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;left:12px;top:10px;z-index:5;max-width:min(370px,calc(100vw - 110px));pointer-events:none;text-shadow:0 1px 8px rgba(0,0,0,.8);padding:8px 12px 10px;border-radius:14px;background:rgba(5,8,15,.88);border:1px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.brand{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.brand b{font-size:22px;font-weight:600;letter-spacing:.01em}
+.brand span{color:var(--ink3);font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.readout{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-family:var(--mono);font-size:11.5px}
+.readout dt{color:var(--ink3)}
+.readout dd{margin:0;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.readout dd.hi{color:var(--sun)}
+.help{margin:12px 0 0;color:var(--ink3);font-size:11.5px;max-width:260px}
+.help b{color:var(--ink2);font-weight:500}
+.nw{white-space:nowrap}
+#probe{position:fixed;z-index:6;pointer-events:none;font-family:var(--mono);font-size:11px;background:rgba(6,10,18,.9);border:1px solid var(--line2);border-radius:8px;padding:6px 9px;line-height:1.45;transform:translate(14px,14px);display:none;white-space:nowrap}
+#probe i{color:var(--ink3);font-style:normal}
+
+/* ---------- panel ---------- */
+#panelBtn{position:fixed;right:14px;top:12px;z-index:9;height:34px;padding:0 14px;border-radius:999px;background:var(--panel);border:1px solid var(--line2);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font-weight:500;display:none;align-items:center;gap:8px}
+#panelBtn svg{width:16px;height:16px}
+#panel{position:fixed;right:12px;top:12px;bottom:12px;width:340px;z-index:8;background:var(--panel);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+#panel .head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px 16px;border-bottom:1px solid var(--line)}
+#panel .head h2{margin:0;font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+#panel .head button{width:30px;height:30px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--ink2);display:grid;place-items:center}
+#panel .scroll{overflow:auto;padding:6px 8px 18px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+details{border-bottom:1px solid var(--line);padding:0 8px}
+details:last-child{border-bottom:0}
+summary{border-radius:8px;list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:13px 2px 12px;font-weight:500;font-size:14.5px;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary .ic{width:22px;height:22px;display:grid;place-items:center;color:var(--accent)}
+summary .ic svg{width:18px;height:18px}
+summary .chev{margin-left:auto;width:14px;height:14px;color:var(--ink3);transition:transform .2s}
+details[open] summary .chev{transform:rotate(90deg)}
+.body{padding:0 2px 14px;display:flex;flex-direction:column;gap:13px}
+.row{display:block}
+.row.dim,.sw.dim{opacity:.7}
+.rhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.rl{color:var(--ink2);font-size:13px}
+.rv{font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+.hint{color:var(--ink3);font-size:11.5px;line-height:1.4;margin-top:5px}
+.hint b{color:var(--ink2);font-weight:500}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;margin:0;cursor:pointer;border-radius:11px}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:linear-gradient(to right,var(--accent) var(--p,0%),rgba(160,190,235,.5) var(--p,0%))}
+input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:rgba(160,190,235,.5)}
+input[type=range]::-moz-range-progress{height:4px;border-radius:4px;background:var(--accent)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#eaf6ff;border:0;margin-top:-6px;box-shadow:0 0 0 3px rgba(110,193,255,.22),0 2px 6px rgba(0,0,0,.5)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#eaf6ff;border:0;box-shadow:0 0 0 3px rgba(110,193,255,.22)}
+input[type=range]:active::-webkit-slider-thumb{box-shadow:0 0 0 6px rgba(110,193,255,.28),0 2px 6px rgba(0,0,0,.5)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line2);background:transparent;border-radius:999px;padding:5px 11px;font-size:12.5px;color:var(--ink2);transition:background .15s,color .15s,border-color .15s}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:500}
+.chip.scene{background:var(--panel2);padding:6px 12px}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.btn{border:1px solid var(--line2);background:var(--panel2);border-radius:var(--r-sm);padding:7px 11px;font-size:12.5px;color:var(--ink)}
+.sw{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.sw .rl{color:var(--ink)}
+.sw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;pointer-events:none}
+.sw .t{flex:none;width:36px;height:20px;border-radius:20px;background:#67778f;position:relative;transition:background .18s}
+.sw .t::after{content:"";position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:#dfe9f7;transition:transform .18s}
+.sw input:checked + .t{background:var(--accent)}
+.sw input:checked + .t::after{transform:translateX(16px);background:#04202f}
+.sw input:focus-visible + .t{outline:2px solid var(--accent);outline-offset:2px}
+.field{display:flex;gap:8px}
+.field input[type=text]{flex:1;min-width:0;background:rgba(0,0,0,.28);border:1px solid rgba(160,190,235,.55);border-radius:var(--r-sm);padding:7px 10px;font-family:var(--mono);font-size:12.5px;text-transform:uppercase;letter-spacing:.06em}
+.legend{display:grid;gap:5px;font-size:12px;color:var(--ink2)}
+.legend div{display:grid;grid-template-columns:12px 1fr;gap:8px;align-items:start}
+.legend i{width:10px;height:10px;border-radius:3px;margin-top:4px}
+.legend small{display:block;font-family:var(--mono);font-size:11px;color:var(--ink3)}
+.subttl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:2px 0 -4px}
+
+/* ---------- dock ---------- */
+#dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:7;display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--panel);border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 10px 40px rgba(0,0,0,.45);max-width:calc(100vw - 24px)}
+body.panel-on #dock,body.panel-on #toast{left:calc(50% - 176px)}
+body.ui-hidden #toast{left:50%}
+.ib{width:36px;height:36px;border-radius:11px;border:1px solid var(--line2);background:var(--panel2);display:grid;place-items:center;color:var(--ink);flex:none}
+.ib svg{width:18px;height:18px}
+.ib.main{width:44px;height:44px;border-radius:14px;background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ib[aria-pressed=true]:not(.main){background:rgba(110,193,255,.2);border-color:var(--accent);color:var(--accent2)}
+.ib.strike[aria-pressed=true]{background:rgba(255,132,102,.2);border-color:var(--hot);color:var(--hot)}
+.spd{display:flex;flex-direction:column;gap:0;width:132px;flex:none}
+.spd output{font-family:var(--mono);font-size:11px;color:var(--ink2);text-align:center;margin-top:-2px;white-space:nowrap}
+.when{display:flex;flex-direction:column;gap:2px}
+.when input{background:transparent;border:0;border-bottom:1px solid rgba(160,190,235,.55);font-family:var(--mono);font-size:12.5px;color:var(--ink);padding:0 0 1px;width:196px;color-scheme:dark}
+.when small{font-size:10.5px;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase}
+.sep{width:1px;height:28px;background:var(--line);flex:none}
+#toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,8px);z-index:12;background:rgba(10,16,28,.92);border:1px solid var(--line2);padding:8px 14px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;width:max-content;max-width:min(92vw,560px);text-align:center;line-height:1.3;border-radius:16px}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+
+#boot{position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:3;color:var(--ink2);font-size:13px;letter-spacing:.06em;text-transform:uppercase;pointer-events:none;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45}}
+
+/* ---------- pins ---------- */
+#pins{position:fixed;inset:0;z-index:4;pointer-events:none;overflow:hidden}
+.pin{position:absolute;left:0;top:0;will-change:transform}
+.pin.off{visibility:hidden}
+.pdot{position:absolute;left:-6px;top:-6px;width:12px;height:12px;border-radius:50%;background:var(--sun);border:2px solid rgba(4,6,11,.85);box-shadow:0 0 0 3px rgba(255,195,107,.3),0 0 16px rgba(255,195,107,.75)}
+.pin.d .pdot{background:#ff9a6b;box-shadow:0 0 0 3px rgba(255,154,107,.3),0 0 16px rgba(255,154,107,.7)}
+.pin.n .pdot{background:#7fb2ff;box-shadow:0 0 0 3px rgba(127,178,255,.3),0 0 16px rgba(127,178,255,.7)}
+.ptag{position:absolute;left:14px;top:-13px;display:flex;align-items:center;gap:6px;background:rgba(6,10,18,.9);border:1px solid var(--line2);border-radius:999px;padding:3px 4px 3px 10px;font-family:var(--mono);font-size:11px;white-space:nowrap;pointer-events:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.px{width:20px;height:20px;border-radius:50%;border:0;background:rgba(160,190,235,.14);color:var(--ink2);font-size:14px;line-height:1;display:grid;place-items:center;padding:0;pointer-events:auto}
+@media (min-width:861px) and (max-width:1100px){ .spd{width:112px} .when input{width:144px;font-size:10.5px} .when input::-webkit-calendar-picker-indicator{display:none} #dock{gap:4px} }
+
+/* ---------- fallback ---------- */
+#fallback{position:fixed;inset:0;z-index:20;display:none;place-items:center;padding:24px;background:radial-gradient(ellipse at 50% 38%,#0b1a30 0%,#04060b 62%)}
+#fallback .card{max-width:460px;text-align:center}
+#fallback .globe{width:150px;height:150px;border-radius:50%;margin:0 auto 22px;background:radial-gradient(circle at 34% 30%,#9ad3ff 0%,#2e7bbf 30%,#10335f 62%,#05101f 100%);box-shadow:0 0 50px rgba(90,170,255,.35),inset -22px -14px 40px rgba(0,0,0,.6)}
+#fallback h1{font-size:24px;font-weight:600;margin:0 0 8px}
+#fallback p{color:var(--ink2);margin:0 0 8px}
+#fallback .btn{margin-top:10px;padding:9px 20px;font-weight:600;background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+#fallback code{font-family:var(--mono);font-size:11.5px;color:var(--ink3);display:block;margin-top:14px;white-space:pre-wrap;text-align:left;max-height:140px;overflow:auto}
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  #panelBtn{display:inline-flex}
+  #panel{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:min(62vh,520px);transform:translateY(calc(100% + 20px));visibility:hidden;transition:transform .28s ease,visibility 0s linear .28s;z-index:10}
+  body.panel-on #panel{transform:none;visibility:visible;transition:transform .28s ease,visibility 0s}
+  body.ui-hidden #panel{visibility:hidden}
+  body.panel-on #dock{left:50%;visibility:hidden}
+  body.panel-on #pins{visibility:hidden}
+  body.panel-on #toast{left:50%;bottom:calc(min(62vh,520px) + 18px)}
+  #dock{bottom:10px;gap:7px;padding:7px 8px}
+  .spd{width:112px}
+  .when input{width:188px}
+  #hud{left:12px;top:12px}
+  .help{display:none}
+  #panel{max-width:520px;margin:0 auto}
+}
+@media (max-width:860px) and (max-height:520px){ body.panel-on #hud{visibility:hidden} }
+@media (max-width:560px){
+  #hud{max-width:calc(100vw - 144px)}
+  .brand b{font-size:19px}
+  .readout{font-size:10.5px;gap:3px 8px}
+  #dock{flex-wrap:wrap;justify-content:center;width:calc(100vw - 16px);row-gap:6px;border-radius:16px}
+  .sep{display:none}
+  .spd{flex:1 1 112px;min-width:112px;width:auto}
+  .when{flex:1 1 150px}
+  .when input{width:100%}
+  #toast{bottom:172px}
+}
+@media (max-width:400px){ .readout dd{white-space:normal;overflow:visible;overflow-wrap:anywhere} }
+@media (min-width:861px){ #panelBtn{display:none} body:not(.panel-on) #panel{display:none} body:not(.panel-on) #panelBtn{display:inline-flex} }
+@media (pointer:coarse){#panel,#dock,#panelBtn,.ptag,#hud{backdrop-filter:none;-webkit-backdrop-filter:none}#panel,#dock,#panelBtn{background:rgba(8,12,21,.94)}#hud{background:rgba(5,8,15,.9)}}
+@media (pointer:coarse){.chip,.chip.scene{padding:10px 14px}.btn{padding:10px 14px}.px{width:32px;height:32px}.when input{min-height:32px}#panel .head button{width:38px;height:38px}#panelBtn{height:40px}.ib{width:40px;height:40px}.ib.main{width:46px;height:46px}input[type=range]{height:30px}.sw{min-height:32px}}
+@media (hover:hover){
+  .chip:not([aria-pressed=true]):hover{color:var(--ink);border-color:rgba(160,190,235,.5)}
+  #panelBtn:hover{border-color:var(--accent)}
+  #fallback .btn:hover{background:var(--accent2);border-color:var(--accent2)}
+  .chip.scene:hover{background:rgba(110,193,255,.14);color:var(--ink)}
+  .btn:hover{border-color:var(--accent);background:rgba(110,193,255,.12)}
+  .btn.warm:hover{border-color:var(--sun);background:rgba(255,195,107,.12)}
+  .ib:hover{border-color:var(--accent)}
+  .ib.main:hover{background:var(--accent2)}
+  .px:hover{background:rgba(255,132,102,.28);color:var(--ink)}
+  #panel .head button:hover{background:var(--panel2);color:var(--ink)}
+  summary:hover{background:var(--panel2)}
+}
+.btn.warm{border-color:rgba(255,195,107,.4)}
+.chip:active,.btn:active,.ib:active,.px:active,#panelBtn:active,#panel .head button:active{transform:scale(.96);filter:brightness(1.15)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body class="panel-on">
+<canvas id="c" tabindex="0" role="application" aria-label="Earth, interactive 3D view" aria-describedby="canvasHelp"></canvas>
+<p id="canvasHelp" hidden>Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom. With the Pin or Asteroid tool armed, press Enter to use it at the centre of the view.</p>
+<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;margin:0;padding:24px;text-align:center;color:#a3b3ca">This simulation needs JavaScript and WebGPU.</p></noscript>
+
+<div id="hud">
+  <div class="brand"><b role="heading" aria-level="1">Earth</b><span>WebGPU</span></div>
+  <dl class="readout" id="readout"></dl>
+  <p class="help">Drag to orbit, flick to glide · scroll to zoom · <span class="nw"><b>H</b> hides the interface</span></p>
+</div>
+<div id="boot" role="status">Building the planet…</div>
+<div id="probe"></div>
+<div id="pins" aria-live="off"></div>
+
+<div id="dock">
+  <button class="ib" id="bRev" aria-label="Play backwards" aria-pressed="false" title="Play backwards"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 5.5v13L6 12z"/></svg></button>
+  <button class="ib main" id="bPlay" aria-label="Pause" title="Pause (Space)"><svg id="icPlay" viewBox="0 0 24 24" fill="currentColor"></svg></button>
+  <div class="spd"><input type="range" id="spd" min="0" max="7" step="1" aria-label="Time speed"><output id="spdOut" aria-live="off"></output></div>
+  <div class="sep"></div>
+  <div class="when"><small>UTC</small><input type="datetime-local" id="when" aria-label="Date and time (UTC)" min="0100-01-01T00:00" max="9999-12-31T23:59"></div>
+  <button class="ib" id="bNow" aria-label="Jump to now" title="Jump to now (real time)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></button>
+  <div class="sep"></div>
+  <button class="ib" id="bPin" aria-label="Pin tool" aria-pressed="false" title="Pin a place (P): pick a spot on the planet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></button>
+  <button class="ib strike" id="bStrike" aria-label="Asteroid tool" aria-pressed="false" title="Asteroid tool (A): pick a spot on the planet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="15.5" cy="15.5" r="4.2"/><path d="M12.2 12.2L3.5 3.5M9.2 14L3.5 8.8M14 9.2L8.8 3.5"/></svg></button>
+</div>
+
+
+<button id="panelBtn" aria-controls="panel" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Controls</button>
+<aside id="panel" aria-label="Controls">
+  <div class="head"><h2>Controls</h2><button id="panelClose" aria-label="Close controls"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="scroll" id="panelBody"></div>
+</aside>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div id="fallback">
+  <div class="card" role="alert">
+    <div class="globe"></div>
+    <h1 id="fbTitle">WebGPU isn’t available here</h1>
+    <p id="fbP1">This simulation renders a procedural planet on the GPU with WebGPU compute and fragment shaders.</p>
+    <p id="fbP2">Open it in a recent Chrome, Edge, Safari or Firefox with hardware acceleration on, and if you’re viewing it inside an embedded frame, try opening it in its own tab.</p>
+    <button class="btn" id="fbReload" type="button">Reload</button>
+    <code id="fbDetail"></code>
+  </div>
+</div>
+
+<script>
+const SRC = {"noise":"// Tileable 3D noise volume, 128^3 RGBA8.\n//   r = Perlin (period 4)   g = Perlin (period 8)\n//   b = 1 - Worley (period 4)   a = 1 - Worley (period 8)\n// Same construction as the original \"Let There Be\" noise atlas.\n\n@group(0) @binding(0) var outTex: texture_storage_3d\u003crgba8unorm, write>;\n\nfn hash33(p3in: vec3f) -> vec3f {\n  var p3 = fract(p3in * vec3f(0.1031, 0.1030, 0.0973));\n  p3 += dot(p3, p3.yxz + 33.33);\n  return fract((p3.xxy + p3.yxx) * p3.zyx);\n}\nfn fmod3(a: vec3f, b: f32) -> vec3f { return a - b * floor(a / b); }\n\nfn grad(ip: vec3f, period: f32) -> vec3f {\n  let w = fmod3(ip, period);\n  return normalize(hash33(w * 1.37 + 17.13) * 2.0 - 1.0 + 1e-4);\n}\nfn perlinT(p: vec3f, period: f32) -> f32 {\n  let i = floor(p);\n  let f = fract(p);\n  let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);\n  let n000 = dot(grad(i + vec3f(0.0, 0.0, 0.0), period), f - vec3f(0.0, 0.0, 0.0));\n  let n100 = dot(grad(i + vec3f(1.0, 0.0, 0.0), period), f - vec3f(1.0, 0.0, 0.0));\n  let n010 = dot(grad(i + vec3f(0.0, 1.0, 0.0), period), f - vec3f(0.0, 1.0, 0.0));\n  let n110 = dot(grad(i + vec3f(1.0, 1.0, 0.0), period), f - vec3f(1.0, 1.0, 0.0));\n  let n001 = dot(grad(i + vec3f(0.0, 0.0, 1.0), period), f - vec3f(0.0, 0.0, 1.0));\n  let n101 = dot(grad(i + vec3f(1.0, 0.0, 1.0), period), f - vec3f(1.0, 0.0, 1.0));\n  let n011 = dot(grad(i + vec3f(0.0, 1.0, 1.0), period), f - vec3f(0.0, 1.0, 1.0));\n  let n111 = dot(grad(i + vec3f(1.0, 1.0, 1.0), period), f - vec3f(1.0, 1.0, 1.0));\n  return mix(mix(mix(n000, n100, u.x), mix(n010, n110, u.x), u.y),\n             mix(mix(n001, n101, u.x), mix(n011, n111, u.x), u.y), u.z);\n}\nfn worleyT(p: vec3f, period: f32) -> f32 {\n  let n = floor(p);\n  let f = fract(p);\n  var d1 = 8.0;\n  for (var k = -1; k \u003c= 1; k++) {\n    for (var j = -1; j \u003c= 1; j++) {\n      for (var i = -1; i \u003c= 1; i++) {\n        let g = vec3f(f32(i), f32(j), f32(k));\n        let o = hash33(fmod3(n + g, period) * 1.91 + 5.3);\n        let r = g + o - f;\n        d1 = min(d1, dot(r, r));\n      }\n    }\n  }\n  return sqrt(d1);\n}\n\n@compute @workgroup_size(4, 4, 4)\nfn main(@builtin(global_invocation_id) id: vec3u) {\n  let N = 128.0;\n  let v = (vec3f(id) + 0.5) / N;\n  let p4 = perlinT(v * 4.0, 4.0);\n  let p8 = perlinT(v * 8.0, 8.0);\n  let w4 = worleyT(v * 4.0, 4.0);\n  let w8 = worleyT(v * 8.0, 8.0);\n  let c = vec4f(\n    clamp(0.5 + 0.62 * p4, 0.0, 1.0),\n    clamp(0.5 + 0.62 * p8, 0.0, 1.0),\n    clamp(1.0 - w4 * 1.15, 0.0, 1.0),\n    clamp(1.0 - w8 * 1.15, 0.0, 1.0));\n  textureStore(outTex, vec3i(id), c);\n}\n","planet":"// ============================================================================\n//  EARTH — WebGPU port of the \"Let There Be\" planet model (Blue Marble grade)\n//  Units: 1.0 = one Earth radius. Sphere-space = world space with the polar\n//  axis stretched by 1/c so that an oblate Earth becomes a unit sphere.\n// ============================================================================\nstruct Uni { p: array\u003cvec4f, @@NSLOTS@@> };\n@group(0) @binding(0) var\u003cuniform> U: Uni;\n@group(0) @binding(1) var noiseTex: texture_3d\u003cf32>;\n@group(0) @binding(2) var nsamp: sampler;\n\nconst PI: f32 = 3.14159265;\nconst TAU: f32 = 6.28318531;\nconst SUN_BASE: f32 = 10.0;\nconst R_CLOUD: f32 = 1.008;\n\nfn sunE() -> f32 { return SUN_BASE * uSunI; }\n\nfn sstep(a: f32, b: f32, x: f32) -> f32 {\n  let t = clamp((x - a) / (b - a), 0.0, 1.0);\n  return t * t * (3.0 - 2.0 * t);\n}\nfn sat1(x: f32) -> f32 { return clamp(x, 0.0, 1.0); }\nfn sqr(x: f32) -> f32 { return x * x; }\nfn rotX(a: f32) -> mat3x3f { let c = cos(a); let s = sin(a); return mat3x3f(vec3f(1.0, 0.0, 0.0), vec3f(0.0, c, s), vec3f(0.0, -s, c)); }\nfn rotY(a: f32) -> mat3x3f { let c = cos(a); let s = sin(a); return mat3x3f(vec3f(c, 0.0, -s), vec3f(0.0, 1.0, 0.0), vec3f(s, 0.0, c)); }\nfn rotZ(a: f32) -> mat3x3f { let c = cos(a); let s = sin(a); return mat3x3f(vec3f(c, s, 0.0), vec3f(-s, c, 0.0), vec3f(0.0, 0.0, 1.0)); }\n\n// ---- hashes (Dave Hoskins, \"Hash without Sine\", MIT) ----\nfn hash11(p0: f32) -> f32 { var p = fract(p0 * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }\nfn hash12(p: vec2f) -> f32 { var p3 = fract(p.xyx * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }\nfn hash13(p3in: vec3f) -> f32 { var p3 = fract(p3in * 0.1031); p3 += dot(p3, p3.zyx + 31.32); return fract((p3.x + p3.y) * p3.z); }\nfn hash22(p: vec2f) -> vec2f { var p3 = fract(p.xyx * vec3f(0.1031, 0.1030, 0.0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }\nfn hash31(p: f32) -> vec3f { var p3 = fract(vec3f(p) * vec3f(0.1031, 0.1030, 0.0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xxy + p3.yzz) * p3.zyx); }\nfn hash33(p3in: vec3f) -> vec3f { var p3 = fract(p3in * vec3f(0.1031, 0.1030, 0.0973)); p3 += dot(p3, p3.yxz + 33.33); return fract((p3.xxy + p3.yxx) * p3.zyx); }\n\nfn blackbody(Kin: f32) -> vec3f {\n  let K = clamp(Kin, 1000.0, 40000.0) / 100.0;\n  var c: vec3f;\n  c.x = select(clamp(1.29293618606 * pow(max(K - 60.0, 1.0), -0.1332047592), 0.0, 1.0), 1.0, K \u003c= 66.0);\n  c.y = select(clamp(1.12989086089 * pow(max(K - 60.0, 1.0), -0.0755148492), 0.0, 1.0),\n               clamp(0.39008157876 * log(K) - 0.63184144378, 0.0, 1.0), K \u003c= 66.0);\n  c.z = select(select(clamp(0.54320678911 * log(max(K - 10.0, 1.0)) - 1.19625408914, 0.0, 1.0), 0.0, K \u003c= 19.0), 1.0, K >= 66.0);\n  return pow(c, vec3f(2.2));\n}\n\nfn raySphere(ro: vec3f, rd: vec3f, c: vec3f, r: f32) -> vec2f {\n  let oc = ro - c;\n  let b = dot(oc, rd);\n  var h = b * b - dot(oc, oc) + r * r;\n  if (h \u003c 0.0) { return vec2f(1e9, -1e9); }\n  h = sqrt(h);\n  return vec2f(-b - h, -b + h);\n}\n\nfn NT(p: vec3f) -> vec4f { return textureSampleLevel(noiseTex, nsamp, p, 0.0); }\n\nfn worley3(p: vec3f) -> vec2f {\n  let n = floor(p);\n  let f = fract(p);\n  var d1 = 8.0;\n  var d2 = 8.0;\n  for (var k = -1; k \u003c= 1; k++) {\n    for (var j = -1; j \u003c= 1; j++) {\n      for (var i = -1; i \u003c= 1; i++) {\n        let g = vec3f(f32(i), f32(j), f32(k));\n        let o = hash33(n + g);\n        let r = g + o - f;\n        let d = dot(r, r);\n        if (d \u003c d1) { d2 = d1; d1 = d; } else if (d \u003c d2) { d2 = d; }\n      }\n    }\n  }\n  return sqrt(vec2f(d1, d2));\n}\n\n// true outward normal of the oblate ellipsoid, given a point in sphere-space\nfn trueUp(p: vec3f) -> vec3f { return normalize(vec3f(p.x, p.y * uInvC, p.z)); }\n// sphere-space -> world\nfn toWorld(p: vec3f) -> vec3f { return vec3f(p.x, p.y * uC, p.z); }\n\n// ---------------------------------------------------------------------------\n//  Eclipses: overlap of two angular discs\n// ---------------------------------------------------------------------------\nfn discOverlap(rs: f32, rm: f32, d: f32) -> f32 {\n  if (d >= rs + rm) { return 0.0; }\n  if (d \u003c= abs(rs - rm)) {\n    if (rm >= rs) { return 1.0; }\n    return (rm * rm) / (rs * rs);\n  }\n  let c1 = clamp((d * d + rs * rs - rm * rm) / (2.0 * d * rs), -1.0, 1.0);\n  let c2 = clamp((d * d + rm * rm - rs * rs) / (2.0 * d * rm), -1.0, 1.0);\n  let k = (-d + rs + rm) * (d + rs - rm) * (d - rs + rm) * (d + rs + rm);\n  let area = rs * rs * acos(c1) + rm * rm * acos(c2) - 0.5 * sqrt(max(k, 0.0));\n  return clamp(area / (PI * rs * rs), 0.0, 1.0);\n}\n// fraction of the sun's disc visible from world point P with the Moon as occluder\nfn moonSunVis(P: vec3f) -> f32 {\n  if (uMoonOn \u003c 0.5) { return 1.0; }\n  let d = uMoon.xyz - P;\n  let tc = dot(d, uSun);\n  if (tc \u003c= 0.0) { return 1.0; }\n  let h = length(d - uSun * tc);\n  return 1.0 - discOverlap(uSunR, uMoon.w / tc, h / tc);\n}\n// fraction of the sun's disc visible from a point on the Moon with the Earth as occluder\nfn earthSunVis(P: vec3f) -> f32 {\n  let tc = dot(-P, uSun);\n  if (tc \u003c= 0.0) { return 1.0; }\n  let h = length(-P - uSun * tc);\n  return 1.0 - discOverlap(uSunR, 1.02 / tc, h / tc);\n}\n\n// ---------------------------------------------------------------------------\n//  Atmosphere (Rayleigh + Mie + ozone, Chapman function for the sun path)\n// ---------------------------------------------------------------------------\n// eh = exp(-h), passed in so a caller that already has it does not pay for it again\nfn chapmanE(X: f32, h: f32, mu: f32, eh: f32) -> f32 {\n  let c = sqrt(X + h);\n  if (mu >= 0.0) { return c / (c * mu + 1.0) * eh; }\n  let x0 = sqrt(max(1.0 - mu * mu, 0.0)) * (X + h);\n  let c0 = sqrt(x0);\n  return 2.0 * c0 * exp(min(X - x0, 80.0)) - c / (1.0 - c * mu) * eh;\n}\nfn chapman(X: f32, h: f32, mu: f32) -> f32 { return chapmanE(X, h, mu, exp(-h)); }\nfn sunTrans(p: vec3f, sun: vec3f) -> vec3f {\n  let r = length(p);\n  let mu = dot(trueUp(p), sun);\n  let h = max(r - 1.0, 0.0);\n  let cR = uHR * chapman(1.0 / uHR, h / uHR, mu);\n  let cM = uHM * chapman(1.0 / uHM, h / uHM, mu);\n  return exp(-(uBR + uBO) * cR - uBM * 1.1 * cM);\n}\nfn phaseR(c: f32) -> f32 { return 0.0596831 * (1.0 + c * c); }\nfn phaseHG(c: f32, g: f32) -> f32 {\n  let g2 = g * g;\n  return 0.1193662 * (1.0 - g2) * (1.0 + c * c) / ((2.0 + g2) * pow(max(1.0 + g2 - 2.0 * g * c, 1e-4), 1.5));\n}\nfn phaseM(c: f32) -> f32 { return 0.7 * phaseHG(c, 0.76) + 0.3 * phaseHG(c, 0.93); }\n\nstruct AtmoOut { L: vec3f, Tr: vec3f };\n\nfn atmosphere(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32, sun: vec3f, rb: f32, lobe: f32, mu: f32) -> AtmoOut {\n  var o: AtmoOut;\n  o.L = vec3f(0.0);\n  o.Tr = vec3f(1.0);\n  let ta = raySphere(ro, rd, vec3f(0.0), uAtmR);\n  if (ta.x > ta.y || ta.y \u003c 0.0) { return o; }\n  let t0 = max(ta.x, 0.0);\n  let t1 = min(ta.y, tEnd);\n  if (t1 \u003c= t0) { return o; }\n  let tc = clamp(-dot(ro, rd), t0, t1);\n  let pR = phaseR(mu);\n  let pM = mix(phaseHG(mu, 0.76), phaseM(mu), lobe);\n  let bR = uBR * rb;\n  var odR = 0.0;\n  var odM = 0.0;\n  var accR = vec3f(0.0);\n  var accM = vec3f(0.0);\n  var accG = vec3f(0.0);\n  let nSteps = i32(uSteps);\n  let N = f32(nSteps);\n  let useEcl = uMoonOn > 0.5;\n  let useGlow = (uAtmGlow.x + uAtmGlow.y + uAtmGlow.z) > 0.0;\n  for (var i = 0; i \u003c 64; i++) {\n    if (i >= nSteps) { break; }\n    let u = (f32(i) + jit) / N;\n    var t: f32;\n    var w: f32;\n    if (u \u003c 0.5) {\n      let v = u * 2.0;\n      t = tc - (tc - t0) * (1.0 - v) * (1.0 - v);\n      w = 4.0 * (tc - t0) * (1.0 - v) / N;\n    } else {\n      let v = (u - 0.5) * 2.0;\n      t = tc + (t1 - tc) * v * v;\n      w = 4.0 * (t1 - tc) * v / N;\n    }\n    let p = ro + rd * t;\n    let r = length(p);\n    let h = max(r - 1.0, 0.0);\n    let hR = h / uHR;\n    let hM = h / uHM;\n    let eR = exp(-hR);\n    let eM = exp(-hM);\n    let dR = eR * w;\n    let dM = eM * w;\n    let ms = dot(trueUp(p), sun);\n    let cR = uHR * chapmanE(1.0 / uHR, hR, ms, eR);\n    let cM = uHM * chapmanE(1.0 / uHM, hM, ms, eM);\n    let tauV = (bR + uBO) * (odR + 0.5 * dR) + uBM * 1.1 * (odM + 0.5 * dM);\n    var T = exp(-tauV - (bR + uBO) * cR - uBM * 1.1 * cM);\n    if (useEcl) { T = T * moonSunVis(toWorld(p)); }\n    accR += dR * T;\n    accM += dM * T;\n    if (useGlow) { accG += dM * exp(-tauV); }\n    odR += dR;\n    odM += dM;\n  }\n  o.L = sunE() * (bR * pR * accR + uBM * pM * accM * (0.5 + 0.5 * lobe)) + uAtmGlow * accG * uBM;\n  o.Tr = exp(-(bR + uBO) * odR - uBM * 1.1 * odM);\n  return o;\n}\n\n// ---------------------------------------------------------------------------\n//  Sky: stars, Milky Way (real galactic orientation), young-system debris disk\n// ---------------------------------------------------------------------------\nfn faceDir(f: f32, uv: vec2f) -> vec3f {\n  if (f \u003c 0.5) { return vec3f(1.0, uv.x, uv.y); }\n  if (f \u003c 1.5) { return vec3f(-1.0, uv.x, uv.y); }\n  if (f \u003c 2.5) { return vec3f(uv.x, 1.0, uv.y); }\n  if (f \u003c 3.5) { return vec3f(uv.x, -1.0, uv.y); }\n  if (f \u003c 4.5) { return vec3f(uv.x, uv.y, 1.0); }\n  return vec3f(uv.x, uv.y, -1.0);\n}\nstruct CubeUV { uv: vec2f, face: f32 };\nfn cubeUV(d: vec3f) -> CubeUV {\n  var o: CubeUV;\n  let a = abs(d);\n  if (a.x >= a.y && a.x >= a.z) { o.face = select(1.0, 0.0, d.x > 0.0); o.uv = d.yz / a.x; return o; }\n  if (a.y >= a.z) { o.face = select(3.0, 2.0, d.y > 0.0); o.uv = d.xz / a.y; return o; }\n  o.face = select(5.0, 4.0, d.z > 0.0); o.uv = d.xy / a.z;\n  return o;\n}\nfn mwBand(rd: vec3f) -> f32 { let b = dot(rd, uMWN); return exp(-b * b / 0.02); }\n\nfn starLayer(rd: vec3f, N: f32, prob: f32, bright: f32, seed: f32) -> vec3f {\n  let cu = cubeUV(rd);\n  let g = (cu.uv * 0.5 + 0.5) * N;\n  let cid = floor(g);\n  let h = hash33(vec3f(cid, cu.face * 37.0 + seed));\n  if (h.x > prob) { return vec3f(0.0); }\n  let suv = ((cid + 0.3 + 0.4 * h.yz) / N) * 2.0 - 1.0;\n  let sd = normalize(faceDir(cu.face, suv));\n  let dd = rd - sd;\n  let a2 = dot(dd, dd);\n  let sig = 0.8 * uPixAng;\n  let s2 = sig * sig;\n  if (a2 > 40.0 * s2) { return vec3f(0.0); }      // exp(-20) of a star is far below one display level\n  let m = hash12(cid * 1.37 + cu.face + seed);\n  let I = bright * (0.05 + 4.0 * pow(m, 30.0) + 0.35 * pow(m, 6.0));\n  let bb = blackbody(3000.0 + 9000.0 * pow(hash12(cid + seed * 3.1), 0.6));\n  let col = mix(vec3f(1.0), bb / max(max(bb.x, bb.y), bb.z), 0.55);\n  return col * I * exp(-a2 / (2.0 * s2)) * (uPixAng * uPixAng / (0.0007 * 0.0007));\n}\nfn skyCol(rd: vec3f) -> vec3f {\n  let mw = mwBand(rd);\n  var s = starLayer(rd, 70.0, 0.2, 1.0, 1.0);\n  s += starLayer(rd, 210.0, 0.017 * (1.0 + 7.0 * mw), 0.35, 7.0);\n  s += starLayer(rd, 520.0, 0.004 * (1.0 + 30.0 * mw), 0.16, 13.0);\n  var lane = 0.0;\n  var mwc = vec3f(0.0);\n  if (mw > 1e-7) {                                 // away from the galactic plane the band is below one display level\n    let n1 = NT(rd * 0.9 + 0.3).r;\n    let n2 = NT(rd * 2.3 + 1.7).g;\n    let n3 = NT(rd * 5.1 + 4.1).r;\n    let n4 = NT(rd * 11.0 + 2.2).g;\n    let clouds = sstep(0.25, 0.85, n1 * 0.55 + n2 * 0.45) * (0.55 + 0.9 * n3) * (0.75 + 0.5 * n4);\n    let b = dot(rd, uMWN);\n    lane = sstep(0.5, 0.64, NT(rd * 1.7 + 2.9).r * 0.7 + n3 * 0.45) * exp(-b * b / 0.005);\n    let core = exp(-pow(length(rd - uMWC), 2.0) / 0.25);\n    mwc = mix(vec3f(0.6, 0.66, 0.8), vec3f(1.0, 0.82, 0.62), core) * mw * clouds * (0.018 + 0.05 * core) * (1.0 - 0.9 * lane);\n  }\n  var debris = vec3f(0.0);\n  if (uDebris > 0.0) {                             // only the young-system disk\n    let dn = normalize(cross(uSun, vec3f(0.2, 1.0, 0.1)));\n    let db = dot(rd, dn);\n    let dsk = exp(-db * db / 0.0025) * (0.3 + 2.5 * exp(-(1.0 - dot(rd, uSun)) * 6.0)) * (0.5 + NT(rd * 3.0 + 7.0).b);\n    debris = vec3f(1.0, 0.55, 0.28) * dsk * 0.035 * uDebris;\n  }\n  return (s * (1.0 - 0.7 * lane) + mwc) * uStars + debris;\n}\n\n// ---------------------------------------------------------------------------\n//  Planet fields\n// ---------------------------------------------------------------------------\nvar\u003cprivate> gFp: f32 = 0.002;     // pixel footprint (planet units) of the current pixel\nvar\u003cprivate> gOceanM: f32 = 1.0;   // open-ocean mask of the current pixel\n\nfn contFieldW(q: vec3f, oc: f32, warp: f32) -> f32 {\n  var p = q * 0.78 + uSeed;\n  let w = vec3f(NT(p * 0.43 + vec3f(0.11, 0.53, 0.29)).r,\n                NT(p * 0.43 + vec3f(0.71, 0.13, 0.47)).r,\n                NT(p * 0.43 + vec3f(0.37, 0.83, 0.61)).g) - 0.5;\n  p += w * warp;\n  var h = 0.0;\n  var a = 0.5;\n  var s = 0.0;\n  for (var i = 0; i \u003c 10; i++) {\n    let wg = clamp(oc - f32(i), 0.0, 1.0);\n    if (wg \u003c= 0.0) { break; }\n    h += a * wg * (NT(p).r - 0.5);\n    s += a;\n    p = p * 2.04 + vec3f(0.19, 0.37, 0.11);\n    a *= 0.52;\n  }\n  return h / s * 2.6;\n}\nfn contField(q: vec3f, oc: f32) -> f32 { return contFieldW(q, oc, 1.1); }\n\n// ---------------------------------------------------------------------------\n//  Clouds: zonal shear + cyclones, cellular cumulus over open ocean, cirrus\n// ---------------------------------------------------------------------------\nstruct FlowOut { p: vec3f, cyc: f32, cdo: f32, eye: f32 };\nfn flow(q: vec3f) -> FlowOut {\n  var o: FlowOut;\n  var p = q;\n  let sh = sin(p.y * 7.0 + uSeed.x) * 0.08 + sin(p.y * 13.0 + uSeed.y) * 0.03;\n  let cs = cos(sh);\n  let sn = sin(sh);\n  p = vec3f(p.x * cs - p.z * sn, p.y, p.x * sn + p.z * cs);\n  o.cyc = 0.0; o.cdo = 0.0; o.eye = 0.0;\n  for (var k = 0; k \u003c 3; k++) {\n    let cy = U.p[UB_uCyc + k];\n    let c = cy.xyz;\n    let dv = p - c;\n    let r = length(dv);\n    if (r \u003c 0.5) { o.cdo = max(o.cdo, exp(-r * r / 0.0035) * min(uCycK, 1.5)); }      // beyond 0.5 the term is \u003c 1e-30\n    if (r \u003c 0.25) { o.eye = max(o.eye, exp(-r * r / 0.00018) * min(uCycK, 1.0)); }    // beyond 0.25 it underflows to 0\n    if (r \u003c 0.36) {                                // the swirl is exactly zero from 0.36 outward\n      let ang = cy.w * uCycK * 1.4 * min(max(log(0.34 / (r + 0.03)), 0.0), 1.9) * sstep(0.36, 0.1, r);\n      let ca = cos(ang);\n      let sa = sin(ang);\n      p = p * ca + cross(c, p) * sa + c * dot(c, p) * (1.0 - ca);\n    }\n    o.cyc = max(o.cyc, exp(-r * r / 0.03) * min(uCycK, 1.5));\n  }\n  o.p = p;\n  return o;\n}\n\nfn cloudDen(q: vec3f, oc: f32, cover: f32) -> f32 {\n  let fo = flow(q);\n  let p = fo.p;\n  let lat = q.y;\n  var pb = vec3f(p.x, p.y * 1.3, p.z) * 1.05 + uSeed.yzx + vec3f(uCT * 0.006, 0.0, -uCT * 0.004);\n  pb += (NT(pb * 0.5 + 0.7).rgb - 0.5) * 0.4;\n  var n = 0.0;\n  var a = 0.5;\n  var s = 0.0;\n  let nb = select(5, 3, oc \u003c 4.5);\n  for (var i = 0; i \u003c 5; i++) {\n    if (i >= nb) { break; }\n    n += a * (NT(pb).r - 0.5);\n    s += a;\n    pb = pb * 2.09 + vec3f(0.27, 0.11, 0.41);\n    a *= 0.55;\n  }\n  n = n / s;\n  let z = 0.10 * exp(-lat * lat / 0.008)\n        + 0.09 * exp(-sqr(abs(lat) - 0.68) / 0.02) * (sstep(0.35, 0.65, NT(q * 1.2 + uSeed.zyx).g) * 2.0 - 0.6)\n        - 0.12 * exp(-sqr(abs(lat) - 0.38) / 0.012)\n        + 0.12 * fo.cyc;\n  let c = cover + z + 0.45 * fo.cdo * sstep(0.2, 0.45, cover);\n  let th = (0.5 - c) * 0.3;\n  var v = n * 1.3;\n  let core = sstep(th, th + 0.1, v);\n  let pd0 = mix(p, q, 0.75 * sstep(0.0, 0.4, fo.cyc)) * 6.0 + uSeed.zxy + vec3f(uCT * 0.012, 0.0, 0.0);\n  var pd = pd0;\n  var det = 0.0;\n  a = 0.5;\n  s = 0.0;\n  for (var i = 0; i \u003c 4; i++) {\n    let wg = clamp(oc - 2.5 - f32(i), 0.0, 1.0);\n    if (wg \u003c= 0.0) { s += a * (1.0 - pow(0.55, f32(4 - i))) / 0.45; break; }\n    let t = NT(pd);\n    det += a * wg * (mix(t.g, t.a, 0.6) - 0.5);\n    s += a;\n    pd = pd * 2.17 + vec3f(0.13, 0.37, 0.21);\n    a *= 0.55;\n  }\n  det /= s;\n  v += det * (0.16 + 0.3 * (1.0 - core) + 0.12 * uStorm);\n  var d = mix(sstep(th - 0.04, th + 0.05, v) * (0.4 + 0.6 * sstep(th, th + 0.16, v)),\n              sstep(th - 0.025, th + 0.035, v) * (0.55 + 0.45 * sstep(th, th + 0.14, v)), uGrade);\n  // The cumulus fringe is multiplied by gOceanM and by a latitude window, so it is exactly zero\n  // over land and poleward of |lat| 0.85: skip its two noise taps there.\n  if (uGrade > 0.0 && gOceanM > 0.0 && abs(lat) \u003c 0.85) {\n    let pcu = vec3f(p.x, p.y * 2.5, p.z) * 20.0 + uSeed.xzy * 0.3;\n    let wc = NT(pcu);\n    let wc2 = NT(pcu * 2.1 + 1.7);\n    let cellv = wc.b * 0.65 + wc2.a * 0.45 + (wc.g - 0.5) * 0.3;\n    let cellPx = 0.0125 / max(gFp, 1e-5);\n    let cu = mix(sstep(0.5, 0.8, cellv), 0.25, sstep(8.0, 3.0, cellPx));\n    let fringe = sstep(th - 0.14, th - 0.02, v);\n    d = max(d, cu * 0.26 * fringe * gOceanM * sstep(0.85, 0.6, abs(lat)) * uGrade);\n  }\n  d *= 1.0 - 0.9 * fo.eye;\n  // Cirrus: scaled by sstep(0.2,0.45,cover) and a latitude window, both exactly zero outside\n  // (cover \u003c= 0.2 or |lat| >= 0.72), so the three noise taps are skipped there.\n  if (cover > 0.2 && abs(lat) \u003c 0.72) {\n    let ci = NT(vec3f(p.x * 1.6, p.y * 4.5, p.z * 1.6) + uSeed.zxy * 0.7).g * 0.7 + NT(vec3f(p.x * 4.0, p.y * 11.0, p.z * 4.0) + 2.1).r * 0.3;\n    d = max(d, sstep(0.66, 0.9, ci) * sstep(0.45, 0.65, NT(p * 1.3 + 5.0).r) * mix(0.16, 0.07, uGrade) * sstep(0.2, 0.45, cover) * sstep(0.72, 0.5, abs(lat)));\n  }\n  return d;\n}\n\n// ---------------------------------------------------------------------------\n//  City lights (energy-conserving gaussian point lights on cube-face grids)\n// ---------------------------------------------------------------------------\nfn lightGrid(g: vec2f, fpc: f32, fpcMin: f32, D: f32, seed: f32, bmax: f32) -> f32 {\n  let sig = 0.085;\n  let s2 = sig * sig + 0.3 * fpc * fpc;\n  let fade = sstep(0.22, 0.6, fpcMin);\n  var pt = 0.0;\n  if (fade \u003c 0.999 && D > 0.002) {\n    let c0 = floor(g - 0.5);\n    for (var j = 0; j \u003c 2; j++) {\n      for (var i = 0; i \u003c 2; i++) {\n        let cid = c0 + vec2f(f32(i), f32(j));\n        let h = hash33(vec3f(cid, seed));\n        if (hash12(cid * 0.71 + seed) > D) { continue; }\n        let dv = g - cid - h.yz;\n        let b = 0.35 + bmax * pow(hash12(cid + seed * 0.37), 6.0);\n        pt += b * (sig * sig / s2) * exp(-dot(dv, dv) / (2.0 * s2));\n      }\n    }\n  }\n  let avg = D * 6.2832 * sig * sig * (0.35 + bmax / 7.0);\n  return mix(pt, avg, fade);\n}\nfn cityLayer(q: vec3f, M: mat3x3f, N: f32, fp: f32, fpMin: f32, D: f32, seed: f32, bmax: f32) -> f32 {\n  var qr = M * q;\n  qr += (NT(qr * 3.3 + seed * 0.13).rgb - 0.5) * 0.035;\n  let cu = cubeUV(normalize(qr));\n  let k = 1.0 + dot(cu.uv, cu.uv);\n  return lightGrid(cu.uv * N, fp * k * N, fpMin * k * N, D, cu.face * 11.0 + seed, bmax);\n}\nfn cityLights(q: vec3f, land: f32, c: f32, sea: f32, ice: f32, desert: f32, fp: f32, fpMin: f32) -> vec3f {\n  if (uCity \u003c= 0.0) { return vec3f(0.0); }\n  let coast = exp(-max(c - sea, 0.0) / 0.03) * land;\n  let cl = NT(q * 3.1 + uSeed.zxy * 1.7).r;\n  let cl2 = NT(q * 9.3 + uSeed.yxz).g;\n  let fr = (NT(q * 23.0 + uSeed.yzx).r - 0.5) * 0.14 + (NT(q * 61.0 + 1.3).g - 0.5) * 0.08 * (1.0 - sstep(0.3, 1.0, fp * 61.0 * 8.0));\n  let cv = cl * 0.6 + cl2 * 0.55 + fr;\n  let clusters = pow(sstep(0.62, 0.80, cv), 1.3);\n  let metro = sstep(0.8, 0.95, cv);\n  var road = 0.0;\n  let roadG = sstep(0.3, 0.55, cl) * land * (1.0 - ice);\n  if (roadG > 0.0) {\n    let v1 = worley3(q * 5.0 + uSeed * 0.7 + 3.3);\n    let v2 = worley3(q * 13.0 + uSeed.yzx + 1.1);\n    let fw1 = 0.012 + fp * 5.0 * 2.5;\n    let fw2 = 0.012 + fp * 13.0 * 2.5;\n    road = ((1.0 - sstep(0.0, fw1, v1.y - v1.x)) * (0.012 / fw1) + 0.6 * (1.0 - sstep(0.0, fw2, v2.y - v2.x)) * (0.012 / fw2)) * roadG;\n  }\n  var D = land * (1.0 - ice) * (1.0 - 0.85 * desert) * (0.22 * coast * (0.3 + cl2) + 0.9 * clusters + 1.2 * road);\n  let grow = clamp((NT(q * 0.7 + uSeed.yzx + 5.0).r - 0.5) * 2.6 + 0.5, 0.0, 1.0);\n  let g0 = sstep(grow, grow + 0.15, uCity * 1.2 - 0.05);\n  D *= g0;\n  if (D \u003c 0.002) { return vec3f(0.0); }\n  var L = 0.0;\n  let I3 = mat3x3f(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 1.0, 0.0), vec3f(0.0, 0.0, 1.0));\n  L += 6.5 * cityLayer(q, I3, 70.0, fp, fpMin, min(D * D * 0.8 + 0.3 * metro * D, 0.9), 1.0, 3.0 + 3.0 * metro);\n  L += 3.4 * cityLayer(q, rotY(0.37) * rotX(0.61), 210.0, fp, fpMin, min(D * 1.05, 0.95), 2.0, 2.0);\n  L += 2.0 * cityLayer(q, rotY(1.1) * rotZ(0.83), 600.0, fp, fpMin, min(D * 1.0, 0.95), 3.0, 1.0);\n  L += 0.008 * D * D + 0.006 * road * g0 * land;\n  var col = vec3f(1.0, 0.45, 0.13) * L * 1.2;\n  col += vec3f(1.0, 0.72, 0.45) * metro * D * 0.03;\n  return col;\n}\n\n// ---------------------------------------------------------------------------\n//  Lightning\n// ---------------------------------------------------------------------------\nfn bolt(qc: vec3f) -> f32 {\n  let g = qc * 8.0;\n  let id = floor(g);\n  let h = hash33(id + 17.0);\n  if (h.x > 0.3) { return 0.0; }\n  let per = 1.1 + 1.7 * h.y;\n  let ph = (uT + h.z * 9.0) - per * floor((uT + h.z * 9.0) / per);\n  let hf = hash33(id + 7.7);\n  let env = exp(-sqr(ph / 0.018)) + 0.8 * exp(-sqr((ph - 0.07 - 0.03 * hf.x) / 0.015))\n          + 0.6 * exp(-sqr((ph - 0.16 - 0.04 * hf.y) / 0.02)) + step(0.4, hf.z) * 0.5 * exp(-sqr((ph - 0.27) / 0.015))\n          + step(0.7, hf.z) * 0.35 * exp(-sqr((ph - 0.36) / 0.02));\n  let c = id + 0.5 + (hash33(id + 3.1) - 0.5) * 0.3;\n  let r2 = dot(g - c, g - c);\n  return env * (exp(-r2 * 1260.0) + 0.25 * exp(-r2 * 230.0));\n}\n\n// ---------------------------------------------------------------------------\n//  Surface\n//   ro, rdS : sphere-space camera ray (for the cloud shell)\n//   rdW     : world-space view direction\n//   p       : unit-sphere hit point (sphere-space)\n//   tHit    : world distance to the hit\n// ---------------------------------------------------------------------------\nstruct SurfOut { col: vec3f, cloudA: f32 };\n\nfn shadeSurface(ro: vec3f, rdS: vec3f, rdW: vec3f, p: vec3f, tHit: f32) -> SurfOut {\n  var so: SurfOut;\n  let nS = normalize(p);\n  let n = trueUp(nS);\n  let q = uToPlanet * nS;\n  let sun = uSun;\n  let sq3 = uToPlanet * sun;\n  let lat = q.y;\n  let ndv = max(dot(n, -rdW), 0.02);\n  let fp = tHit * uPixAng / sqrt(ndv);\n  let oc = clamp(log2(1.0 / (11.0 * fp)) + 1.0, 3.0, select(7.5, 9.0, uSteps > 20.0));\n  gFp = fp;\n  let c = contField(q, oc) - 0.03;\n  let sea = mix(-0.42, 0.0, uWater);\n  gOceanM = sstep(-0.02, -0.1, c - sea);\n  let mu = dot(n, sun);\n  let mvis = moonSunVis(toWorld(nS));\n  var Ts = vec3f(0.0);\n  if (mu > -0.25) {                              // deeper into the night every use of Ts is multiplied by an exact zero\n    Ts = sunTrans(nS * 1.0005, sun);\n    Ts = mix(Ts, pow(Ts, vec3f(0.35)), uGrade);\n  }\n  var irr = max(mu + 0.015, 0.0) / 1.015;\n  let twi = exp(-sqr((mu - 0.014) / 0.022)) * uGrade;\n  irr = mix(irr, pow(max(mu, 0.0), 0.62) * sstep(-0.005, 0.06, mu), uGrade);\n  let E = (sunE() * min(Ts * uWB, vec3f(1.0)) * irr * mix(vec3f(1.0), vec3f(2.2, 0.8, 0.3), twi)\n         + sunE() * vec3f(1.0, 0.3, 0.07) * 0.035 * twi) * mvis;\n  let amb = sunE() * vec3f(0.005, 0.009, 0.018) * sstep(mix(-0.02, 0.02, uGrade), 0.45, mu);\n\n  let aa = fp * 3.0 / sqrt(ndv) + 0.002;\n  let ocean = select(0.0, sstep(sea + aa, sea - aa, c), uWater > 0.0);\n  let land = 1.0 - ocean;\n  let moist = NT(q * 1.4 + uSeed.zyx + 2.0).g;\n  let mq = q * 1.5 + uSeed * 1.3 + (NT(q * 0.9 + 2.2).rgb - 0.5) * 0.5;\n  let rn = 1.0 - abs(NT(mq).g * 2.0 - 1.0);\n  let land0 = sstep(0.01, 0.2, c - sea);\n  let mount = sstep(0.62, 0.95, rn) * land0;\n  let alat = abs(lat);\n  var tex = 0.0;\n  {\n    var tp = q * 26.0 + uSeed;\n    var ta = 0.5;\n    for (var i = 0; i \u003c 3; i++) {\n      let wg = clamp(oc - 5.0 - f32(i), 0.0, 1.0);\n      if (wg \u003c= 0.0) { break; }\n      tex += ta * wg * (NT(tp).g - 0.5);\n      tp = tp * 2.3 + 0.17;\n      ta *= 0.6;\n    }\n    tex = tex / 0.98;\n  }\n  let fine = NT(q * 9.0 + uSeed).g;\n  let desert = sstep(0.2, 0.05, abs(alat - 0.36)) * sstep(0.55, 0.4, moist + (fine - 0.5) * 0.2) * (1.0 - mount);\n  let ice = sstep(uIceT, uIceT + 0.04, alat + (moist - 0.5) * 0.14 + (fine - 0.5) * 0.04);\n  let lifeN = NT(q * 1.1 + 9.0).r;\n  let lifeL = sstep(lifeN - 0.12, lifeN + 0.12, uLife * 1.35 - 0.15);\n  let green = mix(vec3f(0.016, 0.036, 0.011), vec3f(0.075, 0.085, 0.03), sstep(0.35, 0.72, moist + (fine - 0.5) * 0.5));\n  let redD = sstep(0.35, 0.65, NT(q * 2.6 + uSeed.yxz + 7.0).r + (fine - 0.5) * 0.3);\n  let sand = mix(vec3f(0.5, 0.36, 0.19), vec3f(0.62, 0.5, 0.33), fine);\n  var biome = mix(green, mix(sand, vec3f(0.42, 0.19, 0.075) * (0.85 + 0.3 * fine), redD), desert);\n  biome = mix(biome, vec3f(0.014, 0.03, 0.014) * (0.8 + 0.4 * fine), sstep(0.52, 0.64, alat) * (1.0 - desert));\n  biome = mix(biome, vec3f(0.1, 0.09, 0.07), sstep(0.7, 0.79, alat));\n  biome = mix(biome, vec3f(0.13, 0.115, 0.095), mount * 0.75);\n  biome = mix(biome, vec3f(0.8, 0.82, 0.86), sstep(0.7, 0.95, rn) * land0 * sstep(0.45, 0.7, alat) * 0.9);\n  biome *= 1.0 + tex * 1.1;\n  var bare = mix(vec3f(0.06, 0.045, 0.035), vec3f(0.19, 0.095, 0.045), sstep(0.35, 0.7, moist + (fine - 0.5) * 0.4)) * (0.75 + 0.5 * fine) * (1.0 + tex);\n  bare = mix(bare, vec3f(0.16, 0.14, 0.12), mount * 0.5);\n  let crust = vec3f(0.03, 0.028, 0.027) * (0.6 + 0.8 * fine) * (1.0 + tex * 0.8);\n  let cooled = 1.0 - uHeat;\n  var alb = mix(crust, bare, sstep(0.35, 0.95, cooled));\n  alb = mix(alb, biome, lifeL);\n  alb = mix(alb, vec3f(0.75, 0.8, 0.86), ice * sstep(0.3, 1.0, uLife + uWater * 0.3));\n  let shelf = sstep(sea - 0.07, sea, c);\n  var oalb = mix(vec3f(0.0012, 0.0035, 0.018), vec3f(0.006, 0.032, 0.048), shelf * 0.8);\n  oalb = mix(oalb, vec3f(0.7, 0.75, 0.8), ice * 0.9);\n\n  // ---- emission: lava / magma ocean ----\n  var em = vec3f(0.0);\n  var steamProx = 0.0;\n  var rough = 0.0;\n  if (uHeat > 0.001) {\n    let coolN = NT(q * 0.9 + uSeed.zyx + 4.0).r;\n    let heatL = clamp((uHeat - 0.45 * (coolN - 0.3)) * 1.5, 0.0, 1.0);\n    let flick = NT(q * 18.0 + vec3f(0.0, 0.0, uT * 0.35)).r;\n    let wwarp = (NT(q * 0.8 + 0.3).rgb - 0.5) * 0.38;\n    let wp = q * 3.4 + uSeed * 2.0 + wwarp;\n    let f1 = worley3(wp);\n    let jag = (1.0 - sstep(0.25, 0.9, fp * 38.0 * 8.0)) * (1.0 - uMolten);\n    var e1 = f1.y - f1.x + (NT(q * 38.0).g - 0.5) * 0.03 * jag + (NT(q * 12.0 + 1.7).r - 0.5) * 0.035;\n    e1 = max(e1, 0.0);\n    let wv = sstep(0.25, 0.8, NT(q * 2.2 + uSeed.yzx + 1.3).r);\n    let w1 = mix(0.003, 0.026, heatL) * (0.3 + 1.5 * wv);\n    let a1 = fp * 3.4 * 1.2;\n    let crack1 = (1.0 - sstep(0.0, w1 + a1, e1)) * min(1.0, (w1 + 0.003) / (w1 + a1));\n    let xc = clamp(1.0 - e1 / max(w1, 1e-4), 0.0, 1.0);\n    let halo1 = exp(-e1 / (0.01 + 0.02 * heatL));\n    if (uMolten > 0.0) {\n      let mp = q * 3.2 + uSeed.zxy + (NT(q * 1.1 + 2.0).rgb - 0.5) * 0.5 + vec3f(0.0, uT * 0.04, 0.0);\n      let fm = worley3(mp);\n      let mb = exp(-(fm.y - fm.x) / (0.12 + fp * 3.2 * 3.0));\n      var Tm = 1050.0 + 620.0 * mb + 220.0 * (NT(q * 1.7 + uSeed).r - 0.5);\n      let ed = mix(-0.1, 0.7, uMolten);\n      let skin = sstep(ed, ed + 0.6, mix(e1, (fm.y - fm.x) * 1.4, 0.5));\n      Tm *= 1.0 - 0.42 * skin;\n      em += blackbody(Tm) * pow(Tm / 1500.0, 4.0) * 1.3 * sstep(0.0, 0.35, uMolten) * mix(0.45, 1.0, pow(ndv, 0.35));\n    }\n    if (uSteam > 0.001 && uStorm \u003c 0.999) {\n      let east = normalize(cross(vec3f(0.0, 1.0, 0.0), q) + 1e-4);\n      let qw = q - east * 0.07 + vec3f(0.0, 0.02, 0.0);\n      let fw = worley3(qw * 3.4 + uSeed * 2.0 + wwarp);\n      let ew = fw.y - fw.x + (NT(qw * 7.0 + 2.0).r - 0.5) * 0.12;\n      steamProx = exp(-max(ew, 0.0) / 0.16) * sstep(0.3, 0.65, NT(q * 4.3 + vec3f(uT * 0.05, 0.0, 0.0)).g + 0.15);\n    }\n    let wp2 = q * 11.0 + uSeed.yzx * 3.0 + (NT(q * 2.3 + 1.1).rgb - 0.5) * 0.5;\n    let f2 = worley3(wp2);\n    let e2 = f2.y - f2.x;\n    let w2 = mix(0.0, 0.025, heatL);\n    let a2 = fp * 11.0 * 1.2;\n    let crack2 = (1.0 - sstep(0.0, w2 + a2, e2)) * min(1.0, (w2 + 0.003) / (w2 + a2)) * sstep(0.5, 0.8, NT(q * 1.7 + 6.0).r + 0.15 * heatL) * (1.0 - uMolten);\n    let lavaLvl = mix(-0.3, -0.5, sstep(0.0, 0.9, 1.0 - uHeat));\n    let cC = contFieldW(q, 2.6, 0.2) - 0.03;\n    let depth = lavaLvl - cC;\n    let dW = fp * 1.4 + 0.002 + 0.03 * uMolten;\n    let seaGate = sstep(0.3, 0.9, 1.0 - uMolten);\n    let seaL = sstep(-dW, dW, depth - 0.004) * seaGate;\n    let cp = q * 14.0 + uSeed.zxy + vec3f(0.0, uT * 0.035, uT * 0.02) + (NT(q * 2.6 + 0.9).rgb - 0.5) * 0.5;\n    let fc = worley3(cp);\n    let ce = fc.y - fc.x;\n    let ca2 = fp * 14.0 * 1.5;\n    let seamS = exp(-ce / (0.012 + ca2)) * (0.012 / (0.012 + ca2));\n    let cellB = seamS + 0.1 * exp(-ce / 0.1);\n    let cellC = sstep(0.05, 0.4, ce);\n    let deep = sstep(0.0, 0.07, lavaLvl - cC);\n    let dS = max(depth - 0.004, 0.0);\n    let rim = exp(-dS / 0.012);\n    var Tsea = (mix(560.0, 660.0, deep) - 60.0 * cellC + mix(900.0, 1200.0, deep) * cellB + 420.0 * rim * (0.5 + 0.5 * cellB)) * (0.82 + 0.18 * heatL);\n    Tsea += 650.0 * heatL * exp(-dS / (0.0022 + fp * 2.0));\n    let raft = sstep(0.28, 0.42, ce) * sstep(0.2, 0.55, 1.0 - heatL + 0.3 * NT(q * 3.0 + uSeed.zxy).r);\n    let Tc1 = mix(700.0, 1900.0, clamp(wv * heatL * (0.75 + 0.25 * xc) + 0.12 * (flick - 0.5), 0.0, 1.0));\n    let Tc2 = mix(650.0, 1000.0, heatL) + 120.0 * flick;\n    em += blackbody(Tc1) * pow(Tc1 / 1500.0, 4.0) * 7.0 * crack1 * (1.0 - seaL) * sstep(0.0, 0.25, heatL) * (1.0 - 0.85 * uMolten);\n    em += blackbody(Tc2) * pow(Tc2 / 1500.0, 4.0) * 5.0 * crack2 * (1.0 - seaL) * sstep(0.0, 0.25, heatL);\n    em += blackbody(Tc1 * 0.7) * pow(Tc1 * 0.7 / 1500.0, 4.0) * 0.45 * halo1 * (1.0 - seaL) * heatL;\n    em += blackbody(Tsea) * pow(Tsea / 1500.0, 4.0) * 2.2 * seaL * (1.0 - raft * (1.0 - rim)) * sstep(0.0, 0.4, heatL);\n    em += vec3f(1.0, 0.3, 0.06) * 0.12 * exp(-max(-depth, 0.0) / 0.018) * (1.0 - seaL) * seaGate * sstep(0.0, 0.4, heatL);\n    alb *= 1.0 - seaL * (1.0 - raft);\n    rough = (1.0 - seaL * (1.0 - raft)) * sstep(0.1, 0.6, uHeat) * (1.0 - uMolten);\n  }\n\n  // ---- asteroid impacts: flash, radial ejecta rays, shock front, melt crater ----\n  for (var k = 0; k \u003c 4; k++) {\n    let imp = U.p[UB_uImp + k];\n    let age = uT - imp.w;\n    if (age \u003c 0.0 || age > 6.0) { continue; }\n    let P = imp.xyz;\n    let dq = q - P;\n    let dd = length(dq);\n    if (dd > 0.6) { continue; }\n    let t1 = normalize(cross(P, vec3f(0.31, 1.0, 0.17)));\n    let t2 = cross(P, t1);\n    let lp = vec2f(dot(dq, t1), dot(dq, t2));\n    let an = atan2(lp.y, lp.x);\n    let nR = 8.0 + floor(hash11(f32(k) * 3.7 + uSeed.x) * 7.0);\n    let sec = floor((an / 6.28318 + 0.5) * nR);\n    var rays = 0.0;\n    for (var j = -1; j \u003c= 1; j++) {\n      let sj = (sec + f32(j)) - nR * floor((sec + f32(j)) / nR);\n      let hr = hash31(sj * 1.37 + f32(k) * 17.1 + uSeed.y);\n      let ra = ((sj + 0.2 + 0.6 * hr.x) / nR - 0.5) * 6.28318;\n      let da = abs((an - ra + 3.14159) - 6.28318 * floor((an - ra + 3.14159) / 6.28318) - 3.14159);\n      let Lr = (0.1 + 0.16 * hr.y) * (1.0 - exp(-age * 4.5));\n      let wdt = 0.004 + 0.03 * dd * (1.0 - 0.5 * dd / max(Lr, 1e-3)) + fp * 0.8;\n      let prof = exp(-sqr(dd * sin(min(da, 1.5)) / wdt)) * (0.0045 / wdt);\n      let along = sstep(Lr, Lr * 0.3, dd) * sstep(0.004, 0.02, dd) * (0.6 + 0.4 * hr.z);\n      rays += prof * along * (0.7 + 0.6 * NT(vec3f(dd * 9.0, sj * 0.37, f32(k))).r);\n    }\n    let rr = (0.015 + 0.2 * sqrt(age)) * (1.0 + 0.35 * (NT(vec3f(lp * 4.0, f32(k) * 0.3 + 0.9)).r - 0.5));\n    let front = exp(-sqr((dd - rr) / (0.005 + 0.012 * age))) * exp(-age * 2.4) * sstep(0.4, 0.62, NT(vec3f(lp * 7.0, f32(k))).g);\n    let crater = exp(-dd * dd / 0.0003) * exp(-age * 0.7) * (0.5 + 0.5 * sstep(0.004, 0.012, dd));\n    let Tk = 1200.0 + 700.0 * exp(-age * 1.2);\n    em += blackbody(Tk) * pow(Tk / 1500.0, 3.0) * (front * 1.5 + rays * 3.0 * exp(-age * 2.5) * (1.0 - sstep(0.9, 1.5, age)) + crater * 3.0);\n    em += vec3f(1.0, 0.9, 0.8) * 90.0 * exp(-dd * dd / 0.00012) * exp(-age * 12.0);\n  }\n\n  em *= 1.0 - 0.9 * ocean;\n  // ---- clouds (parallax shell) ----\n  let st = sq3 - q * dot(sq3, q);\n  let gateSteam = mix(steamProx, 1.0, max(uStorm, 1.0 - sstep(0.0, 0.35, uHeat)));\n  let cover = uCover;\n  var csh = 0.0;\n  if (cover > 0.01 && mu > -0.25) {             // below -0.25 the sunlight E is exactly zero, so its cloud shadow cannot show\n    csh = cloudDen(normalize(q + st * mix(R_CLOUD - 1.0, 0.024, uGrade) / max(mu, mix(0.35, 0.2, uGrade))), min(oc, 4.0), cover) * gateSteam;\n  }\n  let Eg = E * (1.0 - mix(0.85, 0.95, uGrade) * csh);\n\n  var col = alb * (Eg + amb) / 3.14159 * land;\n  let v = -rdW;\n  let hv = normalize(sun + v);\n  let vh = max(dot(v, hv), 0.0);\n  let Fr = 0.02 + 0.98 * pow(max(1.0 - vh, 0.0), 5.0);\n  if (ocean > 0.0) {                             // every water term below is multiplied by ocean: skip its six noise taps on land\n    let wres = mix(sstep(0.25, 1.2, fp * 160.0), sstep(0.08, 0.45, fp * 160.0), uGrade);\n    let wn = vec3f(NT(q * 40.0 + 1.0).r, NT(q * 40.0 + 2.3).g, NT(q * 57.0 + 4.1).r) - 0.5\n           + (vec3f(NT(q * 130.0 + 0.7).g, NT(q * 130.0 + 5.1).r, NT(q * 130.0 + 3.3).g) - 0.5) * 0.6 * (1.0 - sstep(0.2, 1.0, fp * 520.0));\n    let nw = normalize(n + (wn - n * dot(wn, n)) * 0.22 * (1.0 - wres));\n    let nhw = max(dot(nw, hv), 0.0);\n    let a2w = 0.006 + mix(0.03, 0.007, uGrade) * wres;\n    let Dg = a2w / (3.14159 * pow(nhw * nhw * (a2w - 1.0) + 1.0, 2.0));\n    let spec = Eg * Dg * Fr / (4.0 * ndv) * step(0.0, mu) * (1.0 - ice) * (1.0 + 1.6 * uGrade);\n    let Fv = 0.02 + 0.98 * pow(max(1.0 - ndv, 0.0), 5.0);\n    let rr2 = reflect(rdW, nw);\n    let skyR = sunE() * (vec3f(0.012, 0.026, 0.06) * sstep(mix(-0.1, 0.02, uGrade), 0.35, mu) + Ts * 0.05 * pow(max(dot(rr2, sun), 0.0), 6.0) * sstep(-0.05, 0.1, mu));\n    col += ocean * (oalb * (Eg + amb) / 3.14159 * (1.0 - Fv) + spec + skyR * Fv);\n  }\n  let nh = max(dot(n, hv), 0.0);\n  if (rough > 0.0) {\n    let a2r = 0.035;\n    let Dr = a2r / (3.14159 * pow(nh * nh * (a2r - 1.0) + 1.0, 2.0));\n    col += Eg * Dr * (0.04 + 0.96 * pow(max(1.0 - vh, 0.0), 5.0)) / (4.0 * ndv) * step(0.0, mu) * rough * 0.6 * land;\n  }\n\n  var cloudA = 0.0;\n  var ccol = vec3f(0.0);\n  var qc = q;\n  var cd = 0.0;\n  if (cover > 0.01) {\n    let tcs = raySphere(ro, rdS, vec3f(0.0), R_CLOUD);\n    let pc = ro + rdS * max(tcs.x, 0.0);\n    let nc = normalize(pc);\n    qc = uToPlanet * nc;\n    cd = cloudDen(qc, oc - 1.0, cover) * gateSteam;\n    cloudA = cd * mix(0.92, 1.0, max(uSteam, uStorm)) * uSteamA;\n    if (cd > 0.0) {                                // clear pixels never see the cloud colour (cloudA is exactly 0 there)\n      let stc = sq3 - qc * dot(sq3, qc);\n      let muc = dot(trueUp(pc), sun);\n      let cs1 = cloudDen(normalize(qc + stc * 0.014), min(oc, 5.0), cover) * gateSteam;\n      let shade = exp(-cs1 * 4.0 * (1.0 - sstep(0.0, 0.5, muc)) - cs1 * 0.35);\n      var Tc = sunTrans(pc, sun);\n      Tc = mix(Tc, pow(Tc, vec3f(0.35)), uGrade);\n      let twc = exp(-sqr((muc - 0.004) / 0.028)) * uGrade;\n      let Ec = (sunE() * min(Tc * uWB, vec3f(1.0)) * max(muc + 0.05, 0.0) / 1.05 * mix(1.0, sstep(-0.02, 0.08, muc), uGrade)\n              * mix(vec3f(1.0), vec3f(1.9, 0.85, 0.5), twc) + sunE() * vec3f(1.0, 0.45, 0.25) * 0.018 * twc) * moonSunVis(toWorld(pc));\n      let fwd = 1.0 + 1.2 * pow(max(dot(rdW, sun), 0.0), 8.0);\n      var tint = mix(vec3f(1.0), vec3f(0.72, 0.68, 0.62), uSteam * (1.0 - uStorm));\n      tint = mix(tint, vec3f(0.075, 0.068, 0.062), sstep(0.0, 0.55, uStorm));\n      ccol = 0.88 * tint * (Ec * shade * fwd + amb * 1.4) / 3.14159;\n      ccol += vec3f(1.0, 0.36, 0.1) * 0.5 * steamProx * uHeat * (1.0 - uSteamA) * 2.0;\n    }\n  }\n  col += em * (1.0 - cloudA * mix(0.75, 0.98, sstep(-0.05, 0.05, mu)));\n  ccol += em * cloudA * (0.12 + 0.7 * (1.0 - uSteamA));\n\n  // ---- night: city lights ----\n  let night = sstep(0.08, -0.12, mu);\n  if (uCity > 0.0 && night > 0.0) {\n    let cityc = cityLights(q, land * lifeL, c, sea, ice, desert, fp, tHit * uPixAng);\n    let lights = cityc * night;\n    col += lights * (1.0 - cloudA * 0.85);\n    ccol += lights * 0.18;\n  }\n  ccol += vec3f(0.004, 0.005, 0.009) * night * (1.0 - 0.85 * uGrade);\n  if (uBolt > 0.0 && night > 0.0) {              // lightning only shows on the night side\n    let b = bolt(qc) * uBolt * night;\n    let cdet = sstep(0.3, 0.8, NT(qc * 45.0 + uSeed).g * 0.6 + NT(qc * 110.0).r * 0.5);\n    ccol += vec3f(0.55, 0.65, 1.0) * b * 26.0 * cd * cd * (0.25 + cdet);\n    col += vec3f(0.55, 0.65, 1.0) * b * 0.3;\n  }\n  col += alb * vec3f(0.003, 0.0045, 0.008) * night * (1.0 - 0.85 * uGrade);\n  col = mix(col, ccol, cloudA);\n  so.col = col;\n  so.cloudA = cloudA;\n  return so;\n}\n\n// ---------------------------------------------------------------------------\n//  Moon (tidally locked, procedural maria + craters, eclipses both ways)\n// ---------------------------------------------------------------------------\nfn shadeMoon(pw: vec3f) -> vec3f {\n  let nW = normalize(pw - uMoon.xyz);\n  let mq = uMoonM * nW;\n  let m1 = NT(mq * 0.9 + 0.31).r * 0.6 + NT(mq * 2.3 + 1.7).g * 0.4;\n  let maria = sstep(0.5, 0.58, m1 + 0.07 * mq.z - 0.03);\n  let w1 = worley3(mq * 5.0 + 3.3);\n  let w2 = worley3(mq * 13.0 + 1.1);\n  let w3 = worley3(mq * 34.0 + 7.7);\n  let bowl = (1.0 - sstep(0.04, 0.3, w1.x)) * 0.55 + (1.0 - sstep(0.03, 0.26, w2.x)) * 0.35 + (1.0 - sstep(0.03, 0.22, w3.x)) * 0.2;\n  let rimL = exp(-sqr((w1.x - 0.31) / 0.05)) * 0.18 + exp(-sqr((w2.x - 0.27) / 0.045)) * 0.12;\n  var alb = mix(0.17, 0.062, maria);\n  alb *= (1.0 - 0.34 * bowl * mix(1.0, 0.6, maria)) * (1.0 + rimL) * (0.88 + 0.24 * NT(mq * 21.0).g);\n  let rays = exp(-pow(length(mq - normalize(vec3f(-0.35, -0.8, 0.45))) / 0.1, 2.0)); // one bright young crater\n  alb = alb * (1.0 + 2.2 * rays * sstep(0.35, 0.0, w2.x)) ;\n  let tint = mix(vec3f(1.0, 0.97, 0.92), vec3f(0.92, 0.95, 1.0), maria);\n  let mu = dot(nW, uSun);\n  let vis = earthSunVis(pw);\n  let E = sunE() * vis * max(mu, 0.0);\n  let ES = sunE() * uEarthshine;                       // earthshine on the night side\n  let red = (1.0 - vis) * vec3f(0.62, 0.2, 0.07) * 0.03 * sunE() * sstep(-0.3, 0.3, mu);   // eclipse light bent through Earth's atmosphere\n  return alb * tint * (E + ES) / 3.14159 + alb * red / 3.14159;\n}\n\n// ---------------------------------------------------------------------------\n//  Interior cutaway (PREM radii): crust / mantle / outer core / inner core\n// ---------------------------------------------------------------------------\nconst CRUST_R: f32 = 0.982;\nconst CMB_R: f32 = 0.5462;\nconst ICB_R: f32 = 0.1917;\n\nfn shadeCut(pq: vec3f, nq: vec3f, sq3: vec3f, tHit: f32) -> vec3f {\n  let r = length(pq);\n  let tt = uT * 0.03;\n  let w1 = NT(pq * 2.1 + vec3f(0.0, tt, 0.0)).r;\n  let w2 = NT(pq * 5.3 + vec3f(tt * 1.7, 0.0, tt)).g;\n  let w3 = NT(pq * 17.0).b;\n  let w4 = NT(pq * 9.0 + vec3f(0.0, tt * 2.5, 0.0)).a;\n  var alb = vec3f(0.1);\n  var em = vec3f(0.0);\n  if (r > CRUST_R) {\n    let strata = 0.5 + 0.5 * sin(r * 520.0 + w1 * 7.0);\n    alb = mix(vec3f(0.06, 0.05, 0.042), vec3f(0.2, 0.15, 0.1), 0.25 + 0.5 * strata * w3);\n    em = vec3f(0.5, 0.2, 0.06) * 0.03;\n  } else if (r > CMB_R) {\n    let depth = (CRUST_R - r) / (CRUST_R - CMB_R);\n    let conv = sstep(0.3, 0.8, w1 * 0.65 + w2 * 0.5);\n    alb = mix(vec3f(0.34, 0.14, 0.05), vec3f(0.42, 0.09, 0.025), depth) * (0.65 + 0.7 * conv);\n    em = mix(vec3f(0.9, 0.3, 0.06), vec3f(1.0, 0.18, 0.03), depth) * (0.06 + 0.38 * depth * depth) * (0.6 + 0.9 * conv);\n  } else if (r > ICB_R) {\n    let depth = (CMB_R - r) / (CMB_R - ICB_R);\n    let swirl = sstep(0.25, 0.85, w1 * 0.5 + w4 * 0.7);\n    alb = vec3f(0.5, 0.25, 0.05);\n    em = mix(vec3f(1.0, 0.36, 0.05), vec3f(1.0, 0.72, 0.22), swirl) * (1.7 + 1.2 * depth);\n  } else {\n    alb = vec3f(0.6, 0.5, 0.35);\n    em = vec3f(1.0, 0.9, 0.7) * 5.0;\n  }\n  // thin boundary lines: Moho, core-mantle boundary, inner-core boundary\n  let ln = exp(-sqr((r - CRUST_R) / 0.003)) + exp(-sqr((r - CMB_R) / 0.004)) + exp(-sqr((r - ICB_R) / 0.003));\n  alb *= 1.0 - 0.6 * min(ln, 1.0);\n  em += vec3f(1.0, 0.8, 0.5) * ln * 0.12;\n  let diff = max(dot(nq, sq3), 0.0);\n  let lit = sunE() * (0.12 + 0.88 * diff) / 3.14159;\n  return alb * lit + em * uCutGlow;\n}\n\n// ---------------------------------------------------------------------------\n//  Aurora ovals around the magnetic poles (volumetric shell, ~80-500 km)\n// ---------------------------------------------------------------------------\nfn auroraShell(roS: vec3f, rdS: vec3f, tMax: f32, jit: f32) -> vec3f {\n  let r1 = 1.012;\n  let r2 = 1.085;\n  let so = raySphere(roS, rdS, vec3f(0.0), r2);\n  if (so.x > so.y || so.y \u003c 0.0) { return vec3f(0.0); }\n  let si = raySphere(roS, rdS, vec3f(0.0), r1);\n  let t0 = max(so.x, 0.0);\n  var t1 = so.y;\n  if (si.x \u003c si.y && si.x > t0) { t1 = si.x; }\n  t1 = min(t1, tMax);\n  if (t1 \u003c= t0) { return vec3f(0.0); }\n  let dt = (t1 - t0) / 22.0;\n  var acc = vec3f(0.0);\n  // The oval only shows within 2.146 widths of its colatitude (exp(-x^2) \u003c 0.01 beyond). Turn that into bounds on\n  // cos(colat) so most steps are rejected with a couple of dot products, before any sqrt or acos. 2.146 is a hair\n  // wider than sqrt(ln 100), so this test only ever rejects what the exact `oval \u003c 0.01` test below would reject too.\n  // (The select/min guards cannot trigger for the slider ranges: colat - dC >= 0.128, colat + dC \u003c= 0.954 rad.)\n  let w = 0.07 + 0.03 * uAurora;\n  let dC = 2.146 * w;\n  let cHi = select(1.0, cos(uAuroraColat - dC), uAuroraColat > dC);\n  let cLo = cos(min(uAuroraColat + dC, 1.5707963));\n  let cHi2 = cHi * cHi;\n  let cLo2 = cLo * cLo;\n  for (var i = 0; i \u003c 22; i++) {\n    let t = t0 + (f32(i) + jit) * dt;\n    let p = roS + rdS * t;\n    let pp = uToPlanet * p;\n    let zm = dot(pp, uMagAx);\n    let pp2 = dot(pp, pp);\n    if (zm * zm \u003c cLo2 * pp2 || zm * zm > cHi2 * pp2) { continue; }\n    let colat = acos(clamp(abs(zm) / max(sqrt(pp2), 1e-4), 0.0, 1.0));\n    let oval = exp(-sqr((colat - uAuroraColat) / w));\n    if (oval \u003c 0.01) { continue; }\n    let r = length(p);\n    let a = clamp((r - r1) / (r2 - r1), 0.0, 1.0);\n    let phi = atan2(dot(pp, uMagE2), dot(pp, uMagE1));\n    let hs = select(0.0, 0.37, zm \u003c 0.0);\n    let n1 = NT(vec3f(cos(phi) * 1.3, sin(phi) * 1.3, uT * 0.02 + hs)).r;\n    let n2 = NT(vec3f(cos(phi) * 9.0, sin(phi) * 9.0, uT * 0.07 + 2.1 + hs)).g;\n    let curtain = sstep(0.36, 0.78, n1) * (0.35 + 0.9 * sstep(0.35, 0.85, n2));\n    let gr = exp(-sqr((a - 0.22) / 0.2));\n    let rd2 = sstep(0.4, 0.95, a);\n    let bl = exp(-sqr(a / 0.07));\n    let col = vec3f(0.12, 1.0, 0.35) * gr + vec3f(1.0, 0.1, 0.18) * rd2 * 0.45 + vec3f(0.45, 0.2, 1.0) * bl * 0.5;\n    let dark = sstep(0.2, -0.2, dot(trueUp(p), uSun));\n    acc += col * (oval * curtain * dark) * dt;\n  }\n  return acc * 7.0 * uAurora;\n}\n\n// ---------------------------------------------------------------------------\n//  Dipole field lines r = L cos^2(lat): found where the ray crosses L-shells\n//  inside a thin meridian slab, with pulses streaming along each line\n// ---------------------------------------------------------------------------\n// Six shells are drawn at L = 1.25 * exp(0.3221 * k), k = 0..5. LIN and LOUT are the first and last of them and bound\n// the march; if a radius in shellL changes, change these with it.\nconst LIN = 1.25;\nconst LOUT = 6.2566416;                  // L >= r, so nothing exists beyond r = LOUT\n// Radius L of drawn shell k (0..5): literals through selects, so no array is indexed dynamically.\nfn shellL(k: i32) -> f32 {\n  return select(select(select(select(select(LIN, 1.7250285, k == 1), 2.3805786, k == 2), 3.2852526, k == 3), 4.5337234, k == 4), LOUT, k == 5);\n}\n// One drawn dipole shell: its glowing meridian lines and the pulses streaming along them. The caller has\n// already checked that the ray segment [Lprev, L1] straddles Lk; one copy of this body keeps the shader small.\nfn shellHit(Lk: f32, kf: f32, Lprev: f32, L1: f32, tp: f32, t: f32, sc: f32, ac: vec3f, b: vec3f) -> vec3f {\n  let f = (Lk - Lprev) / (L1 - Lprev);\n  let tc = mix(tp, t, f);\n  let pc = ac + b * (tc - sc);\n  let rc2 = dot(pc, pc);\n  if (rc2 \u003c= 1.0) { return vec3f(0.0); }\n  let zAx = dot(pc, uMagAx);              // height along the magnetic axis (not squared)\n  let rho2 = max(rc2 - zAx * zAx, 1e-5);\n  let phi = atan2(dot(pc, uMagE2), dot(pc, uMagE1));\n  let fa = phi / TAU * 18.0 + 0.5;\n  let dphi = abs(fa - floor(fa) - 0.5) * (TAU / 18.0);\n  let daz = dphi * sqrt(rho2);\n  let w = 0.0045 + tc * uPixAng * 1.2;\n  let g2 = sqr(daz / w);\n  if (g2 >= 20.0) { return vec3f(0.0); }  // beyond that exp(-g2) \u003c 2.1e-9: invisible, skip the pulse maths\n  let glow = exp(-g2);\n  let lam = asin(clamp(zAx / sqrt(rc2), -1.0, 1.0));\n  let ph = hash11(kf * 7.1 + floor(fa) * 3.3);\n  let pulse = pow(clamp(0.5 + 0.5 * sin(lam * 9.0 * uMagPol - uT * 3.0 + ph * 6.28), 0.0, 1.0), 5.0);\n  let cc = mix(vec3f(0.15, 0.75, 1.0), vec3f(0.85, 0.3, 1.0), kf / 5.0);\n  return cc * glow * (0.22 + 1.5 * pulse) / (1.0 + 0.12 * Lk);\n}\nfn fieldL(rm2: f32, bb: f32, zc: f32, bz: f32, s: f32) -> f32 {\n  let r2 = rm2 + bb * s * s;\n  let z = zc + bz * s;\n  return r2 * sqrt(r2) / max(r2 - z * z, 1e-5);\n}\nfn fieldLines(roS: vec3f, rdS: vec3f, tMax: f32, jit: f32) -> vec3f {     // jit is unused: the step grid is fixed so lines do not shimmer\n  let Rf = 7.6;\n  let so = raySphere(roS, rdS, vec3f(0.0), Rf);\n  if (so.x > so.y || so.y \u003c 0.0) { return vec3f(0.0); }\n  let t0 = max(so.x, 0.0);\n  let t1 = min(so.y, tMax);\n  if (t1 \u003c= t0) { return vec3f(0.0); }\n  let NS = 72;\n  let dt = (t1 - t0) / f32(NS);\n  // planet-frame ray centred on its closest approach to the planet: r^2 and z become cheap polynomials in t\n  let a = uToPlanet * roS;\n  let b = uToPlanet * rdS;\n  let bb = dot(b, b);\n  let sc = -dot(a, b) / bb;\n  let ac = a + b * sc;\n  let rm2 = dot(ac, ac);\n  if (rm2 >= LOUT * LOUT) { return vec3f(0.0); }            // the whole ray is beyond the outermost shell\n  let zc = dot(ac, uMagAx);\n  let bz = dot(b, uMagAx);\n  // only segments that touch the sphere r \u003c LOUT can cross a shell; same step grid, one spare step each side\n  let hs = sqrt((LOUT * LOUT - rm2) / bb);\n  let fLo = clamp(ceil((sc - hs - t0) / dt) - 1.0, 1.0, f32(NS) + 1.0);\n  let fHi = clamp(floor((sc + hs - t0) / dt) + 2.0, 0.0, f32(NS));\n  let iLo = i32(fLo);\n  let iHi = i32(fHi);\n  var acc = vec3f(0.0);\n  var tp = t0 + f32(iLo - 1) * dt;\n  var Lprev = fieldL(rm2, bb, zc, bz, tp - sc);\n  for (var i = iLo; i \u003c= iHi; i++) {\n    let t = t0 + f32(i) * dt;\n    let L1 = fieldL(rm2, bb, zc, bz, t - sc);\n    let Lmin = min(Lprev, L1);\n    let Lmax = max(Lprev, L1);\n    if (Lmax > LIN && Lmin \u003c LOUT) {\n      for (var k = 0; k \u003c 6; k++) {\n        let Lk = shellL(k);\n        if (Lk > Lmin && Lk \u003c Lmax) { acc += shellHit(Lk, f32(k), Lprev, L1, tp, t, sc, ac, b); }\n      }\n    }\n    tp = t;\n    Lprev = L1;\n  }\n  return acc * 1.4;\n}\n\n// ---------------------------------------------------------------------------\n//  Magnetopause and bow shock: paraboloids |p| + p.sun = 2 r0\n// ---------------------------------------------------------------------------\nfn paraboloidT(ro: vec3f, rd: vec3f, r0: f32) -> f32 {\n  let A = 2.0 * r0 - dot(uSun, ro);\n  let B = dot(uSun, rd);\n  let a = 1.0 - B * B;\n  if (a \u003c 1e-5) { return -1.0; }\n  let b = 2.0 * (dot(ro, rd) + A * B);\n  let c = dot(ro, ro) - A * A;\n  let disc = b * b - 4.0 * a * c;\n  if (disc \u003c 0.0) { return -1.0; }\n  let sq = sqrt(disc);\n  let t1 = (-b - sq) / (2.0 * a);\n  let t2 = (-b + sq) / (2.0 * a);\n  if (t1 > 0.0 && A - B * t1 >= 0.0) { return t1; }\n  if (t2 > 0.0 && A - B * t2 >= 0.0) { return t2; }\n  return -1.0;\n}\nfn magShells(ro: vec3f, rd: vec3f, tMax: f32) -> vec3f {\n  var acc = vec3f(0.0);\n  for (var s = 0; s \u003c 2; s++) {\n    let r0 = select(10.0, 13.8, s == 1);\n    let t = paraboloidT(ro, rd, r0);\n    if (t > 0.0 && t \u003c tMax) {\n      let p = ro + rd * t;\n      let nrm = normalize(normalize(p) + uSun);\n      let fres = pow(max(1.0 - abs(dot(nrm, rd)), 0.0), 2.2);\n      let fl = NT(p * 0.28 + uSun * (uT * 0.9) + f32(s) * 3.1).r;\n      let fl2 = NT(p * 0.9 + uSun * (uT * 1.7)).g;\n      let fade = exp(-length(p) / 42.0);\n      let base = select(vec3f(0.25, 0.8, 1.0), vec3f(0.35, 0.45, 1.0), s == 1);\n      acc += base * (0.05 + 0.6 * fres) * (0.35 + 0.9 * sstep(0.4, 0.8, fl) + 0.4 * fl2) * fade * select(1.0, 0.55, s == 1);\n    }\n  }\n  return acc;\n}\n\n// ---------------------------------------------------------------------------\n//  Main\n// ---------------------------------------------------------------------------\n@vertex\nfn vs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {\n  let x = f32((vi \u003c\u003c 1u) & 2u);\n  let y = f32(vi & 2u);\n  return vec4f(x * 2.0 - 1.0, y * 2.0 - 1.0, 0.0, 1.0);\n}\n\n@fragment\nfn fs(@builtin(position) fc: vec4f) -> @location(0) vec4f {\n  let res = vec2f(uResX, uResY);\n  let ndc = vec2f(fc.x / res.x * 2.0 - 1.0 + uOffX, 1.0 - fc.y / res.y * 2.0);\n  let rd = normalize(uCamF + ndc.x * uAspect * uTanHalf * uCamR + ndc.y * uTanHalf * uCamU);\n  let ro = uCamPos;\n  let sun = uSun;\n  let jit = fract(hash12(fc.xy * 1.037 + 11.3));\n\n  // Earth in sphere-space (polar axis stretched by 1/c -> unit sphere)\n  let roS = vec3f(ro.x, ro.y * uInvC, ro.z);\n  let rdS0 = vec3f(rd.x, rd.y * uInvC, rd.z);\n  let kS = length(rdS0);\n  let rdS = rdS0 / kS;\n  let hp = raySphere(roS, rdS, vec3f(0.0), 1.0);\n  let tca = -dot(roS, rdS);\n  let dmin = length(roS + rdS * tca);\n  let edgePx = (dmin - 1.0) / (max(tca, 1e-3) * uPixAng);\n  var cov = select(0.0, clamp(0.5 - edgePx, 0.0, 1.0), tca > 0.0);\n  var hit = hp.x \u003c hp.y && hp.x > 0.0;\n  var tS = select(tca, hp.x, hit);\n  var faceHit = false;\n  var facePos = vec3f(0.0);\n  var faceNrm = vec3f(0.0);\n\n  // cutaway wedge / octant (planet frame)\n  if (uCut > 0.5 && hit) {\n    let roQ = uToPlanet * roS;\n    let rdQ = uToPlanet * rdS;\n    let oct = uCutOct > 0.5;\n    let p0 = roQ + rdQ * hp.x;\n    let inC = dot(uCutN1, p0) > 0.0 && dot(uCutN2, p0) > 0.0 && (!oct || p0.y > 0.0);\n    if (inC) {\n      var te = 1e9;\n      var which = 0;\n      let d1 = dot(uCutN1, rdQ);\n      if (d1 \u003c 0.0) { let t = -dot(uCutN1, roQ) / d1; if (t \u003c te) { te = t; which = 1; } }\n      let d2 = dot(uCutN2, rdQ);\n      if (d2 \u003c 0.0) { let t = -dot(uCutN2, roQ) / d2; if (t \u003c te) { te = t; which = 2; } }\n      if (oct && rdQ.y \u003c 0.0) { let t = -roQ.y / rdQ.y; if (t \u003c te) { te = t; which = 3; } }\n      if (which > 0 && te \u003c hp.y && te > hp.x) {\n        faceHit = true;\n        tS = te;\n        facePos = roQ + rdQ * te;\n        faceNrm = select(select(uCutN2, vec3f(0.0, 1.0, 0.0), which == 3), uCutN1, which == 1);\n      } else {\n        hit = false;\n        cov = 0.0;\n      }\n    }\n  }\n  let tEW = tS / kS;\n  if (uDbg > 0.5 && uDbg \u003c 1.5) { return vec4f(select(0.0, 1.0, hit), cov, tS * 0.1, 1.0); }\n\n  // moon\n  var moonT = 1e9;\n  if (uMoonOn > 0.5) {\n    let mh = raySphere(ro, rd, uMoon.xyz, uMoon.w);\n    if (mh.x \u003c mh.y && mh.x > 0.0) { moonT = mh.x; }\n  }\n  let moonFront = moonT \u003c 1e8 && (!hit || moonT \u003c tEW);\n\n  let ca = dot(rd, sun);\n  let ang = sqrt(max(2.0 * (1.0 - ca), 0.0));\n  var col = vec3f(0.0);\n  var cloudA = 0.0;\n  if (moonFront) {\n    col = shadeMoon(ro + rd * moonT);\n  } else {\n    var bg = vec3f(0.0);\n    if (cov \u003c 1.0) {\n      bg = skyCol(rd);\n      let disc = clamp((uSunR - ang) / uPixAng + 0.5, 0.0, 1.0);\n      let ld = 1.0 - 0.5 * (1.0 - sqrt(max(1.0 - sqr(ang / uSunR), 0.0)));\n      bg += (vec3f(1.0, 0.97, 0.93) * 700.0 * disc * ld + vec3f(1.0, 0.9, 0.8) * 3.0 * exp(-ang / 0.004)) * uSunI;\n    }\n    var surf = vec3f(0.0);\n    if (faceHit) {\n      surf = shadeCut(facePos, faceNrm, uToPlanet * sun, tEW);\n      cov = 1.0;\n    } else if (cov > 0.0) {\n      var p = roS + rdS * tS;\n      if (!hit) { p = normalize(p); }\n      let so = shadeSurface(roS, rdS, rd, p, tEW);\n      surf = so.col;\n      cloudA = so.cloudA;\n    }\n    col = mix(bg, surf, cov);\n  }\n\n  if (uDbg > 1.5 && uDbg \u003c 2.5) { return vec4f(clamp(col, vec3f(0.0), vec3f(1e5)), 1.0); }\n  // atmosphere\n  let wl = sstep(0.99, 1.004, dmin);\n  var tEndAtm = select(1e9, select(tS, hp.x, faceHit), hit);\n  if (moonFront) { tEndAtm = min(tEndAtm, moonT * kS); }\n  let ao = atmosphere(roS, rdS, tEndAtm, jit, sun, mix(1.0, 1.3, wl), wl, ca);\n  if (uDbg > 2.5 && uDbg \u003c 3.5) { return vec4f(clamp(ao.L, vec3f(0.0), vec3f(1e5)), 1.0); }\n  if (uDbg > 3.5 && uDbg \u003c 4.5) { return vec4f(ao.Tr, 1.0); }\n  let discW = select(0.0, 1.0 - wl, hit);\n  col = col * mix(ao.Tr, min(ao.Tr * uWB, vec3f(1.0)), discW) + ao.L * mix(1.0, uHaze, discW);\n\n  // airglow\n  {\n    let pt = roS + rdS * max(tca, 0.0);\n    let hc = length(pt) - 1.0;\n    let nightT = sstep(0.05, -0.25, dot(normalize(pt), sun));\n    let ag = exp(-sqr((hc - 0.018) / 0.008)) * nightT * select(1.0, 0.0, hit) * step(0.0, tca);\n    col += vec3f(0.10, 0.35, 0.08) * ag * 0.012 * uCity;\n  }\n\n  // sun glare (hidden behind the planet)\n  {\n    let tcs = -dot(ro, sun);\n    let dsun = length(ro + sun * tcs);\n    var gv = 1.0;\n    if (tcs > 0.0) { gv = sstep(0.995, 1.05, dsun); }\n    let warm = mix(vec3f(1.0, 0.55, 0.25), vec3f(1.0, 0.88, 0.75), sstep(1.0, 1.12, dsun));\n    col += warm * uSunI * gv * ((1.4 * exp(-ang / 0.012) + 0.08 * exp(-ang / 0.07)) * step(0.0, ca) + 0.005 * exp(-ang / 0.3));\n  }\n\n  // space-weather overlays (additive)\n  let tMaxS = select(1e9, tS, hit || faceHit);\n  if (uAurora > 0.001) { col += auroraShell(roS, rdS, tMaxS, jit); }\n  if (uField > 0.5) { col += fieldLines(roS, rdS, tMaxS, jit) * uField; }\n  if (uMagShell > 0.5) { col += magShells(ro, rd, select(1e9, tEW, hit || faceHit)) * uMagShell; }\n\n  // meteors streaking in before an impact\n  for (var k = 0; k \u003c 4; k++) {\n    let age = uT - U.p[UB_uImp + k].w;\n    if (age > 0.02 || age \u003c -0.6) { continue; }\n    let P = U.p[UB_uImpV + k].xyz;\n    let V = normalize(P * 0.55 + cross(P, vec3f(0.0, 1.0, 0.0)) * 0.9);\n    let sh = max(-age, 0.0) * 2.4;\n    let A = P + V * sh;\n    let B = P + V * (sh + 0.3);\n    let ba = B - A;\n    let oa = ro - A;\n    let a = dot(rd, rd);\n    let b = dot(rd, ba);\n    let cc = dot(ba, ba);\n    let d = dot(rd, oa);\n    let e = dot(ba, oa);\n    let den = a * cc - b * b;\n    let sN = clamp((a * e - b * d) / max(den, 1e-6), 0.0, 1.0);\n    let tN = max((b * sN - d) / a, 0.0);\n    let pr = ro + rd * tN;\n    let ps = A + ba * sN;\n    let dist = length(pr - ps);\n    let wdt = 0.0012 + 0.004 * (1.0 - sN) * (1.0 - sN) + tN * uPixAng;\n    let I = exp(-dist * dist / (wdt * wdt)) * (0.003 / wdt) * (pow(max(1.0 - sN, 0.0), 6.0) * 40.0 + sqr(1.0 - sN) * 4.0);\n    let occl = select(1.0, 0.0, hit && tEW \u003c tN);\n    col += mix(vec3f(1.0, 0.45, 0.15), vec3f(1.0, 0.92, 0.8), pow(max(1.0 - sN, 0.0), 4.0)) * I * occl * sstep(-0.6, -0.45, age);\n  }\n\n  // NaN / Inf guard by bit pattern (a float compare like x != x can be folded away by fast-math compilers)\n  if (any((bitcast\u003cvec3u>(col) & vec3u(0x7f800000u)) == vec3u(0x7f800000u))) { col = vec3f(0.0); }\n  return vec4f(clamp(col, vec3f(0.0), vec3f(60000.0)), 1.0);\n}\n","post":"// HDR post: dual-filter bloom (13-tap down, tent up) and ACES composite.\nstruct PP {\n  a: vec4f,   // texel.x, texel.y, first, bloomRadius\n  b: vec4f,   // exposure, bloomAmt, vignette, grain\n  c: vec4f,   // time, saturation, resX, resY\n};\n@group(0) @binding(0) var tA: texture_2d\u003cf32>;\n@group(0) @binding(1) var tB: texture_2d\u003cf32>;\n@group(0) @binding(2) var smp: sampler;\n@group(0) @binding(3) var\u003cuniform> P: PP;\n\nstruct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };\n\n@vertex\nfn vs(@builtin(vertex_index) vi: u32) -> VOut {\n  let x = f32((vi \u003c\u003c 1u) & 2u);\n  let y = f32(vi & 2u);\n  var o: VOut;\n  o.pos = vec4f(x * 2.0 - 1.0, y * 2.0 - 1.0, 0.0, 1.0);\n  o.uv = vec2f(x, 1.0 - y);\n  return o;\n}\n\nfn tapA(uv: vec2f) -> vec3f {\n  let c = textureSampleLevel(tA, smp, uv, 0.0).rgb;\n  return min(max(c, vec3f(0.0)), vec3f(4000.0));\n}\nfn kw(c: vec3f) -> f32 { return 1.0 / (1.0 + dot(c, vec3f(0.2126, 0.7152, 0.0722)) * 0.5); }\n\n@fragment\nfn fs_down(in: VOut) -> @location(0) vec4f {\n  let t = P.a.xy;\n  let uv = in.uv;\n  let a = tapA(uv + vec2f(-2.0, 2.0) * t);\n  let b = tapA(uv + vec2f(0.0, 2.0) * t);\n  let c = tapA(uv + vec2f(2.0, 2.0) * t);\n  let d = tapA(uv + vec2f(-2.0, 0.0) * t);\n  let e = tapA(uv);\n  let f = tapA(uv + vec2f(2.0, 0.0) * t);\n  let g = tapA(uv + vec2f(-2.0, -2.0) * t);\n  let h = tapA(uv + vec2f(0.0, -2.0) * t);\n  let i = tapA(uv + vec2f(2.0, -2.0) * t);\n  let j = tapA(uv + vec2f(-1.0, 1.0) * t);\n  let k = tapA(uv + vec2f(1.0, 1.0) * t);\n  let l = tapA(uv + vec2f(-1.0, -1.0) * t);\n  let m = tapA(uv + vec2f(1.0, -1.0) * t);\n  var res: vec3f;\n  if (P.a.z > 0.5) {\n    // first level: Karis average so single hot pixels don't fire the whole bloom\n    let g0 = (a + b + d + e) * 0.25;\n    let g1 = (b + c + e + f) * 0.25;\n    let g2 = (d + e + g + h) * 0.25;\n    let g3 = (e + f + h + i) * 0.25;\n    let g4 = (j + k + l + m) * 0.25;\n    res = g0 * 0.125 * kw(g0) + g1 * 0.125 * kw(g1) + g2 * 0.125 * kw(g2) + g3 * 0.125 * kw(g3) + g4 * 0.5 * kw(g4);\n    res = res / (0.125 * (kw(g0) + kw(g1) + kw(g2) + kw(g3)) + 0.5 * kw(g4));\n  } else {\n    res = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625 + (j + k + l + m) * 0.125;\n  }\n  return vec4f(res, 1.0);\n}\n\n@fragment\nfn fs_up(in: VOut) -> @location(0) vec4f {\n  let t = P.a.xy * P.a.w;\n  let uv = in.uv;\n  var s = tapA(uv + vec2f(-1.0, 1.0) * t) + tapA(uv + vec2f(1.0, 1.0) * t) + tapA(uv + vec2f(-1.0, -1.0) * t) + tapA(uv + vec2f(1.0, -1.0) * t);\n  s += 2.0 * (tapA(uv + vec2f(0.0, 1.0) * t) + tapA(uv + vec2f(0.0, -1.0) * t) + tapA(uv + vec2f(-1.0, 0.0) * t) + tapA(uv + vec2f(1.0, 0.0) * t));\n  s += 4.0 * tapA(uv);\n  s = s / 16.0;\n  let prev = textureSampleLevel(tB, smp, uv, 0.0).rgb;\n  return vec4f(prev + s, 1.0);\n}\n\nfn aces(cin: vec3f) -> vec3f {\n  let im = mat3x3f(vec3f(0.59719, 0.07600, 0.02840), vec3f(0.35458, 0.90834, 0.13383), vec3f(0.04823, 0.01566, 0.83777));\n  let om = mat3x3f(vec3f(1.60475, -0.10208, -0.00327), vec3f(-0.53108, 1.10813, -0.07276), vec3f(-0.07367, -0.00605, 1.07602));\n  let c = im * cin;\n  let a = c * (c + 0.0245786) - 0.000090537;\n  let b = c * (0.983729 * c + 0.4329510) + 0.238081;\n  return clamp(om * (a / b), vec3f(0.0), vec3f(1.0));\n}\nfn toSrgb(c: vec3f) -> vec3f {\n  let lo = c * 12.92;\n  let hi = 1.055 * pow(max(c, vec3f(0.0031308)), vec3f(1.0 / 2.4)) - 0.055;\n  return select(hi, lo, c \u003c= vec3f(0.0031308));\n}\nfn h12(p: vec2f) -> f32 { var p3 = fract(p.xyx * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }\n\n@fragment\nfn fs_final(in: VOut) -> @location(0) vec4f {\n  let uv = in.uv;\n  var col = textureSampleLevel(tA, smp, uv, 0.0).rgb;\n  col = min(max(col, vec3f(0.0)), vec3f(60000.0));\n  // bloom amount 0 => the bloom chain is not run (see renderGPU), so don't read its stale texture\n  if (P.b.y > 0.0) { col += textureSampleLevel(tB, smp, uv, 0.0).rgb * P.b.y; }\n  col *= P.b.x;\n  let res = vec2f(P.c.z, P.c.w);\n  let vd = (uv - 0.5) * vec2f(res.x / min(res.x, res.y), res.y / min(res.x, res.y));\n  col *= mix(1.0, smoothstep(0.25, 1.25, 1.5 - length(vd)), P.b.z);\n  var tm = toSrgb(aces(col));\n  let L = dot(tm, vec3f(0.2126, 0.7152, 0.0722));\n  tm = mix(vec3f(L), tm, P.c.y);\n  let fcd = in.pos.xy;\n  let gf = floor(P.c.x * 24.0) % 251.0;\n  let gn = h12(fcd * 0.7123 + vec2f(gf * 1.618, 0.37)) + h12(fcd.yx * 1.3719 + vec2f(gf * 0.913, 17.3)) - 1.0;\n  tm += gn * P.b.w * (0.35 + 0.65 * (1.0 - abs(L - 0.45) * 1.6));\n  tm += (h12(fcd + 0.37) + h12(fcd * 1.13 + 7.1) - 1.0) / 255.0;\n  return vec4f(clamp(tm, vec3f(0.0), vec3f(1.0)), 1.0);\n}\n"};
+// ---------------------------------------------------------------------------
+//  Astronomy: Kepler Sun, low-precision Moon, Earth rotation, eclipses
+//  World frame: X toward the vernal equinox, Y toward the celestial north pole,
+//  Z = -(equatorial y). Planet radii are the unit of length (equatorial radius).
+// ---------------------------------------------------------------------------
+const DEG = Math.PI / 180;
+const TAU = Math.PI * 2;
+const J2000 = 2451545.0;
+const AU_R = 23454.78;               // 1 AU in equatorial Earth radii
+const SUN_RADIUS_AU = 0.0046524726;  // angular radius at 1 AU (rad)
+const MOON_R = 0.27245;              // Moon radius in Earth radii
+const SIDEREAL_DAY_H = 23.9345;      // PDF: sidereal rotation period
+const OBLIQ0 = 23.44;                // PDF: axial tilt
+const ECC0 = 0.0167;                 // PDF: orbital eccentricity
+const J2 = 1.08263e-3;               // PDF: zonal harmonic
+const GM_KM3 = 3.986004e5;           // PDF: GM, km^3 s^-2
+const A_KM = 6378.137;               // PDF: equatorial radius
+
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const mod = (a, n) => ((a % n) + n) % n;
+const jdOfDate = (d) => d.getTime() / 86400000 + 2440587.5;
+const dateOfJd = (jd) => new Date((jd - 2440587.5) * 86400000);
+
+function kepler(M, e) {
+  let E = M + e * Math.sin(M) * (1 + e * Math.cos(M));
+  for (let i = 0; i < 12; i++) {
+    const d = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    E -= d;
+    if (Math.abs(d) < 1e-12) break;
+  }
+  return E;
+}
+
+function eclToWorld(lam, beta, eps) {
+  const cb = Math.cos(beta), sb = Math.sin(beta), cl = Math.cos(lam), sl = Math.sin(lam);
+  const ce = Math.cos(eps), se = Math.sin(eps);
+  const xe = cb * cl, ye = cb * sl * ce - sb * se, ze = cb * sl * se + sb * ce;
+  return [xe, ze, -ye];
+}
+
+// Geocentric Sun on a Kepler ellipse (a = 1 AU). Perihelion ~3 Jan for the default longitude.
+function sunAt(jd, ecc, epsDeg) {
+  const eps = epsDeg * DEG;
+  const n = jd - J2000;
+  const M = mod((357.5291 + 0.98560028 * n) * DEG, TAU);
+  const E = kepler(M, ecc);
+  const nu = 2 * Math.atan2(Math.sqrt(1 + ecc) * Math.sin(E / 2), Math.sqrt(1 - ecc) * Math.cos(E / 2));
+  const lam = mod((282.9372 + 0.0000471 * n) * DEG + nu, TAU);   // perihelion longitude precesses ~1.7 deg/century
+  const r = 1 - ecc * Math.cos(E);
+  return { lam, r, dir: eclToWorld(lam, 0, eps), nu, M };
+}
+
+// Astronomical Almanac low-precision Moon (about 0.3 deg).
+function moonAt(jd, epsDeg) {
+  const eps = epsDeg * DEG;
+  const T = (jd - J2000) / 36525;
+  const a = (c, k) => (c + k * T) * DEG;
+  const lam = mod((218.32 + 481267.881 * T + 6.29 * Math.sin(a(135.0, 477198.87)) - 1.27 * Math.sin(a(259.3, -413335.36))
+    + 0.66 * Math.sin(a(235.7, 890534.22)) + 0.21 * Math.sin(a(269.9, 954397.74)) - 0.19 * Math.sin(a(357.5, 35999.05))
+    - 0.11 * Math.sin(a(186.5, 966404.03))) * DEG, TAU);
+  const bet = (5.13 * Math.sin(a(93.3, 483202.02)) + 0.28 * Math.sin(a(228.2, 960400.89))
+    - 0.28 * Math.sin(a(318.3, 6003.15)) - 0.17 * Math.sin(a(217.6, -407332.21))) * DEG;
+  const par = (0.9508 + 0.0518 * Math.cos(a(135.0, 477198.87)) + 0.0095 * Math.cos(a(259.3, -413335.36))
+    + 0.0078 * Math.cos(a(235.7, 890534.22)) + 0.0028 * Math.cos(a(269.9, 954397.74))) * DEG;
+  return { lam, bet, dist: 1 / Math.sin(par), dir: eclToWorld(lam, bet, eps) };
+}
+
+// Phase: illuminated fraction and a name from the ecliptic elongation.
+function moonPhase(jd, epsDeg) {
+  const s = sunAt(jd, ECC0, epsDeg), m = moonAt(jd, epsDeg);
+  const dl = mod(m.lam - s.lam, TAU);
+  const cosPsi = Math.cos(m.bet) * Math.cos(dl);
+  const frac = (1 - cosPsi) / 2;
+  const names = ['New moon', 'Waxing crescent', 'First quarter', 'Waxing gibbous', 'Full moon', 'Waning gibbous', 'Last quarter', 'Waning crescent'];
+  const name = names[Math.floor(mod(dl / TAU * 8 + 0.5, 8))];
+  return { frac, name, elong: dl, cosPsi };
+}
+
+// Signed elongation of the Moon from the target (0 = new, PI = full) wrapped to (-PI, PI]
+function elongErr(jd, target, ecc) {
+  const s = sunAt(jd, ecc == null ? ECC0 : ecc, OBLIQ0), m = moonAt(jd, OBLIQ0);
+  let d = mod(m.lam - s.lam - target + Math.PI, TAU) - Math.PI;
+  return d;
+}
+
+// Next syzygy at or after jd; kind 'solar' (new moon) or 'lunar' (full moon).
+// Returns the first one whose Moon latitude is small enough for a central solar eclipse, or a total lunar one.
+function nextEclipse(jd, kind, ecc) {
+  const target = kind === 'lunar' ? Math.PI : 0;
+  const maxLat = 0.72 * DEG;                       // solar: Moon within this latitude of the ecliptic at new moon
+  let t = jd;
+  for (let i = 0; i < 80; i++) {
+    // step to the next syzygy using the mean synodic rate, then refine by secant
+    let err = elongErr(t, target, ecc);
+    if (err > 0) t += (TAU - err) / (12.1908 * DEG);   // already past: go to the next one
+    else t += -err / (12.1908 * DEG);
+    for (let k = 0; k < 6; k++) {
+      err = elongErr(t, target, ecc);
+      t -= err / (12.1908 * DEG);
+    }
+    if (t > jd + 0.02) {
+      const m = moonAt(t, OBLIQ0);
+      if (kind === 'lunar') {
+        // total only if the Moon's disc fits inside Earth's umbra (Danjon: umbra enlarged by 2%)
+        const sr = sunAt(t, ecc == null ? ECC0 : ecc, OBLIQ0).r, par = Math.asin(1 / m.dist);
+        const umbra = 1.02 * (par + 0.00244 * DEG / sr - 0.2666 * DEG / sr) - 0.2725 * par;
+        if (Math.abs(m.bet) < umbra) return t;
+      } else if (Math.abs(m.bet) < maxLat) return t;
+    }
+    t += 20;
+  }
+  return null;
+}
+
+// Next time the Sun's ecliptic longitude hits lamTarget (radians) after jd.
+// Newton on a measured slope: the Sun's angular rate swings from 0.3x to 5x its mean as eccentricity runs to 0.6.
+function nextSolarLongitude(jd, lamTarget, ecc) {
+  const e = ecc == null ? ECC0 : ecc;
+  const lamAt = (t) => sunAt(t, e, OBLIQ0).lam;
+  const wrap = (x) => mod(x + Math.PI, TAU) - Math.PI;
+  const n = 0.9856 * DEG;
+  const refine = (t) => {
+    for (let k = 0; k < 40; k++) {
+      const l0 = lamAt(t), err = wrap(l0 - lamTarget);
+      if (Math.abs(err) < 1e-8) break;
+      const rate = Math.max(0.2 * n, wrap(lamAt(t + 0.01) - l0) / 0.01);
+      t -= Math.max(-60, Math.min(60, err / rate));
+    }
+    return t;
+  };
+  let t = refine(jd + 1 + mod(lamTarget - lamAt(jd + 1), TAU) / n);
+  if (t < jd) t = refine(t + 365.2422);
+  return t;
+}
+
+// Earth rotation state with a re-anchoring phase so changing the day length never jumps.
+class Spin {
+  constructor() { this.reset(); }
+  // Back to the canonical anchor: real sidereal rate, true orientation at every date.
+  reset() {
+    this.jdA = J2000;
+    this.eraA = TAU * 0.7790572732640;
+    this.setDay(SIDEREAL_DAY_H, 1);
+  }
+  setDay(hours, dir) {
+    this.hours = hours; this.dir = dir;
+    this.rate = dir * TAU * 86400 / (hours * 3600 * (86164.0905 / (SIDEREAL_DAY_H * 3600)) );
+  }
+  era(jd) { return mod(this.eraA + this.rate * (jd - this.jdA), TAU); }
+  change(jd, hours, dir) {
+    const cur = this.era(jd);
+    this.jdA = jd; this.eraA = cur;
+    this.setDay(hours, dir);
+  }
+}
+
+// Oblateness from the PDF relation f = 3/2 J2 + m/2, m = w^2 a^3 / GM
+function flatteningFor(hours) {
+  const w = TAU / (hours * 3600);
+  const m = w * w * Math.pow(A_KM, 3) / GM_KM3;
+  return { m, f: 1.5 * J2 + 0.5 * m };
+}
+
+// Rotation about +Y by theta (world <- planet) as a 3x3 row-major array
+function rotYm(theta) {
+  const c = Math.cos(theta), s = Math.sin(theta);
+  return [c, 0, s, 0, 1, 0, -s, 0, c];
+}
+const v3 = {
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  mul: (a, k) => [a[0] * k, a[1] * k, a[2] * k],
+  dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  len: (a) => Math.hypot(a[0], a[1], a[2]),
+  norm: (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
+  lerp: (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
+};
+// planet -> view of a world vector: toPlanet = R_y(-era)
+function worldToPlanet(v, era) {
+  const c = Math.cos(era), s = Math.sin(era);
+  return [c * v[0] - s * v[2], v[1], s * v[0] + c * v[2]];
+}
+function planetToWorld(v, era) {
+  const c = Math.cos(era), s = Math.sin(era);
+  return [c * v[0] + s * v[2], v[1], -s * v[0] + c * v[2]];
+}
+
+const fmtUTC = (jd) => {
+  const d = dateOfJd(jd);
+  if (isNaN(d.getTime())) return '—';
+  const p = (n, w = 2) => String(n).padStart(w, '0');
+  const y = d.getUTCFullYear();
+  return `${y < 0 ? '-' : ''}${p(Math.abs(y), 4)}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}  ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
+};
+
+if (typeof module !== 'undefined') {
+  module.exports = { DEG, TAU, J2000, jdOfDate, dateOfJd, sunAt, moonAt, moonPhase, nextEclipse, nextSolarLongitude, Spin, flatteningFor, worldToPlanet, planetToWorld, fmtUTC, kepler, OBLIQ0, ECC0 };
+}
+
+;
+// ---------------------------------------------------------------------------
+//  Uniform registry: names used in WGSL (uFoo) are packed into vec4 slots and
+//  substituted at runtime, so the shader reads like the original GLSL.
+// ---------------------------------------------------------------------------
+const UDEFS = [
+  ['uCamPos', 3], ['uPixAng', 1], ['uCamR', 3], ['uTanHalf', 1], ['uCamU', 3], ['uAspect', 1], ['uCamF', 3], ['uT', 1],
+  ['uSun', 3], ['uSunI', 1], ['uSunR', 1], ['uResX', 1], ['uResY', 1], ['uCT', 1], ['uOffX', 1],
+  ['uSteps', 1], ['uInvC', 1], ['uC', 1], ['uAtmR', 1], ['uHR', 1], ['uHM', 1], ['uGrade', 1], ['uHaze', 1],
+  ['uBR', 3], ['uHeat', 1], ['uBM', 3], ['uMolten', 1], ['uBO', 3], ['uSteam', 1], ['uWB', 3], ['uStorm', 1],
+  ['uAtmGlow', 3], ['uSteamA', 1], ['uSeed', 3], ['uWater', 1],
+  ['uLife', 1], ['uCover', 1], ['uCity', 1], ['uBolt', 1], ['uDebris', 1], ['uStars', 1], ['uIceT', 1], ['uCycK', 1],
+  ['uMoon', 4], ['uMoonOn', 1], ['uDbg', 1], ['uEarthshine', 1], ['uCut', 1], ['uCutOct', 1],
+  ['uCutN1', 3], ['uCutGlow', 1], ['uCutN2', 3], ['uAurora', 1], ['uMWN', 3], ['uAuroraColat', 1],
+  ['uMWC', 3], ['uField', 1], ['uMagAx', 3], ['uMagShell', 1], ['uMagE1', 3], ['uMagPol', 1], ['uMagE2', 3],
+  ['uToPlanet', 'm3'], ['uMoonM', 'm3'], ['uCyc', [4, 3]], ['uImp', [4, 4]], ['uImpV', [4, 4]],
+];
+const UMAP = {};
+let NSLOTS = 0;
+(function allocate() {
+  let cur = 0;
+  const align4 = () => { cur = Math.ceil(cur / 4) * 4; };
+  for (const [name, spec] of UDEFS) {
+    if (typeof spec === 'number') {
+      if (spec === 3 && cur % 4 > 1) align4();
+      if (spec === 4) align4();
+      UMAP[name] = { off: cur, n: spec };
+      cur += spec;
+    } else if (spec === 'm3') {
+      align4(); UMAP[name] = { off: cur, n: 12, mat: true }; cur += 12;
+    } else {
+      align4(); UMAP[name] = { off: cur, n: spec[0] * spec[1], arr: true }; cur += spec[0] * spec[1];
+    }
+  }
+  NSLOTS = Math.ceil(cur / 4);
+})();
+const UF = new Float32Array(NSLOTS * 4);
+function setU(name, ...v) { const d = UMAP[name]; if (!d) throw new Error('no uniform ' + name); for (let i = 0; i < v.length; i++) UF[d.off + i] = v[i]; }
+function setMat3(name, m) { const d = UMAP[name]; for (let c = 0; c < 3; c++) { UF[d.off + c * 4] = m[c]; UF[d.off + c * 4 + 1] = m[3 + c]; UF[d.off + c * 4 + 2] = m[6 + c]; } }
+function setArr(name, i, v) { const d = UMAP[name]; for (let k = 0; k < v.length; k++) UF[d.off + i * 4 + k] = v[k]; }
+
+function expandShader(src) {
+  src = src.replace(/@@NSLOTS@@/g, String(NSLOTS));
+  src = src.replace(/\bUB_(\w+)\b/g, (m, n) => (UMAP[n] ? String(UMAP[n].off / 4) : m));
+  return src.replace(/\bu[A-Z]\w*\b/g, (m) => {
+    const d = UMAP[m];
+    if (!d) return m;
+    if (d.mat) { const s = d.off / 4; return `mat3x3f(U.p[${s}].xyz, U.p[${s + 1}].xyz, U.p[${s + 2}].xyz)`; }
+    const slot = Math.floor(d.off / 4), c = d.off % 4;
+    if (d.n === 1) return `U.p[${slot}].${'xyzw'[c]}`;
+    if (d.n === 3) return `U.p[${slot}].${'xyzw'.slice(c, c + 3)}`;
+    if (d.n === 4) return `U.p[${slot}]`;
+    return m;
+  });
+}
+
+// ---------------------------------------------------------------------------
+//  Seeds: same string hash + mulberry32 as the original ("Let There Be")
+// ---------------------------------------------------------------------------
+function hashWord(s) {
+  let e = 2166136261;
+  for (let t = 0; t < s.length; t++) { e ^= s.charCodeAt(t); e = Math.imul(e, 16777619); }
+  e ^= e >>> 16; e = Math.imul(e, 2246822507); e ^= e >>> 13; e = Math.imul(e, 3266489909); e ^= e >>> 16;
+  return e >>> 0;
+}
+function makeRng(str) {
+  let i = hashWord(str) >>> 0;
+  const t = () => { i = (i + 1831565813) | 0; let e = Math.imul(i ^ (i >>> 15), 1 | i); e = (e + Math.imul(e ^ (e >>> 7), 61 | e)) ^ e; return ((e ^ (e >>> 14)) >>> 0) / 4294967296; };
+  t.range = (a, b) => a + (b - a) * t();
+  t.onSphere = () => { const s = t() * 2 - 1, r = t() * Math.PI * 2, a = Math.sqrt(1 - s * s); return [a * Math.cos(r), a * Math.sin(r), s]; };
+  return t;
+}
+function worldFromWord(word) {
+  const w = [...(word || 'LIGHT').toUpperCase()].slice(0, 16).join('') || 'LIGHT';
+  const rng = makeRng(w + '|world');
+  const seed = [rng.range(0, 50), rng.range(0, 50), rng.range(0, 50)];
+  const cyc = [];
+  for (let r = 0; r < 3; r++) {
+    let a, o = 0;
+    for (;;) {
+      a = rng.onSphere(); o++;
+      if (Math.abs(a[1]) > 0.2 && Math.abs(a[1]) < 0.7 && (o > 60 || cyc.every((c) => v3.dot(c, a) < 0.5))) break;
+    }
+    cyc.push(a);
+    const l = (a[1] > 0 ? 1 : -1) * rng.range(1.1, 1.6);
+    cyc[r] = a; cyc[r].w = l;
+  }
+  return { word: w, seed, cyc };
+}
+
+// ---------------------------------------------------------------------------
+//  State
+// ---------------------------------------------------------------------------
+const xt = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+// A visitor who asked their system for reduced motion gets a gentler start: no fly-in, a slower default pace, no grain or lightning.
+const RM = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const DEFAULT_SPEED = RM ? 1 : 2;     // index into SPEEDS: 'Calm', one slow soothing turn every ~2.5 minutes
+const DEF = {
+  tilt: OBLIQ0, ecc: ECC0, dayH: SIDEREAL_DAY_H, retro: false, squash: 1,
+  atm: 'earth', dens: 1, scaleH: 1, sunEV: 0, stars: 1,
+  eon: 70, water: 1, ice: 0.304, life: 1, heat: 0, molten: 0, steam: 0, steamA: 1, cover: 0.46, cyc: 1, bolt: 0.5, city: 1,
+  word: 'LIGHT',
+  moonOn: true, moonReal: true, moonDist: 14,
+  cut: false, cutW: 90, cutRot: 0, cutOct: false, cutFace: true, cutGlow: 1,
+  field: false, dip: 11, aurora: 0.3, kp: 2, shells: false,
+  exposure: 0, bloom: 0.5, vignette: 0.38, grain: 0.025, fov: 40,
+};
+const S = Object.assign({}, DEF, {
+  jd: jdOfDate(new Date()), playing: true, speedIdx: DEFAULT_SPEED, rev: false,
+  frame: 'sun', focus: 'earth', autoOrbit: false,
+  quality: 'high', resScale: 1, auto: false,
+  shower: false, sound: false,
+});
+const SPEEDS = [
+  { l: 'Real time', v: 1 }, { l: '1 min/s', v: 60 }, { l: 'Calm · 10 min/s', v: 600 }, { l: '1 h/s', v: 3600 },
+  { l: '6 h/s', v: 21600 }, { l: '1 d/s', v: 86400 }, { l: '10 d/s', v: 864000 }, { l: '1 yr/10 s', v: 3155760 },
+];
+const QUAL = { low: { steps: 12, scale: 0.6 }, med: { steps: 20, scale: 0.8 }, high: { steps: 28, scale: 1 }, ultra: { steps: 40, scale: 1.25 } };
+const cam = { yaw: 0.62, pitch: 0.26, dist: 3.4, distT: 3.4, tgt: [0, 0, 0], flipT: 0, flip: 0 };
+
+const spin = new Spin();
+const world = { ...worldFromWord(S.word) };
+let cloudRef = S.jd;
+const impacts = [{ t: -100 }, { t: -100 }, { t: -100 }, { t: -100 }];
+let impactNext = 0;
+const clock0 = performance.now();
+const nowSec = () => (window.__tfix != null ? window.__tfix : (performance.now() - clock0) / 1000);
+
+function applyEon(n) {
+  const u = 1 - xt(59.6, 61.7, n), molten = 1 - xt(55.9, 57, n), f = xt(59.8, 60.6, n);
+  const d = xt(60.3, 61.7, n), m = xt(61.2, 62.7, n), v = xt(60.5, 61.1, n);
+  S.eon = n; S.heat = u; S.molten = molten; S.steam = f * (1 - v); S.steamA = 1 - 0.5 * f * (1 - xt(60.2, 60.7, n));
+  S.water = d; S.life = m; S.cover = 0.5 * f * (1 - v) + 0.46 * v; S.city = xt(67.9, 69.9, n);
+  S.bolt = 0.6 * (1.2 * xt(60.7, 61.1, n) * (1 - xt(62.2, 62.6, n))) + 0.5 * xt(68.5, 68.9, n);
+}
+
+// ---------------------------------------------------------------------------
+//  Atmosphere presets (multipliers on the original's Rayleigh / Mie / ozone columns)
+// ---------------------------------------------------------------------------
+const TAU_R = [37, 86, 211].map((x) => x * 0.00126);   // vertical optical depths of the original
+const TAU_M = 134 * 188e-6;
+const TAU_O = [4.4, 7.8, 0.22].map((x) => x * 0.0055);
+const ATM = {
+  earth: { name: 'Earth', r: [1, 1, 1], m: [1, 1, 1], o: 1, dens: 1, wb: 1 },
+  dust: { name: 'Dusty', r: [0.5, 0.45, 0.4], m: [4.6, 2.9, 1.5], o: 0, dens: 0.55, wb: 0.35 },
+  haze: { name: 'Thick haze', r: [0.9, 0.9, 0.8], m: [10, 8.2, 4.4], o: 0, dens: 1, wb: 0 },
+  green: { name: 'Green sky', r: [1.5, 2.6, 0.35], m: [1, 1, 1], o: 0.3, dens: 1, wb: 0.8 },
+  violet: { name: 'Violet sky', r: [2.4, 0.35, 1.15], m: [1, 1, 1], o: 0.3, dens: 1, wb: 0.8 },
+  none: { name: 'Airless', r: [0, 0, 0], m: [0, 0, 0], o: 0, dens: 0, wb: 1 },
+};
+
+// ---------------------------------------------------------------------------
+//  Galactic orientation (real): north galactic pole and centre in the world frame
+// ---------------------------------------------------------------------------
+const eq2w = (ra, dec) => [Math.cos(dec) * Math.cos(ra), Math.sin(dec), -Math.cos(dec) * Math.sin(ra)];
+const MWN = eq2w(192.859 * DEG, 27.128 * DEG);
+const MWC = eq2w(266.405 * DEG, -28.936 * DEG);
+
+// ---------------------------------------------------------------------------
+//  Derived per-frame state (also used by the HUD)
+// ---------------------------------------------------------------------------
+const D = {};
+function phaseOf(sun, moon) {
+  const dl = ((moon.lam - sun.lam) % TAU + TAU) % TAU;
+  const cosPsi = Math.cos(moon.bet) * Math.cos(dl);
+  const names = ['New moon', 'Waxing crescent', 'First quarter', 'Waxing gibbous', 'Full moon', 'Waning gibbous', 'Last quarter', 'Waning crescent'];
+  return { frac: (1 - cosPsi) / 2, cosPsi, elong: dl, name: names[Math.floor(((dl / TAU * 8 + 0.5) % 8 + 8) % 8)] };
+}
+const timeTarget = () => (S.playing ? SPEEDS[S.speedIdx].v * (S.rev ? -1 : 1) : 0);
+// Set play state / speed / direction and make the eased time rate land on it at once
+// (used by scenes, "now" and the eclipse jumps, which compute dates assuming a known pace).
+function snapTime(playing, speedIdx, rev) {
+  S.playing = playing; S.speedIdx = speedIdx; S.rev = rev;
+  D.rate = timeTarget();
+}
+function derive(dt) {
+  // Time rate eases toward its target, so play / pause / speed changes glide instead of jolting.
+  const target = timeTarget();
+  const cur = D.rate || 0;
+  let rate = cur + (target - cur) * (1 - Math.exp(-dt * 4.5));
+  if (target === 0 && Math.abs(rate) < 0.05) rate = 0;
+  D.rate = rate;
+  S.jd += dt * rate / 86400;
+  const era = spin.era(S.jd);
+  const sun = sunAt(S.jd, S.ecc, S.tilt);
+  const moon = moonAt(S.jd, S.tilt);
+  const ph = phaseOf(sun, moon);
+  const fl = flatteningFor(S.dayH);
+  const fEff = clamp(fl.f * S.squash, 0, 0.6);
+  Object.assign(D, { era, sun, moon, ph, fl, fEff, c: 1 - fEff });
+  // Sub-solar point
+  const sq = worldToPlanet(sun.dir, era);
+  D.subLat = Math.asin(clamp(sq[1], -1, 1)) / DEG;
+  D.subLon = Math.atan2(-sq[2], sq[0]) / DEG;
+  D.orbV = 29.78 * Math.sqrt(Math.max(0, 2 / sun.r - 1));
+  // Moon position
+  const mdist = S.moonReal ? moon.dist : S.moonDist;
+  D.moonPos = v3.mul(moon.dir, mdist);
+  D.moonDist = mdist;
+}
+
+function atmUniforms() {
+  const A = ATM[S.atm];
+  const HR = 0.008 * S.scaleH, HM = 0.0022 * S.scaleH;
+  const g = 0.03 + 0.97 * xt(60.9, 63, S.eon);
+  const dens = S.dens * A.dens;
+  const u = S.heat;
+  const BR = TAU_R.map((t, i) => t / HR * A.r[i] * dens * g);
+  const x = (TAU_M / HM) * (1 + 0.8 * u + 0.6 * S.steam * (1 - S.life)) * dens;
+  const BM = [x * A.m[0], x * (1 - 0.25 * u) * A.m[1], x * (1 - 0.5 * u) * A.m[2]];
+  const BO = TAU_O.map((t) => t / HR * S.life * A.o * dens);
+  const grade = xt(59.8, 61, S.eon);
+  const b = grade * A.wb;
+  const WB = [0, 1, 2].map((i) => { const O = Math.exp(-(BR[i] + BO[i]) * HR - BM[i] * 1.1 * HM); return 1 + (1 / O - 1) * b; });
+  return { HR, HM, atmR: 1 + 8.75 * HR, BR, BM, BO, WB, haze: 1 - 0.92 * b, grade, glow: [1, 0.36, 0.1].map((k) => k * (0.07 * u + 0.9 * S.molten)), debris: 1 - xt(58, 62, S.eon), dens };
+}
+
+// "Rotates with Earth" rides the surface, so the Sun circles the view once per day. Past about 2.5 turns a second
+// that is the whole globe flashing between day and night (a photosensitivity hazard, WCAG 2.3.1), so above that the
+// camera holds the Sun side instead; updateCamera keeps the view continuous across the switch.
+const SPIN_SAFE_TURNS = 2.5;
+const spinsTooFast = () => Math.abs(D.rate || 0) / (S.dayH * 3600) > SPIN_SAFE_TURNS;
+function effFrame() {
+  if (S.frame !== 'spin') return S.frame;
+  return spinsTooFast() ? 'sun' : 'spin';
+}
+function camState() {
+  // reference-frame angle for the orbit camera
+  let fa = 0;
+  const ef = effFrame();
+  if (ef === 'sun') fa = cam.faS != null ? cam.faS : Math.atan2(-D.sun.dir[2], D.sun.dir[0]);   // cam.faS: slew-limited in updateCamera
+  else if (ef === 'spin') fa = D.era;
+  const psi = cam.yaw + fa;
+  const cp = Math.cos(cam.pitch);
+  const dir = [cp * Math.cos(psi), Math.sin(cam.pitch), -cp * Math.sin(psi)];
+  const tgt = cam.tgt;
+  const pos = v3.add(tgt, v3.mul(dir, cam.dist));
+  const F = v3.norm(v3.sub(tgt, pos));
+  const R = v3.norm(v3.cross(F, [0, 1, 0]));
+  const U = v3.cross(R, F);
+  return { pos, F, R, U, fa, dir };
+}
+
+function packUniforms() {
+  const W = GPU.W, H = GPU.H;
+  const C = camState();
+  D.cam = C;
+  const asp = W / H;
+  const tanH = Math.tan(S.fov * DEG / 2) * (asp < 1 ? 1 / asp : 1);   // FOV applies to the shorter side
+  D.tanV = tanH;
+  setU('uCamPos', ...C.pos); setU('uCamR', ...C.R); setU('uCamU', ...C.U); setU('uCamF', ...C.F);
+  setU('uTanHalf', tanH); setU('uAspect', W / H); setU('uPixAng', 2 * tanH / H);
+  setU('uResX', W); setU('uResY', H); setU('uT', nowSec()); setU('uOffX', D.offX || 0);
+  const sunI = Math.pow(2, S.sunEV) / (D.sun.r * D.sun.r);
+  setU('uSun', ...D.sun.dir); setU('uSunI', sunI); setU('uSunR', SUN_RADIUS_AU / D.sun.r);
+  if (Math.abs(S.jd - cloudRef) > 1000) cloudRef = S.jd;       // keep the cloud-drift phase small: float32 loses fine detail far from the anchor
+  setU('uCT', (S.jd - cloudRef) * 52.5);
+  const q = QUAL[S.quality];
+  const A = atmUniforms();
+  D.atm = A;
+  setU('uSteps', A.dens < 0.001 ? 2 : q.steps);
+  setU('uInvC', 1 / D.c); setU('uC', D.c);
+  setU('uAtmR', A.atmR); setU('uHR', A.HR); setU('uHM', A.HM); setU('uGrade', A.grade); setU('uHaze', A.haze);
+  setU('uBR', ...A.BR); setU('uBM', ...A.BM); setU('uBO', ...A.BO); setU('uWB', ...A.WB); setU('uAtmGlow', ...A.glow);
+  setU('uHeat', S.heat); setU('uMolten', S.molten); setU('uSteam', S.steam); setU('uSteamA', S.steamA); setU('uStorm', 0);
+  setU('uWater', S.water); setU('uLife', S.life); setU('uCover', S.cover); setU('uCity', S.city); setU('uBolt', RM ? 0 : S.bolt);
+  setU('uDebris', A.debris); setU('uStars', S.stars); setU('uIceT', 1.15 - 1.15 * S.ice); setU('uCycK', S.cyc);
+  setU('uSeed', ...world.seed);
+  for (let k = 0; k < 3; k++) setArr('uCyc', k, [world.cyc[k][0], world.cyc[k][1], world.cyc[k][2], world.cyc[k].w]);
+  setMat3('uToPlanet', worldToPlanetMat(D.era));
+  setU('uMWN', ...MWN); setU('uMWC', ...MWC);
+  // moon
+  setU('uMoon', D.moonPos[0], D.moonPos[1], D.moonPos[2], MOON_R);
+  setU('uMoonOn', S.moonOn ? 1 : 0); setU('uDbg', S.dbg || 0);
+  const nrm = v3.mul(D.moonPos, -1 / v3.len(D.moonPos));      // toward Earth
+  const eN = [0, Math.cos(S.tilt * DEG), Math.sin(S.tilt * DEG)];   // ecliptic north
+  const ey = v3.norm(v3.sub(eN, v3.mul(nrm, v3.dot(nrm, eN))));
+  const ex = v3.cross(ey, nrm);
+  setMat3('uMoonM', [...ex, ...ey, ...nrm]);
+  setU('uEarthshine', 0.0035 * (1 + D.ph.cosPsi) / 2);
+  // interior cutaway
+  setU('uCut', S.cut ? 1 : 0); setU('uCutOct', S.cutOct ? 1 : 0); setU('uCutGlow', S.cutGlow);
+  let phi1 = S.cutRot * DEG;
+  // a planet-fixed wedge would sweep its glowing interior past the camera every turn: above the safe rate it faces the camera
+  if (S.cutFace || spinsTooFast()) { const cp = worldToPlanet(C.dir, D.era); phi1 += Math.atan2(cp[2], cp[0]) - (S.cutW * DEG) / 2; }
+  const phi2 = phi1 + S.cutW * DEG;
+  setU('uCutN1', -Math.sin(phi1), 0, Math.cos(phi1));
+  setU('uCutN2', Math.sin(phi2), 0, -Math.cos(phi2));
+  // magnetosphere
+  const flip = cam.flip;                       // 0..1 polarity reversal animation
+  const t0 = S.dip * DEG, ph0 = -72 * DEG;
+  const m0 = [Math.sin(t0) * Math.cos(ph0), Math.cos(t0), -Math.sin(t0) * Math.sin(ph0)];
+  const helper = Math.abs(m0[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+  const p0 = v3.norm(v3.cross(m0, helper));
+  const th = Math.PI * flip;
+  const m = v3.norm(v3.add(v3.mul(m0, Math.cos(th)), v3.mul(p0, Math.sin(th))));
+  const e1 = v3.norm(v3.cross(helper, m));
+  const e2 = v3.cross(m, e1);
+  setU('uMagAx', ...m); setU('uMagE1', ...e1); setU('uMagE2', ...e2);
+  setU('uMagPol', Math.cos(th) >= 0 ? 1 : -1);
+  setU('uField', S.field ? 1 : 0); setU('uMagShell', S.shells ? 1 : 0);
+  setU('uAurora', S.aurora * (0.55 + 0.9 * S.kp / 9)); setU('uAuroraColat', (19 + 19 * S.kp / 9) * DEG);
+  // impacts
+  for (let k = 0; k < 4; k++) {
+    const im = impacts[k];
+    if (im.q) { setArr('uImp', k, [im.q[0], im.q[1], im.q[2], im.t]); setArr('uImpV', k, [im.w[0], im.w[1], im.w[2], 0]); }
+    else setArr('uImp', k, [0, 1, 0, -100]);
+  }
+}
+function worldToPlanetMat(era) { const c = Math.cos(era), s = Math.sin(era); return [c, 0, -s, 0, 1, 0, s, 0, c]; }
+
+// Ray from the camera through a pixel -> point on the Earth ellipsoid (world + planet frame)
+function pickEarth(px, py, cw, ch) {
+  if (!D.cam) return null;                    // before the first frame there is nothing to pick
+  const C = D.cam, tanH = D.tanV || Math.tan(S.fov * DEG / 2);
+  const nx = (px / cw) * 2 - 1 + (D.offX || 0), ny = 1 - (py / ch) * 2;
+  const rd = v3.norm(v3.add(v3.add(C.F, v3.mul(C.R, nx * (cw / ch) * tanH)), v3.mul(C.U, ny * tanH)));
+  const ic = 1 / D.c;
+  const ro = C.pos;
+  const roS = [ro[0], ro[1] * ic, ro[2]], rdS = [rd[0], rd[1] * ic, rd[2]];
+  const a = v3.dot(rdS, rdS), b = 2 * v3.dot(roS, rdS), c = v3.dot(roS, roS) - 1;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return null;
+  const t = (-b - Math.sqrt(disc)) / (2 * a);
+  if (t < 0) return null;
+  const pw = v3.add(ro, v3.mul(rd, t));
+  const nS = v3.norm([pw[0], pw[1] * ic, pw[2]]);
+  return { w: pw, q: worldToPlanet(nS, D.era), nS };
+}
+function launchAsteroid(px, py, cw, ch) {
+  const hit = pickEarth(px, py, cw, ch);
+  if (!hit) return false;
+  const t = nowSec() + 0.65;
+  impacts[impactNext] = { q: hit.q, w: hit.w, t };
+  impactNext = (impactNext + 1) % 4;
+  return true;
+}
+
+;
+// ---------------------------------------------------------------------------
+//  WebGPU plumbing: noise volume (compute), planet pass (HDR), bloom chain, tone-map
+// ---------------------------------------------------------------------------
+const GPU = { ready: false, W: 2, H: 2, cw: 2, ch: 2, frames: 0, ema: 1 / 60, lastScaleChange: 0 };
+
+async function compileModule(device, label, code) {
+  const module = device.createShaderModule({ label, code });
+  const info = await module.getCompilationInfo();
+  const errs = info.messages.filter((m) => m.type === 'error');
+  if (errs.length) {
+    const lines = code.split('\n');
+    const txt = errs.slice(0, 14).map((m) => `${label}:${m.lineNum}:${m.linePos}  ${m.message}\n    > ${(lines[m.lineNum - 1] || '').trim().slice(0, 160)}`).join('\n');
+    const e = new Error('WGSL compile failed\n' + txt);
+    e.wgsl = true;
+    throw e;
+  }
+  return module;
+}
+
+async function initGPU(canvas, SRC) {
+  if (!navigator.gpu) { const e = new Error('navigator.gpu is not available'); e.nogpu = true; throw e; }
+  const adapter = (await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' })) || (await navigator.gpu.requestAdapter());
+  if (!adapter) { const e = new Error('No WebGPU adapter'); e.nogpu = true; throw e; }
+  const device = await adapter.requestDevice();
+  GPU.device = device; GPU.adapter = adapter; GPU.canvas = canvas;
+  GPU.errors = [];
+  device.addEventListener('uncapturederror', (ev) => {
+    if (GPU.errors.length < 20) { GPU.errors.push(ev.error.message); console.error('GPU error:', ev.error.message); }
+    // validation and out-of-memory errors arrive here, not in the frame loop's try/catch: say so once
+    if (GPU.ready && !GPU.errTold && typeof toast === 'function') { GPU.errTold = true; toast('Something went wrong drawing the planet — try reloading', 8000); }
+  });
+  device.lost.then((info) => { GPU.lost = info.message || info.reason || 'lost'; document.dispatchEvent(new CustomEvent('gpulost', { detail: info.message })); });   // the message may be empty; the loop must still stop
+
+  const ctx = canvas.getContext('webgpu');
+  if (!ctx) { const e = new Error('no WebGPU canvas context'); e.nogpu = true; throw e; }
+  const format = navigator.gpu.getPreferredCanvasFormat();
+  ctx.configure({ device, format, alphaMode: 'opaque' });
+  GPU.ctx = ctx; GPU.format = format;
+
+  // ---- noise volume --------------------------------------------------------
+  const N = 128;
+  const noiseTex = device.createTexture({ size: [N, N, N], dimension: '3d', format: 'rgba8unorm', usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+  const noiseMod = await compileModule(device, 'noise', SRC.noise);
+  const noisePipe = await device.createComputePipelineAsync({ layout: 'auto', compute: { module: noiseMod, entryPoint: 'main' } });
+  {
+    const bg = device.createBindGroup({ layout: noisePipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: noiseTex.createView({ dimension: '3d' }) }] });
+    const enc = device.createCommandEncoder();
+    const p = enc.beginComputePass();
+    p.setPipeline(noisePipe); p.setBindGroup(0, bg); p.dispatchWorkgroups(N / 4, N / 4, N / 4); p.end();
+    device.queue.submit([enc.finish()]);
+  }
+  const nsamp = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'repeat', addressModeV: 'repeat', addressModeW: 'repeat' });
+
+  // ---- planet pipeline -----------------------------------------------------
+  const planetCode = expandShader(SRC.planet);
+  GPU.planetCode = planetCode;
+  const planetMod = await compileModule(device, 'planet', planetCode);
+  const planetBGL = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: '3d', sampleType: 'float' } },
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+    ],
+  });
+  const HDR = 'rgba16float';
+  device.pushErrorScope('validation');
+  const planetPipe = await device.createRenderPipelineAsync({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [planetBGL] }),
+    vertex: { module: planetMod, entryPoint: 'vs' },
+    fragment: { module: planetMod, entryPoint: 'fs', targets: [{ format: HDR }] },
+    primitive: { topology: 'triangle-list' },
+  });
+  const perr = await device.popErrorScope();
+  if (perr) throw new Error('planet pipeline: ' + perr.message);
+  GPU.ubuf = device.createBuffer({ size: UF.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  GPU.planetBG = device.createBindGroup({
+    layout: planetBGL,
+    entries: [
+      { binding: 0, resource: { buffer: GPU.ubuf } },
+      { binding: 1, resource: noiseTex.createView({ dimension: '3d' }) },
+      { binding: 2, resource: nsamp },
+    ],
+  });
+  GPU.planetPipe = planetPipe;
+
+  // ---- post pipelines ------------------------------------------------------
+  const postMod = await compileModule(device, 'post', SRC.post);
+  const postBGL = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+      { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+    ],
+  });
+  const postLayout = device.createPipelineLayout({ bindGroupLayouts: [postBGL] });
+  const mkPost = (entry, fmt) => device.createRenderPipelineAsync({
+    layout: postLayout,
+    vertex: { module: postMod, entryPoint: 'vs' },
+    fragment: { module: postMod, entryPoint: entry, targets: [{ format: fmt }] },
+    primitive: { topology: 'triangle-list' },
+  });
+  [GPU.downPipe, GPU.upPipe, GPU.finalPipe] = await Promise.all([mkPost('fs_down', HDR), mkPost('fs_up', HDR), mkPost('fs_final', format)]);
+  GPU.postBGL = postBGL;
+  GPU.lin = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
+  GPU.dummy = device.createTexture({ size: [1, 1], format: HDR, usage: GPUTextureUsage.TEXTURE_BINDING });
+  GPU.dummyView = GPU.dummy.createView();
+  GPU.tex = [];
+  GPU.pbufs = [];
+  GPU.ready = true;
+  resizeGPU(true);
+}
+
+function effScale() { return QUAL[S.quality].scale * S.resScale; }
+
+function resizeGPU(force) {
+  if (!GPU.ready) return;                    // controls are live while shaders compile
+  const { device, canvas } = GPU;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let cw = Math.max(2, Math.floor(canvas.clientWidth * dpr)), ch = Math.max(2, Math.floor(canvas.clientHeight * dpr));
+  const cap = 4096;
+  if (cw > cap || ch > cap) { const k = cap / Math.max(cw, ch); cw = Math.floor(cw * k); ch = Math.floor(ch * k); }
+  const sc = effScale();
+  let W = Math.max(2, Math.round(cw * sc)), H = Math.max(2, Math.round(ch * sc));
+  // Safety net only (a 4K screen at Ultra would ask for ~13 Mpx): cap the shaded area at about 4K.
+  // The Quality chips stay in charge of everything below that; the canvas itself stays native-size.
+  const MAXPX = 8.5e6;
+  if (W * H > MAXPX) { const k = Math.sqrt(MAXPX / (W * H)); W = Math.max(2, Math.round(W * k)); H = Math.max(2, Math.round(H * k)); }
+  if (!force && cw === GPU.cw && ch === GPU.ch && W === GPU.W && H === GPU.H) return;
+  canvas.width = cw; canvas.height = ch;
+  GPU.cw = cw; GPU.ch = ch; GPU.W = W; GPU.H = H;
+  for (const t of GPU.tex) t.destroy();
+  for (const b of GPU.pbufs) b.destroy();
+  GPU.tex = []; GPU.pbufs = [];
+
+  const use = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC;
+  const mkTex = (w, h) => { const t = device.createTexture({ size: [w, h], format: 'rgba16float', usage: use }); GPU.tex.push(t); return { t, v: t.createView(), w, h }; };
+  const hdr = mkTex(W, H);
+  const levels = Math.max(2, Math.min(6, Math.floor(Math.log2(Math.min(W, H))) - 3));
+  const down = [], up = [];
+  for (let k = 0; k < levels; k++) down.push(mkTex(Math.max(1, W >> (k + 1)), Math.max(1, H >> (k + 1))));
+  for (let k = 0; k < levels - 1; k++) up.push(mkTex(down[k].w, down[k].h));
+
+  const mkBuf = () => { const b = device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }); GPU.pbufs.push(b); return b; };
+  const mkBG = (a, b, buf) => device.createBindGroup({
+    layout: GPU.postBGL,
+    entries: [
+      { binding: 0, resource: a }, { binding: 1, resource: b }, { binding: 2, resource: GPU.lin }, { binding: 3, resource: { buffer: buf } },
+    ],
+  });
+  const passes = [];
+  const wbuf = (buf, a) => device.queue.writeBuffer(buf, 0, new Float32Array([...a, 0, 0, 0, 0, 0, 0, 0, 0]));
+  // downsample
+  let src = hdr;
+  for (let k = 0; k < levels; k++) {
+    const buf = mkBuf(); wbuf(buf, [1 / src.w, 1 / src.h, k === 0 ? 1 : 0, 1]);
+    passes.push({ pipe: GPU.downPipe, view: down[k].v, bg: mkBG(src.v, GPU.dummyView, buf) });
+    src = down[k];
+  }
+  // upsample: up[k] = down[k] + tent(up[k+1] or down[last])
+  for (let k = levels - 2; k >= 0; k--) {
+    const lo = k === levels - 2 ? down[levels - 1] : up[k + 1];
+    const buf = mkBuf(); wbuf(buf, [1 / lo.w, 1 / lo.h, 0, 1.0]);
+    passes.push({ pipe: GPU.upPipe, view: up[k].v, bg: mkBG(lo.v, down[k].v, buf) });
+  }
+  GPU.passes = passes;
+  GPU.finalBuf = mkBuf();
+  GPU.finalHdr = hdr; GPU.finalBloom = up[0];
+  GPU.finalBG = mkBG(hdr.v, up[0].v, GPU.finalBuf);
+  GPU.hdrView = hdr.v;
+}
+
+function renderGPU(tSec) {
+  const { device } = GPU;
+  device.queue.writeBuffer(GPU.ubuf, 0, UF);
+  device.queue.writeBuffer(GPU.finalBuf, 0, new Float32Array([
+    1 / GPU.W, 1 / GPU.H, 0, 1,
+    Math.pow(2, S.exposure) * 0.9, S.bloom * 0.1, S.vignette, RM ? 0 : S.grain,
+    tSec, 1.06, GPU.cw, GPU.ch,
+  ]));
+  const enc = device.createCommandEncoder();
+  {
+    const p = enc.beginRenderPass({ colorAttachments: [{ view: GPU.hdrView, loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
+    p.setPipeline(GPU.planetPipe); p.setBindGroup(0, GPU.planetBG); p.draw(3); p.end();
+  }
+  // bloom amount 0 contributes exactly nothing to the composite, so skip the bloom chain (up to 11 passes)
+  if (S.bloom > 0) for (const ps of GPU.passes) {
+    const p = enc.beginRenderPass({ colorAttachments: [{ view: ps.view, loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
+    p.setPipeline(ps.pipe); p.setBindGroup(0, ps.bg); p.draw(3); p.end();
+  }
+  {
+    const p = enc.beginRenderPass({ colorAttachments: [{ view: GPU.ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
+    p.setPipeline(GPU.finalPipe); p.setBindGroup(0, GPU.finalBG); p.draw(3); p.end();
+  }
+  device.queue.submit([enc.finish()]);
+}
+
+// frame-time governed render scale
+function autoQuality(dt) {
+  if (dt > 0.5 || dt <= 0) return;
+  GPU.ema += (dt - GPU.ema) * 0.08;
+  GPU.frames++;
+  if (!S.auto || GPU.frames < 40) return;
+  const now = performance.now();
+  if (now - GPU.lastScaleChange < 1200) return;
+  let ns = S.resScale;
+  if (GPU.ema > 1 / 26) ns = Math.max(0.45, S.resScale * 0.84);
+  else if (GPU.ema < 1 / 56 && S.resScale < 1) ns = Math.min(1, S.resScale * 1.1);
+  if (Math.abs(ns - S.resScale) > 0.01) {
+    S.resScale = ns; GPU.lastScaleChange = now; resizeGPU(true);
+  }
+}
+
+// debug: read a few HDR pixels back (used by tests only)
+async function readHDR(pts) {
+  const { device } = GPU; const W = GPU.W, H = GPU.H;
+  const bpr = Math.ceil(W * 8 / 256) * 256;
+  const buf = device.createBuffer({ size: bpr * H, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  const enc = device.createCommandEncoder();
+  enc.copyTextureToBuffer({ texture: GPU.tex[0] }, { buffer: buf, bytesPerRow: bpr }, [W, H]);
+  device.queue.submit([enc.finish()]);
+  await buf.mapAsync(GPUMapMode.READ);
+  const u16 = new Uint16Array(buf.getMappedRange());
+  const h2f = (h) => { const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 31, f = h & 1023; if (e === 0) return s * Math.pow(2, -14) * (f / 1024); if (e === 31) return f ? NaN : s * Infinity; return s * Math.pow(2, e - 15) * (1 + f / 1024); };
+  const out = pts.map(([fx, fy]) => { const x = Math.floor(fx * (W - 1)), y = Math.floor(fy * (H - 1)); const o = y * (bpr / 2) + x * 4; return [h2f(u16[o]), h2f(u16[o + 1]), h2f(u16[o + 2]), h2f(u16[o + 3])].map((v) => +v.toFixed(4)); });
+  buf.unmap(); buf.destroy();
+  return out;
+}
+
+;
+// ---------------------------------------------------------------------------
+//  Ambient sound: a slow, generative pad (opt-in) and a low thump for impacts.
+//  Everything is synthesised with Web Audio; nothing is downloaded.
+// ---------------------------------------------------------------------------
+const Snd = { ctx: null, master: null, bus: null, on: false, stopT: 0 };
+
+function sndBuild() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return false;
+  let ctx;
+  try { ctx = new AC(); } catch (e) { return false; }
+  const master = ctx.createGain(); master.gain.value = 0;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 0.4;
+  // a soft feedback echo gives the pad some air
+  const delay = ctx.createDelay(1.5); delay.delayTime.value = 0.52;
+  const fb = ctx.createGain(); fb.gain.value = 0.36;
+  const dlp = ctx.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 1400;
+  lp.connect(master); lp.connect(delay); delay.connect(dlp); dlp.connect(fb); fb.connect(delay); dlp.connect(master);
+  master.connect(ctx.destination);
+  // D major-ish drone: D2 A2 D3 F#3 A3, each voice breathes on its own slow LFO
+  const voices = [[73.42, 0.16, 0.031], [110.0, 0.11, 0.043], [146.83, 0.09, 0.027], [185.0, 0.05, 0.037], [220.0, 0.045, 0.021], [587.33, 0.008, 0.05]];
+  voices.forEach(([f, g, lf], i) => {
+    for (const det of [-5, 4]) {
+      const o = ctx.createOscillator(); o.type = i < 3 ? 'triangle' : 'sine'; o.frequency.value = f; o.detune.value = det;
+      const vg = ctx.createGain(); vg.gain.value = g * 0.5;
+      const l = ctx.createOscillator(); l.frequency.value = lf * (det < 0 ? 1 : 1.17);
+      const ld = ctx.createGain(); ld.gain.value = g * 0.42;
+      l.connect(ld); ld.connect(vg.gain);
+      o.connect(vg); vg.connect(lp);
+      o.start(); l.start();
+    }
+  });
+  // the filter slowly opens and closes
+  const fl = ctx.createOscillator(); fl.frequency.value = 0.018;
+  const fd = ctx.createGain(); fd.gain.value = 260;
+  fl.connect(fd); fd.connect(lp.frequency); fl.start();
+  Snd.ctx = ctx; Snd.master = master; Snd.bus = lp;
+  return true;
+}
+
+// Returns true when the pad is running. Must be called from a user gesture the first time.
+function sndSet(on) {
+  try {
+    if (on) {
+      if (!Snd.ctx) { try { if (!sndBuild()) return false; } catch (e) { return false; } }
+      clearTimeout(Snd.stopT);
+      Snd.ctx.resume().catch(() => {});
+      const t = Snd.ctx.currentTime;
+      Snd.master.gain.cancelScheduledValues(t);
+      Snd.master.gain.setValueAtTime(Snd.master.gain.value, t);
+      Snd.master.gain.linearRampToValueAtTime(0.5, t + 2.5);
+      Snd.on = true;
+    } else if (Snd.ctx) {
+      const t = Snd.ctx.currentTime;
+      Snd.master.gain.cancelScheduledValues(t);
+      Snd.master.gain.setValueAtTime(Snd.master.gain.value, t);
+      Snd.master.gain.linearRampToValueAtTime(0, t + 1.2);
+      Snd.on = false;
+      Snd.stopT = setTimeout(() => { if (!Snd.on && Snd.ctx) Snd.ctx.suspend().catch(() => {}); }, 1400);
+    }
+    return true;
+  } catch (e) { Snd.on = false; return false; }
+}
+
+// A low thump + rumble, scheduled `delay` seconds from now.
+function sndImpact(delay) {
+  if (!Snd.on || !Snd.ctx || Snd.ctx.state !== 'running') return;
+  try {
+    const ctx = Snd.ctx, t = ctx.currentTime + delay;
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(34, t + 0.9);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+    o.connect(g); g.connect(Snd.master); o.start(t); o.stop(t + 1.7);
+    const len = Math.floor(ctx.sampleRate * 1.2), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+    const n = ctx.createBufferSource(); n.buffer = buf;
+    const nf = ctx.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 420;
+    const ng = ctx.createGain(); ng.gain.value = 0.55;
+    n.connect(nf); nf.connect(ng); ng.connect(Snd.master); n.start(t);
+  } catch (e) { /* sound is a garnish; never break the sim over it */ }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!Snd.ctx) return;
+  if (document.hidden) Snd.ctx.suspend().catch(() => {});
+  else if (Snd.on) Snd.ctx.resume().catch(() => {});
+});
+
+;
+// ---------------------------------------------------------------------------
+//  UI: schema-driven control panel, time dock, HUD, camera input
+// ---------------------------------------------------------------------------
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const ICON = {
+  play: '<path d="M8 5.5v13l11-6.5z"/>',
+  pause: '<path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/>',
+  chev: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  orbit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="12" rx="9.5" ry="4.2" transform="rotate(-24 12 12)"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/></svg>',
+  moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></svg>',
+  world: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>',
+  sky: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 18a4 4 0 0 1 .6-7.95A5.5 5.5 0 0 1 18 11.5 3.3 3.3 0 0 1 17.5 18z"/></svg>',
+  inside: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>',
+  mag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v18"/><path d="M12 6C3 6 3 18 12 18M12 6c9 0 9 12 0 12" opacity=".8"/></svg>',
+  look: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>',
+  spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></svg>',
+  scenes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg>',
+};
+for (const k in ICON) if (ICON[k].startsWith('<svg ')) ICON[k] = ICON[k].replace('<svg ', '<svg aria-hidden="true" focusable="false" ');
+const fmtN = (d) => (v) => v.toFixed(d);
+const fmtEV = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' EV';
+const fmtDeg = (d = 1) => (v) => v.toFixed(d) + '°';
+const refreshers = [];
+let toastT = 0;
+function toast(msg, ms) {
+  if (!ms) ms = Math.min(7000, 1400 + 45 * msg.length);      // long messages stay long enough to read
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms);
+}
+const hintRefs = [];
+function mkHint(h) {
+  const d = el('div', 'hint');
+  const f = () => { const t = typeof h === 'function' ? h() : h; if (d._t !== t) { d.innerHTML = t; d._t = t; } };
+  hintRefs.push(f); f();
+  return d;
+}
+const uid = (() => { let n = 0; return () => 'c' + (++n); })();
+
+// ---- control builders -------------------------------------------------------
+function mkSlider(c) {
+  const row = el('div', 'row');
+  const id = uid();
+  const head = el('div', 'rhead');
+  const lab = el('label', 'rl', c.label); lab.htmlFor = id;
+  const out = el('output', 'rv'); out.htmlFor = id; out.setAttribute('aria-live', 'off');
+  head.append(lab, out);
+  const inp = el('input'); inp.type = 'range'; inp.id = id;
+  const log = !!c.log;
+  const toPos = (v) => log ? (Math.log(v) - Math.log(c.min)) / (Math.log(c.max) - Math.log(c.min)) : (v - c.min) / (c.max - c.min);
+  const fromPos = (p) => log ? Math.exp(Math.log(c.min) + p * (Math.log(c.max) - Math.log(c.min))) : c.min + p * (c.max - c.min);
+  // Native semantics: a linear slider carries its real min / max / step, so arrow keys move one
+  // step and assistive tech reads real values. A log slider runs on a 0..1000 track, 10 per key press.
+  if (log) { inp.min = 0; inp.max = 1000; inp.step = 10; }
+  else { inp.min = c.min; inp.max = c.max; inp.step = c.step || (c.max - c.min) / 200; }
+  const get = c.get || (() => S[c.key]);
+  const set = c.set || ((v) => { S[c.key] = v; });
+  const quant = (v) => { if (c.step) v = Math.round(v / c.step) * c.step; return Math.min(c.max, Math.max(c.min, v)); };
+  const paint = () => {
+    const v = get(); inp.value = log ? Math.round(toPos(v) * 1000) : v;
+    inp.style.setProperty('--p', (toPos(v) * 100).toFixed(1) + '%');
+    out.textContent = (c.fmt || fmtN(2))(v);
+    inp.setAttribute('aria-valuetext', out.textContent);
+    if (c.off) { const o = !!c.off(); row.classList.toggle('dim', o); row.title = inp.title = o ? c.offWhy : ''; }   // inp.title: the reason reaches keyboard and screen-reader users too
+  };
+  inp.addEventListener('input', () => {
+    set(quant(log ? fromPos(inp.value / 1000) : +inp.value));
+    if (c.after) c.after();
+    refreshAll();
+  });
+  row.append(head, inp);
+  if (c.hint) row.append(mkHint(c.hint));
+  refreshers.push(paint);
+  return row;
+}
+function mkToggle(c) {
+  const lab = el('label', 'sw');
+  if (c.tour) lab.dataset.tour = '1';
+  const t = el('span', 'rl', c.label);
+  const inp = el('input'); inp.type = 'checkbox'; inp.setAttribute('role', 'switch');
+  const get = c.get || (() => S[c.key]);
+  const set = c.set || ((v) => { S[c.key] = v; });
+  inp.addEventListener('change', () => { set(inp.checked); if (c.after) c.after(inp.checked); refreshAll(); });
+  lab.append(t, inp, el('span', 't'));
+  refreshers.push(() => { inp.checked = !!get(); if (c.off) { const o = !!c.off(); lab.classList.toggle('dim', o); lab.title = inp.title = o ? c.offWhy : ''; } });
+  if (!c.hint) return lab;
+  const wrap = el('div', 'row'); wrap.append(lab, mkHint(c.hint));
+  return wrap;
+}
+function mkChips(c) {
+  const wrap = el('div', 'row');
+  const gid = uid();
+  if (c.label) wrap.append(el('div', 'rhead', `<span class="rl" id="${gid}">${c.label}</span>`));
+  const box = el('div', 'chips'); box.setAttribute('role', 'group');
+  if (c.label) box.setAttribute('aria-labelledby', gid); else if (c.group) box.setAttribute('aria-label', c.group);
+  const get = c.get || (() => S[c.key]);
+  const set = c.set || ((v) => { S[c.key] = v; });
+  const bs = c.options.map(([val, name, tip]) => {
+    const b = el('button', 'chip' + (c.cls ? ' ' + c.cls : ''), name); b.type = 'button'; if (tip) b.title = tip;
+    b.addEventListener('click', () => { set(val); if (c.after) c.after(val); refreshAll(); });
+    box.append(b); return [val, b];
+  });
+  wrap.append(box);
+  refreshers.push(() => { for (const [val, b] of bs) { if (c.noState) b.removeAttribute('aria-pressed'); else b.setAttribute('aria-pressed', String(get() === val)); } });
+  if (c.hint) wrap.append(mkHint(c.hint));
+  return wrap;
+}
+function mkButtons(c) {
+  const box = el('div', 'btns');
+  for (const it of c.items) {
+    const b = el('button', 'btn' + (it.cls ? ' ' + it.cls : ''), it.label); b.type = 'button';
+    b.addEventListener('click', () => { it.fn(); refreshAll(); });
+    box.append(b);
+  }
+  return box;
+}
+function mkText(c) {
+  const wrap = el('div', 'row');
+  const id = uid();
+  const head = el('div', 'rhead'); const lab = el('label', 'rl', c.label); lab.htmlFor = id; head.append(lab);
+  const f = el('div', 'field');
+  const inp = el('input'); inp.type = 'text'; inp.id = id; inp.maxLength = 16; inp.spellcheck = false; inp.autocomplete = 'off';
+  const go = el('button', 'btn', 'Apply'); go.type = 'button';
+  const roll = el('button', 'btn warm', 'Roll'); roll.type = 'button'; roll.title = 'Random world'; roll.setAttribute('aria-label', 'Roll a random world seed');
+  inp.placeholder = 'Type a word';
+  const apply = () => { const v = inp.value.trim(); if (!v) { toast('Type a word first'); return; } c.set(v); inp.value = c.get(); refreshAll(); toast('World “' + c.get() + '”'); };
+  go.addEventListener('click', apply);
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) apply(); if (e.key !== 'Escape') e.stopPropagation(); });
+  roll.addEventListener('click', () => { const w = randomWord(); inp.value = w; c.set(w); refreshAll(); toast('World “' + w + '”'); });
+  f.append(inp, go, roll); wrap.append(head, f);
+  if (c.hint) wrap.append(mkHint(c.hint));
+  refreshers.push(() => { if (document.activeElement !== inp) inp.value = c.get(); });
+  return wrap;
+}
+function mkLegend(items) {
+  const box = el('div', 'legend');
+  for (const [col, name, val] of items) box.append(el('div', '', `<i style="background:${col}"></i><span>${name}<small>${val}</small></span>`));
+  return box;
+}
+function build(c) {
+  switch (c.t) {
+    case 'slider': return mkSlider(c);
+    case 'toggle': return mkToggle(c);
+    case 'chips': return mkChips(c);
+    case 'buttons': return mkButtons(c);
+    case 'text': return mkText(c);
+    case 'legend': return mkLegend(c.items);
+    case 'title': return el('div', 'subttl', c.label);
+    case 'hint': return mkHint(c.text);
+  }
+}
+function refreshAll() { for (const f of refreshers) f(); for (const f of hintRefs) f(); }
+
+const WORDS = ['AURORA', 'MERIDIAN', 'TETHYS', 'ZEPHYR', 'ATLAS', 'HALCYON', 'LUMEN', 'VERDANT', 'COBALT', 'SOLSTICE', 'EMBER', 'TIDEPOOL', 'GAIA', 'MONSOON', 'NIMBUS', 'ARCHIPELAGO', 'LAZULI', 'OROGENY', 'CIRRUS', 'PANGAEA', 'ISTHMUS', 'EQUINOX', 'BASALT', 'HORIZON', 'MIRAGE', 'TERRA'];
+const randomWord = () => WORDS[Math.floor(Math.random() * WORDS.length)];
+
+// ---- state operations -------------------------------------------------------
+function setWord(w) {
+  const nw = worldFromWord(w || 'LIGHT');
+  Object.assign(world, nw); S.word = nw.word;
+}
+function setDay(h) { S.dayH = h; spin.change(S.jd, h, S.retro ? -1 : 1); }
+function setRetro(r) { S.retro = r; spin.change(S.jd, S.dayH, r ? -1 : 1); }
+function jumpSolar(lamDeg, name) {
+  S.jd = nextSolarLongitude(S.jd, lamDeg * DEG, S.ecc);
+  toast(name + ' — ' + fmtUTC(S.jd));
+}
+// Point the camera at the spot where the Moon's shadow axis meets the Earth at time t.
+function aimAtShadow(t) {
+  const s = sunAt(t, S.ecc, S.tilt).dir, m = moonAt(t, S.tilt), mp = v3.mul(m.dir, m.dist);
+  const d = v3.mul(s, -1), b = v3.dot(mp, d), c = v3.dot(mp, mp) - 1, disc = b * b - c;
+  const tt = disc < 0 ? -b : -b - Math.sqrt(disc);
+  const p = v3.norm(v3.add(mp, v3.mul(d, tt)));
+  const fa = Math.atan2(-s[2], s[0]);
+  cam.pitch = Math.asin(clamp(p[1], -1, 1)) * 0.85;
+  cam.yaw = Math.atan2(-p[2], p[0]) - fa;
+}
+// Next central eclipse: start a little before it at the calm pace and frame it, so it plays out in view.
+function jumpEclipse(kind) {
+  const t = nextEclipse(S.jd, kind, S.ecc);
+  if (t == null) { toast('No eclipse in the next few years — try another date'); return; }
+  stopTour();
+  S.moonOn = true; S.moonReal = true; S.frame = 'sun';
+  snapTime(true, DEFAULT_SPEED, false);
+  cam.vYaw = 0; cam.vPitch = 0;
+  if (kind === 'solar') {
+    S.jd = t - 0.035;
+    setFocus('earth', true); cam.distT = Math.min(cam.distT, 3);
+    aimAtShadow(t);
+  } else {
+    S.jd = t - 0.06;
+    setFocus('moon'); cam.yaw = 0.15; cam.pitch = 0.1;       // look at the Moon from the Earth's side as it reddens
+  }
+  syncDock();
+  let what = 'Total lunar eclipse';
+  if (kind === 'solar') what = moonAt(t, S.tilt).dist < 58.4 * sunAt(t, S.ecc, S.tilt).r ? 'Total solar eclipse' : 'Annular solar eclipse';
+  toast(what + ' — ' + fmtUTC(t));
+}
+function resetScene(extra, camPatch) {
+  Object.assign(S, DEF, { atm: 'earth' });
+  spin.reset(); setDay(DEF.dayH);               // canonical rotation phase: true orientation for any date
+  setWord('LIGHT');
+  applyEon(DEF.eon);
+  S.frame = 'sun';
+  // a scene is a complete state, time included: now, forward, calm pace (a preset can override)
+  S.jd = jdOfDate(new Date()); cloudRef = S.jd;
+  S.playing = true; S.speedIdx = DEFAULT_SPEED; S.rev = false;
+  if (extra) Object.assign(S, extra);
+  D.rate = timeTarget();
+  cam.flip = 0; cam.flipT = 0; cam.vYaw = 0; cam.vPitch = 0; cam.faS = null;
+  const { distT, keepDist, ...cp } = camPatch || {};
+  Object.assign(cam, { yaw: 0.62, pitch: 0.26 }, cp);
+  setFocus('earth', keepDist);
+  if (distT) cam.distT = distT;
+  refreshAll(); syncDock();
+}
+function setFocus(f, keepDist) {
+  const old = cam.tgt.slice();
+  if (f !== 'earth') S.moonOn = true;
+  S.focus = f;
+  cam.off = RM ? [0, 0, 0] : v3.sub(old, desiredTarget());     // reduced motion: cut to the new target instead of sweeping
+  if (!keepDist) cam.distT = f === 'earth' ? 3.4 : f === 'moon' ? 1.7 : Math.max(10, D.moonDist ? D.moonDist * 1.55 : 90);
+}
+function desiredTarget() {
+  if (S.focus === 'moon' && S.moonOn && D.moonPos) return D.moonPos;
+  if (S.focus === 'both' && S.moonOn && D.moonPos) return v3.mul(D.moonPos, 0.5);
+  return [0, 0, 0];
+}
+const FOCUS_MIN = { earth: 1.12, moon: 0.42, both: 3 };
+
+const PRESETS = [
+  ['Blue Marble', () => resetScene()],
+  ['Solar eclipse', () => {
+    resetScene({}, { distT: 2.1, keepDist: true });
+    // next *total* eclipse (Moon close enough to cover the Sun)
+    let t = nextEclipse(jdOfDate(new Date()), 'solar', S.ecc), n = 0;
+    while (t && n++ < 12) {
+      const m = moonAt(t, S.tilt), s = sunAt(t, S.ecc, S.tilt);
+      if (m.dist < 58.4 * s.r) break;
+      t = nextEclipse(t + 5, 'solar', S.ecc);
+    }
+    if (!t) return;
+    S.jd = t - 0.035;                       // about 50 minutes ahead: five seconds at the calm pace
+    aimAtShadow(t);
+    toast('Total solar eclipse ' + fmtUTC(t).slice(0, 10) + ' — find the shadow sweeping across');
+  }],
+  ['Crescent', () => { resetScene({}, { yaw: 2.3, pitch: 0.1 }); }],
+  ['Hadean', () => { resetScene(); applyEon(56.2); S.cover = 0.35; }],
+  ['Snowball', () => { resetScene({ ice: 1, cover: 0.3, city: 0, life: 0.55 }); S.water = 1; }],
+  ['Dry world', () => { resetScene({ water: 0.04, atm: 'dust', dens: 0.7, cover: 0.12, ice: 0.05, city: 0.4 }); }],
+  ['Night lights', () => { resetScene({ city: 1.5, bolt: 0.8, exposure: 1.1 }, { yaw: 2.7, pitch: 0.3 }); }],
+  ['Sideways (90°)', () => { resetScene({ tilt: 90, playing: true, speedIdx: RM ? DEFAULT_SPEED : 5 }, { pitch: 0.12 }); }],
+  ['Spin fast', () => { resetScene({ dayH: 2.8, squash: 1, cover: 0.5 }); setDay(2.8); }],
+  ['Inside', () => { resetScene({ cut: true, cutW: 115, cutOct: true, cutFace: true }, { yaw: 0.5, pitch: 0.4 }); }],
+  ['Magnetic storm', () => { resetScene({ field: true, shells: false, kp: 8, aurora: 0.9 }, { yaw: 0.2, pitch: 0.12, distT: 5.6, keepDist: true }); }],
+];
+
+// ---- panel definition -------------------------------------------------------
+const PRESET_TIPS = {
+  'Blue Marble': 'Earth from space, right now', 'Solar eclipse': 'The next total solar eclipse, framed as the shadow arrives',
+  'Crescent': 'A thin crescent Earth, looking toward the Sun', 'Hadean': 'The young, molten Earth', 'Snowball': 'A frozen planet',
+  'Dry world': 'Almost no oceans under a dusty sky', 'Night lights': 'City lights and lightning on the night side',
+  'Sideways (90°)': RM ? 'Axial tilt of 90°, like Uranus' : 'Axial tilt of 90°, like Uranus. Runs a day per second so the seasons show', 'Spin fast': 'A 2.8-hour day: the planet bulges at the equator',
+  'Inside': 'A cutaway through crust, mantle and core', 'Magnetic storm': 'Field lines around a stormy Earth. Orbit to the night side for the aurora',
+};
+const hoursStr = (h) => { const m = Math.round(h * 60), H = Math.floor(m / 60), M = m % 60; return `${H} h ${String(M).padStart(2, '0')} m`; };
+function runPreset(i) { stopTour(); toast(PRESETS[i][0]); PRESETS[i][1](); refreshAll(); syncDock(); }
+const SECTIONS = [
+  { id: 'scenes', title: 'Scenes', icon: ICON.scenes, open: true, items: [
+    { t: 'chips', group: 'Scenes', options: PRESETS.map((p, i) => [i, p[0], PRESET_TIPS[p[0]]]), noState: true, cls: 'scene', set: (i) => runPreset(i), get: () => -1 },
+    { t: 'hint', text: RM ? 'Each scene resets everything first (date, pace, view, sliders), then sets itself up.' : 'Each scene resets everything first (date, pace, view, sliders), then sets itself up (Sideways speeds up so its seasons show).' },
+  ] },
+  { id: 'play', title: 'Play', icon: ICON.spark, open: window.innerHeight >= 860, items: [
+    { t: 'toggle', label: 'Cinematic tour', tour: true, get: () => tour.on, set: (v) => setTour(v), hint: 'Visits scene after scene on its own. Drag or click anything to take over.' },
+    { t: 'toggle', key: 'shower', label: 'Asteroid shower', hint: 'Asteroids rain onto the part of the planet you are looking at.' },
+    { t: 'toggle', label: 'Ambient sound', tour: true, get: () => S.sound, set: (v) => setSound(v), hint: 'A slow generative drone, plus a low thump on impact. Off until you ask.' },
+    { t: 'buttons', items: [{ label: 'Surprise me', cls: 'warm', fn: () => surprise() }, { label: 'Clear pins', fn: () => { if (!pins.length) toast('No pins to clear'); else { clearPins(); toast('Pins cleared'); } } }] },
+    { t: 'hint', text: 'Dock tools: <b>pin</b> a place to watch day and night sweep across it, or hurl an <b>asteroid</b>. Flick the planet to send it gliding; double-click to reset the view.' },
+    { t: 'hint', text: 'Keys (with the planet, the page or a slider focused): <b>Space</b> play/pause · <b>←↑↓→</b> orbit · <b>+ −</b> zoom · <b>Shift+←/→</b> ±1 day · <b>P</b> pin · <b>A</b> asteroid · <b>T</b> tour · <b>R</b> surprise · <b>M</b> sound · <b>H</b> hide the interface · <b>Esc</b> put the tool away' },
+  ] },
+  { id: 'orbit', title: 'Spin & seasons', icon: ICON.orbit, open: false, items: [
+    { t: 'slider', key: 'tilt', label: 'Axial tilt', min: 0, max: 90, step: 0.1, fmt: fmtDeg(1), hint: () => `Sun is overhead at <b>${Math.abs(D.subLat || 0).toFixed(1)}°${(D.subLat || 0) >= 0 ? 'N' : 'S'}</b> now. At Earth’s own gentle eccentricity, seasons come from tilt, not distance.` },
+    { t: 'slider', key: 'ecc', label: 'Orbit eccentricity', min: 0, max: 0.6, step: 0.001, fmt: (v) => v.toFixed(3), hint: () => `Sun distance <b>${(D.sun ? D.sun.r : 1).toFixed(3)} AU</b> · Earth’s speed ${(D.orbV || 30).toFixed(1)} km/s (from Kepler’s laws).` },
+    { t: 'slider', label: 'Rotation period', min: 2, max: 72, log: true, get: () => S.dayH, set: setDay, fmt: hoursStr,
+      hint: () => {
+        const sid = ' On Earth, a sidereal day (23 h 56 m) is one true turn; noon to noon takes 24 h.';
+        if (!(D.fEff > 1e-5)) return 'Drawn as a perfect sphere (bulge ×0).' + sid;
+        const tr = D.fl ? D.fl.f : 0;
+        const head = S.squash !== 1 ? `Drawn ${S.squash.toFixed(1)}× exaggerated: <b>1/${(1 / D.fEff).toFixed(1)}</b> (true 1/${(1 / Math.max(tr, 1e-9)).toFixed(1)}).` : `Flattening <b>1/${(1 / D.fEff).toFixed(1)}</b>.`;
+        return head + ' f = 3J₂/2 + m/2, with J₂ held at Earth’s value and m the spin strength.' + sid;
+      } },
+    { t: 'slider', key: 'squash', label: 'Exaggerate bulge', min: 0, max: 30, step: 0.1, fmt: (v) => v.toFixed(1) + '×' },
+    { t: 'toggle', label: 'Spin backwards (retrograde)', get: () => S.retro, set: setRetro },
+    { t: 'title', label: 'Jump to' },
+    { t: 'buttons', items: [
+      { label: 'Mar equinox', fn: () => jumpSolar(0, 'March equinox') }, { label: 'Jun solstice', fn: () => jumpSolar(90, 'June solstice') },
+      { label: 'Sep equinox', fn: () => jumpSolar(180, 'September equinox') }, { label: 'Dec solstice', fn: () => jumpSolar(270, 'December solstice') },
+    ] },
+  ] },
+  { id: 'moon', title: 'Moon & eclipses', icon: ICON.moon, items: [
+    { t: 'toggle', key: 'moonOn', label: 'Show the Moon', after: () => { if (!S.moonOn && S.focus !== 'earth') setFocus('earth'); } },
+    { t: 'toggle', key: 'moonReal', label: 'Real orbit (Almanac series, ~0.3°)', hint: () => `<b>${D.ph ? D.ph.name : ''}</b> · ${D.ph ? (D.ph.frac * 100).toFixed(0) : 0}% lit · ${D.moonDist ? Math.round(D.moonDist * 6371).toLocaleString() : ''} km` },
+    { t: 'slider', key: 'moonDist', label: 'Moon distance', min: 4, max: 140, step: 0.5, fmt: (v) => v.toFixed(1) + ' R⊕', off: () => !S.moonOn, offWhy: 'Turn on “Show the Moon” to use this',
+      get: () => (S.moonReal && D.moonDist ? clamp(D.moonDist, 4, 140) : S.moonDist), after: () => { S.moonReal = false; } },
+    { t: 'buttons', items: [{ label: 'Next solar eclipse', cls: 'warm', fn: () => jumpEclipse('solar') }, { label: 'Next total lunar eclipse', cls: 'warm', fn: () => jumpEclipse('lunar') }, { label: 'Look at Earth', fn: () => setFocus('earth') }] },
+    { t: 'hint', text: 'The jump buttons start a little before the next central eclipse and frame it. The Moon’s shadow on Earth, the lunar eclipse and the phases come from the real geometry; the red glow and earthshine brightness are approximated. Accurate for a few centuries around today. “Look at Earth” brings the camera back to the planet.' },
+  ] },
+  { id: 'world', title: 'World', icon: ICON.world, open: false, items: [
+    { t: 'slider', label: 'Planet age', min: 54, max: 70, step: 0.05, get: () => S.eon, set: (v) => applyEon(v),
+      fmt: (v) => v < 56.5 ? 'Magma ocean' : v < 59.8 ? 'Molten crust' : v < 60.8 ? 'Steam world' : v < 62 ? 'First oceans' : v < 65 ? 'Early life' : v < 68 ? 'Green planet' : 'Today',
+      hint: 'Scrub through four and a half billion years of a planet cooling from magma to a living world. This also moves most of the sliders below (all but Ice caps and Storm swirl).' },
+    { t: 'slider', key: 'water', label: 'Sea level', min: 0, max: 1, step: 0.01, fmt: (v) => Math.round(v * 100) + '%', hint: '100% is today’s Earth.' },
+    { t: 'slider', key: 'ice', label: 'Ice caps', min: 0, max: 1, step: 0.01, fmt: (v) => Math.round(v * 100) + '%' },
+    { t: 'slider', key: 'life', label: 'Life', min: 0, max: 1, step: 0.01, fmt: (v) => Math.round(v * 100) + '%' },
+    { t: 'slider', key: 'cover', label: 'Cloud cover', min: 0, max: 1, step: 0.01, fmt: (v) => Math.round(v * 100) + '%' },
+    { t: 'slider', key: 'cyc', label: 'Storm swirl', min: 0, max: 2, step: 0.01, fmt: fmtN(2) },
+    { t: 'slider', key: 'city', label: 'City lights', min: 0, max: 1.5, step: 0.01, fmt: (v) => Math.round(v * 100) + '%' },
+    { t: 'slider', key: 'bolt', label: 'Lightning', min: 0, max: 1, step: 0.01, fmt: (v) => Math.round(v * 100) + '%', off: () => RM, offWhy: 'Off while your system asks for reduced motion' },
+    { t: 'slider', key: 'heat', label: 'Hot crust', min: 0, max: 1, step: 0.01, fmt: (v) => Math.round(v * 100) + '%' },
+    { t: 'slider', key: 'molten', label: 'Magma ocean', min: 0, max: 1, step: 0.01, fmt: (v) => Math.round(v * 100) + '%' },
+    { t: 'slider', key: 'steam', label: 'Steam', min: 0, max: 1, step: 0.01, fmt: (v) => Math.round(v * 100) + '%' },
+    { t: 'text', label: 'World seed', get: () => S.word, set: setWord, hint: 'Type any word (16 letters at most) and press Apply. Same word, same planet: continents and storms come from this seed.' },
+  ] },
+  { id: 'atm', title: 'Atmosphere & Sun', icon: ICON.sky, items: [
+    { t: 'chips', key: 'atm', group: 'Atmosphere', options: Object.entries(ATM).map(([k, v]) => [k, v.name]) },
+    { t: 'slider', key: 'dens', label: 'Air density', min: 0, max: 3, step: 0.01, fmt: (v) => v.toFixed(2) + '×', off: () => S.atm === 'none', offWhy: 'Airless has no atmosphere to thicken' },
+    { t: 'slider', key: 'scaleH', label: 'Atmosphere depth', min: 0.3, max: 3, step: 0.01, fmt: (v) => v.toFixed(2) + '×', off: () => S.atm === 'none', offWhy: 'Airless has no atmosphere to deepen' },
+    { t: 'slider', key: 'sunEV', label: 'Sun brightness', min: -4, max: 3, step: 0.05, fmt: fmtEV },
+    { t: 'slider', key: 'stars', label: 'Starfield', min: 0, max: 2, step: 0.01, fmt: (v) => Math.round(v * 100) + '%' },
+    { t: 'hint', text: 'Rayleigh and Mie scattering plus ozone absorption are integrated along each view ray, so the blue limb, red sunsets and the green or violet skies all fall out of the same model.' },
+  ] },
+  { id: 'inside', title: 'Inside the Earth', icon: ICON.inside, items: [
+    { t: 'toggle', key: 'cut', label: 'Cutaway' },
+    { t: 'slider', key: 'cutW', label: 'Wedge angle', min: 20, max: 180, step: 1, fmt: fmtDeg(0), off: () => !S.cut, offWhy: 'Turn on Cutaway to use this' },
+    { t: 'toggle', key: 'cutFace', label: 'Wedge faces the camera', off: () => !S.cut, offWhy: 'Turn on Cutaway to use this' },
+    { t: 'slider', key: 'cutRot', label: 'Turn the wedge', min: -180, max: 180, step: 1, fmt: fmtDeg(0), off: () => !S.cut, offWhy: 'Turn on Cutaway to use this' },
+    { t: 'toggle', key: 'cutOct', label: 'Top-half wedge (3 faces)', off: () => !S.cut, offWhy: 'Turn on Cutaway to use this' },
+    { t: 'slider', key: 'cutGlow', label: 'Core glow', min: 0, max: 2.5, step: 0.01, fmt: fmtN(2), off: () => !S.cut, offWhy: 'Turn on Cutaway to use this' },
+    { t: 'title', label: 'Depth below the surface · density' },
+    { t: 'legend', items: [['#a9805a', 'Crust', 'to 35 km deep (drawn ~3× thick)'], ['#c4733c', 'Mantle', 'to 2,891 km · 3.4–5.6 g/cm³'], ['#ffa23a', 'Outer core (liquid)', 'to 5,150 km · 9.9–12.2 g/cm³'], ['#fff0b8', 'Inner core (solid)', 'to 6,371 km · 12.8–13.1 g/cm³']] },
+  ] },
+  { id: 'mag', title: 'Magnetosphere & aurora', icon: ICON.mag, items: [
+    { t: 'toggle', key: 'field', label: 'Dipole field lines', hint: 'Lines follow r = L·sin²θ around a tilted dipole; the pulses are drifting plasma.' },
+    { t: 'slider', key: 'dip', label: 'Dipole tilt', min: 0, max: 90, step: 0.5, fmt: fmtDeg(1) },
+    { t: 'slider', key: 'aurora', label: 'Aurora', min: 0, max: 1.5, step: 0.01, fmt: fmtN(2) },
+    { t: 'slider', key: 'kp', label: 'Geomagnetic storm (Kp)', min: 0, max: 9, step: 0.1, fmt: (v) => 'Kp ' + v.toFixed(1), hint: 'Stronger storms push the aurora oval toward the equator.' },
+    { t: 'toggle', key: 'shells', label: 'Magnetopause & bow shock' },
+    { t: 'buttons', items: [{ label: 'Flip the poles', cls: 'warm', fn: () => { cam.flipT = cam.flipT ? 0 : 1; toast(cam.flipT ? 'Polarity reversing…' : 'Polarity restoring…'); } }] },
+  ] },
+  { id: 'look', title: 'Camera & look', icon: ICON.look, items: [
+    { t: 'chips', label: 'Focus', options: [['earth', 'Earth'], ['moon', 'Moon'], ['both', 'Earth + Moon']], get: () => S.focus, set: (f) => setFocus(f) },
+    { t: 'chips', label: 'Camera frame', key: 'frame', options: [['sun', 'Sun-locked'], ['spin', 'Rotates with Earth'], ['space', 'Fixed stars']], hint: 'Sun-locked keeps the lit side facing you while the planet spins beneath.' },
+    { t: 'toggle', key: 'autoOrbit', label: 'Slow auto-orbit' },
+    { t: 'slider', key: 'fov', label: 'Field of view', min: 12, max: 90, step: 1, fmt: fmtDeg(0) },
+    { t: 'slider', key: 'exposure', label: 'Exposure', min: -3, max: 3, step: 0.05, fmt: fmtEV },
+    { t: 'slider', key: 'bloom', label: 'Bloom', min: 0, max: 2, step: 0.01, fmt: fmtN(2) },
+    { t: 'slider', key: 'vignette', label: 'Vignette', min: 0, max: 1, step: 0.01, fmt: fmtN(2) },
+    { t: 'slider', key: 'grain', label: 'Film grain', min: 0, max: 0.1, step: 0.001, fmt: fmtN(3), off: () => RM, offWhy: 'Off while your system asks for reduced motion' },
+    { t: 'chips', label: 'Quality', key: 'quality', options: [['low', 'Low'], ['med', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']], after: () => { S.resScale = 1; resizeGPU(true); }, hint: () => GPU.ready ? `Rendering <b>${GPU.W}×${GPU.H}</b> · ${Math.round(1 / Math.max(GPU.ema, 1e-3))} fps${S.auto ? ' · auto-scaling' : ''}` : 'Rendering starts once the planet is built.' },
+    { t: 'toggle', key: 'auto', label: 'Auto-adjust resolution to keep it smooth', after: () => { S.resScale = 1; resizeGPU(true); } },
+    { t: 'buttons', items: [{ label: 'Reset everything', fn: () => {
+      stopTour(); clearPins(); S.shower = false; if (tool !== 'none') setTool(tool);
+      setSound(false);
+      S.autoOrbit = false; S.quality = 'high'; S.auto = false; S.resScale = 1; resizeGPU(true);
+      resetScene(); document.body.classList.remove('ui-hidden');
+      toast('Everything reset');
+    } }] },
+  ] },
+];
+
+function buildPanel() {
+  const root = $('#panelBody');
+  for (const sec of SECTIONS) {
+    const d = el('details'); d.open = !!sec.open; d.id = 'sec-' + sec.id;
+    const s = el('summary'); s.innerHTML = `<span class="ic">${sec.icon}</span><span>${sec.title}</span>${ICON.chev}`;
+    const body = el('div', 'body');
+    for (const it of sec.items) body.append(build(it));
+    d.append(s, body); root.append(d);
+    // opening a section that hangs off the bottom scrolls it into view, so the click never looks dead
+    s.addEventListener('click', () => setTimeout(() => {
+      if (!d.open) return;
+      const r = d.getBoundingClientRect(), cr = root.getBoundingClientRect();
+      const dy = Math.min(r.bottom - cr.bottom + 8, r.top - cr.top - 4);
+      if (dy > 0) root.scrollBy({ top: dy, behavior: RM ? 'auto' : 'smooth' });
+    }, 0));
+  }
+  refreshAll();
+}
+
+// ---- dock ----------------------------------------------------------------
+function syncDock() {
+  $('#icPlay').innerHTML = S.playing ? ICON.pause : ICON.play;
+  $('#bPlay').setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
+  $('#bPlay').title = S.playing ? 'Pause (Space)' : 'Play (Space)';
+  $('#bRev').setAttribute('aria-pressed', String(S.rev));
+  $('#spd').value = S.speedIdx; $('#spd').style.setProperty('--p', (S.speedIdx / +$('#spd').max * 100) + '%');
+  $('#spd').setAttribute('aria-valuetext', SPEEDS[S.speedIdx].l);
+  $('#spdOut').textContent = (S.rev ? '◀ ' : '') + SPEEDS[S.speedIdx].l;
+}
+let setPanelFn = null;
+function buildDock() {
+  $('#bPlay').addEventListener('click', () => { S.playing = !S.playing; syncDock(); });
+  $('#bRev').addEventListener('click', () => { S.rev = !S.rev; S.playing = true; syncDock(); });
+  if (RM) $('#spd').max = 5;                  // reduced motion: nothing faster than a day per second
+  $('#spd').addEventListener('input', (e) => {
+    const before = S.speedIdx; S.speedIdx = +e.target.value; syncDock();
+    if (before < 6 && S.speedIdx >= 6) toast('Very fast time-lapse: the surface will flicker. Space pauses; slide left to calm it.', 5500);
+  });
+  $('#bNow').addEventListener('click', () => { S.jd = jdOfDate(new Date()); snapTime(true, 0, false); syncDock(); toast('Real time, right now. Slide the speed right to move faster.'); });
+  const w = $('#when');
+  w.value = dateOfJd(S.jd).toISOString().slice(0, 16);   // never show an empty field before the first tick
+  // datetime-local fires `change` as each segment completes, so apply quietly and leave focus alone
+  // typing a year fires `change` per keystroke (0002, 0020, 0203 …): wait for a pause and ignore out-of-range values
+  let whenT = 0;
+  w.addEventListener('change', () => {
+    stopTour();                               // typing a date is taking over, like any other control
+    clearTimeout(whenT);
+    const val = w.value, valid = w.checkValidity();
+    w._pending = true;                                  // the HUD must not overwrite the field while the pause runs
+    whenT = setTimeout(() => {
+      w._pending = false;
+      if (!valid) return;
+      const m = /^(\d{4,6})-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d))?$/.exec(val);
+      if (!m) return;
+      const d = new Date(Date.UTC(2000, +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)));
+      d.setUTCFullYear(+m[1]);
+      if (!isNaN(d.getTime())) S.jd = jdOfDate(d);
+    }, 600);
+  });
+  w.addEventListener('keydown', (e) => { if (e.key === 'Enter') w.blur(); });
+  // an incomplete or out-of-range date is never applied: say so when the person leaves the field, since it then snaps back
+  let wDirty = false;
+  w.addEventListener('input', () => { wDirty = true; });
+  w.addEventListener('change', () => { wDirty = true; });
+  w.addEventListener('blur', () => {
+    if (!wDirty) return;
+    wDirty = false;
+    if (w.value === '') toast('That date was incomplete, so the previous one stays');
+    else if (!w.checkValidity()) toast('Dates run from year 0100 to 9999 (UTC). The previous date stays.');
+  });
+  $('#bPin').addEventListener('click', () => setTool('pin'));
+  $('#bStrike').addEventListener('click', () => setTool('strike'));
+  const setPanel = (on) => {
+    document.body.classList.toggle('panel-on', on);
+    $('#panelBtn').setAttribute('aria-expanded', String(on));
+    (on ? $('#panelClose') : $('#panelBtn')).focus();          // keep keyboard focus somewhere sensible
+  };
+  setPanelFn = setPanel;
+  $('#panelBtn').setAttribute('aria-expanded', String(document.body.classList.contains('panel-on')));
+  $('#panelBtn').addEventListener('click', () => setPanel(!document.body.classList.contains('panel-on')));
+  $('#panelClose').addEventListener('click', () => setPanel(false));
+  // touching any control (except the tour's own switch) hands control back from the tour
+  const pb = $('#panel');
+  const takeOver = (e) => { if (e.target.closest && !e.target.closest('[data-tour],#panelClose')) stopTour(); };   // closing the panel to watch is not taking over
+  const ACT = [' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'];
+  const act = (e) => { if (ACT.includes(e.key)) takeOver(e); };     // keys that operate a control; hotkeys and Tab leave the tour alone
+  pb.addEventListener('pointerdown', takeOver, true);
+  pb.addEventListener('keydown', act, true);
+  $('#dock').addEventListener('pointerdown', takeOver, true);
+  $('#dock').addEventListener('keydown', act, true);
+  // a mouse click leaves focus on the button it pressed, so Space would press it again: hand focus back to the page
+  for (const box of [pb, $('#dock'), $('#panelBtn')]) box.addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    setTimeout(() => { const a = document.activeElement; if (a && a.matches && a.matches('button,summary,input[type=checkbox]')) a.blur(); }, 0);
+  });
+  syncDock();
+}
+
+// ---- tools: pins & asteroids ---------------------------------------------------
+let tool = 'none';
+function setTool(t) {
+  tool = (t === tool) ? 'none' : t;
+  $('#bPin').setAttribute('aria-pressed', String(tool === 'pin'));
+  $('#bStrike').setAttribute('aria-pressed', String(tool === 'strike'));
+  $('#c').classList.toggle('armed', tool !== 'none');
+  if (tool !== 'none') $('#c').focus({ preventScroll: true });       // so Enter (the keyboard route) lands on the globe, not back on the button
+  const tap = window.matchMedia && matchMedia('(pointer:coarse)').matches ? 'Tap' : 'Click';
+  if (tool === 'pin') toast(tap + ' the planet to drop a pin' + (tap === 'Click' ? ' (or press Enter for the centre)' : ''));
+  else if (tool === 'strike') toast(tap + ' the planet to hurl an asteroid' + (tap === 'Click' ? ' (or press Enter for the centre)' : ''));
+}
+// one place where an armed tool lands, for pointer and keyboard alike
+function useTool(px, py, w, h) {
+  if (tool === 'strike') { if (!strike(px, py, w, h)) toast('Aim at the planet'); return; }
+  const hit = pickEarth(px, py, w, h);
+  if (!hit) toast('Aim at the planet');
+  else if (S.cut && inWedge(hit.q)) toast('That part is cut away');
+  else addPin(hit.q);
+}
+function strike(px, py, w, h) {
+  const ok = launchAsteroid(px, py, w, h);
+  if (ok) sndImpact(0.65);
+  return ok;
+}
+
+const MAX_PINS = 6;
+const pins = [];
+function surfaceInfo(q) {                       // q: planet-frame sphere normal
+  const lon = Math.atan2(-q[2], q[0]) / DEG;
+  const lat = Math.atan2(q[1] / D.c, Math.hypot(q[0], q[2])) / DEG;
+  const sq = worldToPlanet(D.sun.dir, D.era);
+  const elev = Math.asin(clamp(v3.dot(v3.norm([q[0], q[1] / D.c, q[2]]), sq), -1, 1)) / DEG;
+  let lst = 12 + ((lon - D.subLon + 540) % 360 - 180) / 15; lst = ((lst % 24) + 24) % 24;
+  const hh = Math.floor(lst), mm = Math.floor((lst - hh) * 60);
+  return { lat, lon, elev, time: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` };
+}
+function addPin(q) {
+  if (pins.length >= MAX_PINS) { removePin(pins[0]); toast('Six pins at most — the oldest was removed'); }
+  const root = el('div', 'pin off');
+  const dot = el('span', 'pdot');
+  const tag = el('div', 'ptag');
+  const txt = el('span', 'ptxt');
+  const x = el('button', 'px', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Remove pin');
+  tag.append(txt, x); root.append(dot, tag);
+  const p = { q: q.slice(), root, tag, txt, x, dot, vis: false, mode: '', tw: 230, off: 14, below: false };
+  x.addEventListener('click', () => { removePin(p); $('#c').focus({ preventScroll: true }); });   // the button is gone: keep focus on the globe
+  $('#pins').append(root); pins.push(p);
+  updatePins(true);
+}
+function removePin(p) { const i = pins.indexOf(p); if (i >= 0) pins.splice(i, 1); p.root.remove(); }
+function clearPins() { while (pins.length) removePin(pins[0]); }
+function inWedge(q) {
+  const a = UMAP.uCutN1.off, b = UMAP.uCutN2.off;
+  const d1 = UF[a] * q[0] + UF[a + 1] * q[1] + UF[a + 2] * q[2];
+  const d2 = UF[b] * q[0] + UF[b + 1] * q[1] + UF[b + 2] * q[2];
+  return d1 > 0 && d2 > 0 && (!S.cutOct || q[1] > 0);
+}
+function updatePins(withText) {
+  if (!pins.length || !D.cam || !D.sun) return;
+  const C = D.cam, cv = $('#c'), cw = cv.clientWidth, ch = cv.clientHeight, asp = GPU.W / GPU.H, tanV = D.tanV;
+  const bc = document.body.classList, rightGap = bc.contains('panel-on') && !bc.contains('ui-hidden') && window.innerWidth > 860 ? 352 : 0;
+  for (const p of pins) {
+    const n = planetToWorld(p.q, D.era);
+    const pw = [n[0], n[1] * D.c, n[2]];
+    const nrm = v3.norm([n[0], n[1] / D.c, n[2]]);
+    const v = v3.sub(pw, C.pos);
+    const z = v3.dot(v, C.F);
+    let vis = z > 0.05 && v3.dot(nrm, v) < 0 && !(S.cut && inWedge(p.q));
+    let sx = 0, sy = 0;
+    if (vis) {
+      const nx = v3.dot(v, C.R) / (z * tanV * asp), ny = v3.dot(v, C.U) / (z * tanV);
+      sx = ((nx - (D.offX || 0)) * 0.5 + 0.5) * cw; sy = (0.5 - ny * 0.5) * ch;
+      if (sx < -20 || sx > cw + 20 || sy < -20 || sy > ch + 20) vis = false;
+    }
+    if (vis !== p.vis) {
+      p.root.classList.toggle('off', !vis); p.vis = vis;
+      if (!vis && p.root.contains(document.activeElement)) cv.focus({ preventScroll: true });   // a hidden pin must not keep keyboard focus
+    }
+    if (vis) {
+      p.root.style.transform = `translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px)`;
+      // the label sits right of its dot; left of it where that would run under the panel or off the screen;
+      // where neither side has room (a phone), it drops below the dot and slides to stay fully on screen
+      const lo = 6, hi = cw - rightGap - 6;
+      let at = sx + 14, below = false;
+      if (at + p.tw > hi) { at = sx - 14 - p.tw; if (at < lo || at + p.tw > hi) { at = Math.min(Math.max(sx - p.tw / 2, lo), Math.max(lo, hi - p.tw)); below = true; } }
+      const off = Math.round(at - sx);
+      if (off !== p.off) { p.tag.style.left = off + 'px'; p.off = off; }
+      if (below !== p.below) { p.tag.style.top = below ? '14px' : ''; p.below = below; }
+    }
+    if (withText) {
+      const i = surfaceInfo(p.q);
+      const mode = i.elev > 0 ? 'day' : i.elev > -6 ? 'dusk' : 'night';
+      const label = `${compass(i.lat, 'N', 'S')} ${compass(i.lon, 'E', 'W')} · solar ${i.time} · ${mode === 'day' ? 'day' : mode === 'dusk' ? 'twilight' : 'night'}`;
+      if (p.txt.textContent !== label) { p.txt.textContent = label; p.x.setAttribute('aria-label', 'Remove pin at ' + label); p.tw = p.tag.offsetWidth || p.tw; }
+      if (p.mode !== mode) { p.root.classList.toggle('n', mode === 'night'); p.root.classList.toggle('d', mode === 'dusk'); p.mode = mode; }
+    }
+  }
+}
+
+// ---- play: tour, shower, surprise, sound -----------------------------------------
+const TOUR = ['Blue Marble', 'Crescent', 'Night lights', 'Hadean', 'Snowball', 'Inside', 'Magnetic storm', 'Solar eclipse'];
+const tour = { on: false, i: -1, t: 0 };
+const presetIdx = (n) => PRESETS.findIndex((p) => p[0] === n);
+function tourStep() {
+  tour.i = (tour.i + 1) % TOUR.length;
+  const name = TOUR[tour.i];
+  toast(name, 3200);
+  PRESETS[presetIdx(name)][1]();
+  refreshAll(); syncDock();
+  tour.t = 0;
+}
+function setTour(on) {
+  tour.on = !!on;
+  if (tour.on) { tour.i = -1; if (tool !== 'none') setTool(tool); tourStep(); }
+  refreshAll();
+}
+function stopTour() { if (tour.on) { tour.on = false; refreshAll(); } }
+function tickTour(dt) {
+  if (!tour.on) return;
+  tour.t += dt;
+  cam.yaw += dt * 0.045;
+  if (tour.t > 17) tourStep();
+}
+let showerT = 0;
+function tickShower(dt) {
+  if (!S.shower) return;
+  showerT -= dt;
+  if (showerT > 0) return;
+  showerT = 1.5 + Math.random() * 1.6;
+  const cv = $('#c'), w = cv.clientWidth, h = cv.clientHeight;
+  for (let i = 0; i < 14; i++) {
+    if (strike(w * (0.12 + 0.76 * Math.random()), h * (0.12 + 0.76 * Math.random()), w, h)) return;
+  }
+}
+function surprise() {
+  const r = Math.random, pick = (a) => a[Math.floor(r() * a.length)];
+  const life = r() < 0.8 ? 0.3 + 0.7 * r() : 0;
+  resetScene({
+    atm: pick(['earth', 'earth', 'earth', 'dust', 'haze', 'green', 'violet']),
+    tilt: r() < 0.3 ? 40 + 50 * r() : 4 + 36 * r(),
+    water: 0.3 + 0.7 * r(), ice: 0.65 * r() * r(), life, cover: 0.12 + 0.6 * r(),
+    cyc: 0.5 + 1.3 * r(), city: life > 0.7 ? 1.4 * r() : 0, dens: 0.75 + 0.7 * r(),
+  }, { yaw: r() * TAU, pitch: -0.25 + 0.6 * r() });
+  setDay(6 + 30 * r());
+  const w = randomWord(); setWord(w);
+  refreshAll();
+  toast(`A new world: “${w}”`);
+}
+function setSound(on) {
+  if (on && !sndSet(true)) { S.sound = false; toast('Sound isn’t available here'); refreshAll(); return; }
+  if (!on) sndSet(false);
+  S.sound = !!on;
+}
+
+// ---- HUD -------------------------------------------------------------------
+const compass = (v, p, n) => `${Math.abs(v).toFixed(1)}°${v >= 0 ? p : n}`;
+let hudN = 0;
+function updateHUD() {
+  if (!D.sun) return;
+  const ro = $('#readout');
+  const rows = [
+    ['Date', fmtUTC(S.jd).replace('  ', ' ')],
+    ['Sun overhead', `${compass(D.subLat, 'N', 'S')} ${compass(D.subLon, 'E', 'W')}`, 'hi'],
+    ['Rotation', `${hoursStr(S.dayH)} · ${S.retro ? 'retrograde' : 'prograde'}`],
+    ['Shape', D.fEff > 1e-5 ? `flattening 1/${(1 / D.fEff).toFixed(0)}${S.squash !== 1 ? ` (×${S.squash.toFixed(1)} drawn)` : ''}` : 'sphere'],
+    ['Orbit', `${D.sun.r.toFixed(3)} AU · ${D.orbV.toFixed(1)} km/s`],
+    ['Moon', S.moonOn ? `${D.ph.name} · ${(D.ph.frac * 100).toFixed(0)}% lit` : 'off'],
+  ];
+  // the list is built once; a tick only rewrites the values that changed, so assistive tech sees no churn
+  if (!ro._dd) { ro.innerHTML = rows.map(([k, , c]) => `<dt>${k}</dt><dd${c ? ` class="${c}"` : ''}></dd>`).join(''); ro._dd = ro.querySelectorAll('dd'); }
+  rows.forEach(([, v], i) => { const dd = ro._dd[i]; if (dd._v !== v) { dd.textContent = v; dd._v = v; } });
+  const w = $('#when');
+  if (document.activeElement !== w && !w._pending) {
+    const dd = dateOfJd(S.jd), iso = isNaN(dd.getTime()) ? '' : dd.toISOString().slice(0, 16);
+    // years outside 0000–9999 come back as "+010000-…", which the field rejects: leave it blank instead of retrying every tick
+    if (/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(iso)) { if (w.value !== iso) w.value = iso; } else if (w.value) w.value = '';
+  }
+  if (hudN++ % 4 === 0) for (const f of hintRefs) f();
+  updatePins(true);
+}
+let hoverXY = null;
+function updateProbe() {
+  const pr = $('#probe');
+  if (!hoverXY) { pr.style.display = 'none'; return; }
+  const cv = $('#c');
+  const hit = pickEarth(hoverXY.x, hoverXY.y, cv.clientWidth, cv.clientHeight);
+  if (!hit) { pr.style.display = 'none'; return; }
+  const i = surfaceInfo(hit.q);
+  pr.innerHTML = `<i>lat</i> ${compass(i.lat, 'N', 'S')}  <i>lon</i> ${compass(i.lon, 'E', 'W')}<br><i>solar time</i> ${i.time}  <i>sun</i> ${i.elev >= 0 ? '+' : ''}${i.elev.toFixed(0)}°`;
+  pr.style.display = 'block';
+  pr.style.left = hoverXY.cx + 'px'; pr.style.top = hoverXY.cy + 'px';
+}
+
+// ---- pointer / keyboard -------------------------------------------------------
+function buildInput() {
+  const cv = $('#c');
+  const ptrs = new Map();
+  let pinch = 0, moved = 0, downAt = 0, lastMoveT = 0;
+  cam.vYaw = 0; cam.vPitch = 0; cam.hold = false;
+  cv.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;     // only the primary button orbits
+    cv.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 1) { moved = 0; downAt = performance.now(); }
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+    cam.hold = true; cam.vYaw = 0; cam.vPitch = 0;
+    cv.classList.add('drag'); stopTour();
+  });
+  cv.addEventListener('pointermove', (e) => {
+    const rect = cv.getBoundingClientRect();
+    hoverXY = { x: e.clientX - rect.left, y: e.clientY - rect.top, cx: e.clientX, cy: e.clientY };
+    if (!ptrs.has(e.pointerId)) return;
+    if (e.pointerType === 'mouse' && e.buttons === 0) { up({ pointerId: e.pointerId, type: 'pointercancel' }); return; }   // missed the release (context menu, alt-tab)
+    const p = ptrs.get(e.pointerId);
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (ptrs.size === 1) {
+      moved += Math.abs(dx) + Math.abs(dy);
+      const k = 0.0052 * Math.min(1.6, Math.sqrt(Math.max(0.35, cam.dist - 0.6)) / 1.2) * (S.fov / 40);
+      cam.yaw -= dx * k; cam.pitch = clamp(cam.pitch + dy * k, -1.5, 1.5);
+      const now = performance.now(), dts = Math.max(0.008, (now - lastMoveT) / 1000); lastMoveT = now;
+      cam.vYaw = cam.vYaw * 0.5 + (-dx * k / dts) * 0.5; cam.vPitch = cam.vPitch * 0.5 + (dy * k / dts) * 0.5;
+    } else if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch > 0 && d > 0) zoomBy(pinch / d);
+      pinch = d; moved += 10;
+    }
+  });
+  const up = (e) => {
+    const was = ptrs.has(e.pointerId);
+    ptrs.delete(e.pointerId);
+    if (ptrs.size < 2) pinch = 0;
+    if (ptrs.size === 0) {
+      cv.classList.remove('drag'); cam.hold = false;
+      const flick = !RM && e.type === 'pointerup' && moved >= 6 && performance.now() - lastMoveT < 90;
+      if (flick) { cam.vYaw = clamp(cam.vYaw, -2.6, 2.6); cam.vPitch = clamp(cam.vPitch, -1.2, 1.2); } else { cam.vYaw = 0; cam.vPitch = 0; }
+    }
+    if (was && e.type === 'pointerup' && moved < 6 && performance.now() - downAt < 450 && tool !== 'none') {
+      const rect = cv.getBoundingClientRect();
+      useTool(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+    }
+  };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('pointerleave', () => { hoverXY = null; });
+  cv.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;   // lines / pages / pixels
+    zoomBy(Math.exp(clamp(dy, -240, 240) * 0.0014));
+  }, { passive: false });
+  window.addEventListener('blur', () => { ptrs.clear(); pinch = 0; cam.hold = false; cv.classList.remove('drag'); kHeld.clear(); kTap.clear(); });
+  cv.addEventListener('dblclick', () => {
+    if (tool !== 'none') return;
+    cam.yaw = 0.62; cam.pitch = 0.26; cam.vYaw = 0; cam.vPitch = 0; setFocus(S.focus); toast('View reset');
+  });
+  window.addEventListener('keydown', (e) => {
+    if (window.__bootError) return;                                   // nothing is on screen: keys have no business doing anything
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'Escape') {                                         // works wherever focus is
+      if (tool !== 'none') setTool(tool);
+      else if (window.innerWidth <= 860 && document.body.classList.contains('panel-on') && setPanelFn) setPanelFn(false);
+      return;
+    }
+    const tg = e.target, tn = tg && tg.tagName;
+    const typing = tn === 'TEXTAREA' || tn === 'SELECT' || (tn === 'INPUT' && tg.type !== 'range' && tg.type !== 'checkbox');
+    if (typing) return;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const arrow = k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown';
+    if (arrow && ((tn === 'INPUT' && tg.type === 'range') || (tg.closest && tg.closest('#panel')))) return;   // sliders and the scrolling panel keep their own arrow keys
+    if (e.shiftKey && (k === 'ArrowLeft' || k === 'ArrowRight')) { stopTour(); S.jd += k === 'ArrowRight' ? 1 : -1; e.preventDefault(); return; }
+    if (arrow) { kHeld.add(k); kTap.add(k); stopTour(); e.preventDefault(); return; }       // held keys orbit, see keyOrbit()
+    // Single-character shortcuts only act when the globe (or the bare page) has focus: a focused button or switch keeps its own keys
+    const free = !tg || tg === document.body || tg === document.documentElement || tn === 'CANVAS' || (tn === 'INPUT' && tg.type === 'range');   // a slider keeps its arrows, Home/End and Page keys; none of the keys below are its own
+    if (!free) return;
+    if (k === '+' || k === '=' || k === '-' || k === '_') { zoomBy(k === '+' || k === '=' ? 0.88 : 1 / 0.88); e.preventDefault(); return; }
+    if (e.repeat) return;
+    if (tool !== 'none' && tn === 'CANVAS' && (k === 'Enter' || k === ' ')) {      // keyboard route for the pin and asteroid tools: aim at the centre of the globe
+      e.preventDefault();
+      const cv = $('#c'), w = cv.clientWidth, h = cv.clientHeight;
+      useTool((0.5 - 0.5 * (D.offX || 0)) * w, h / 2, w, h);
+      return;
+    }
+    if (k === ' ') { e.preventDefault(); S.playing = !S.playing; syncDock(); }
+    else if (k === 'h') {
+      const hid = document.body.classList.toggle('ui-hidden');
+      if (hid) { toast('Interface hidden — press H to bring it back', 3500); if (document.activeElement && document.activeElement !== cv) cv.focus({ preventScroll: true }); }
+    }
+    else if (k === 'a') setTool('strike');
+    else if (k === 'p') setTool('pin');
+    else if (k === 't') { setTour(!tour.on); toast(tour.on ? 'Cinematic tour on' : 'Tour stopped'); }
+    else if (k === 'r') { stopTour(); surprise(); }
+    else if (k === 'm') { const want = !S.sound; setSound(want); refreshAll(); if (S.sound === want) toast(want ? 'Sound on' : 'Sound off'); }
+  });
+  window.addEventListener('keyup', (e) => { kHeld.delete(e.key); });
+}
+// Arrow keys held down glide the camera; read once per frame by updateCamera.
+// A tap shorter than one frame still counts for that frame, so slow machines don't swallow it.
+const kHeld = new Set(), kTap = new Set();
+function keyOrbit() {
+  if (!kHeld.size && !kTap.size) return null;
+  const on = (k) => kHeld.has(k) || kTap.has(k);
+  const v = [(on('ArrowRight') ? 1 : 0) - (on('ArrowLeft') ? 1 : 0), (on('ArrowUp') ? 1 : 0) - (on('ArrowDown') ? 1 : 0)];
+  kTap.clear();
+  return v;
+}
+function zoomBy(f) {
+  stopTour();
+  const min = FOCUS_MIN[S.focus] || 1.12, max = S.focus === 'earth' ? 60 : S.focus === 'moon' ? 80 : 400;
+  cam.distT = clamp(cam.distT * f, min, max);
+}
+
+;
+// ---------------------------------------------------------------------------
+//  Boot + main loop
+// ---------------------------------------------------------------------------
+cam.off = [0, 0, 0];
+const canvasEl = document.getElementById('c');
+
+function showFallback(e) {
+  window.__bootError = String(e && e.message || e);
+  const f = document.getElementById('fallback');
+  f.style.display = 'grid';
+  const det = document.getElementById('fbDetail'), $f = (id) => document.getElementById(id);
+  if (e && e.nogpu) det.style.display = 'none';
+  else {
+    // WebGPU exists but the planet could not start (shader build failed, device lost, an error on startup)
+    $f('fbTitle').textContent = e && e.lost ? 'The GPU connection was lost' : 'The planet couldn’t start here';
+    $f('fbP1').textContent = e && e.lost
+      ? 'The graphics driver reset or the device went to sleep. Reloading usually brings the planet back.'
+      : 'Your browser has WebGPU, but building the planet failed on this device. Try reloading, or update your browser and graphics drivers. The details below help if you report it.';
+    $f('fbP2').style.display = 'none';
+    det.textContent = String(e && e.message || e).slice(0, 900);
+  }
+  $f('fbReload').onclick = () => { try { location.reload(); } catch (_) { /* a sandboxed frame may refuse; the text above says what to do */ } };
+  for (const id of ['hud', 'panel', 'dock', 'panelBtn', 'probe', 'toast', 'boot', 'pins']) { const n = document.getElementById(id); if (n) n.style.display = 'none'; }
+  document.getElementById('c').style.display = 'none';
+  try { sndSet(false); } catch (_) { /* no audio running */ }      // the sound switch is hidden now, so stop the drone
+  $f('fbReload').focus({ preventScroll: true });
+  console.error('Earth: startup failed:', window.__bootError);
+}
+
+function updateCamera(dt) {
+  // follow target without lag: the offset (left over from a focus change) decays away
+  const k = Math.exp(-dt * 5);
+  cam.off = v3.mul(cam.off, k);
+  const want = desiredTarget();
+  cam.tgt = v3.add(want, cam.off);
+  const mn = FOCUS_MIN[S.focus] || 1.12;
+  cam.distT = Math.max(mn, cam.distT);
+  const a = 1 - Math.exp(-dt * 9);
+  cam.dist = Math.exp(Math.log(cam.dist) + (Math.log(cam.distT) - Math.log(cam.dist)) * a);
+  if (S.autoOrbit) cam.yaw += dt * 0.07;
+  // sun-locked frame: follow the Sun's bearing, but never swing faster than 3 rad/s
+  // (at 90° tilt the Sun passes over the pole and its bearing flips by 180° in one frame)
+  const ef = effFrame();
+  if (cam.ef && cam.ef !== ef && cam.pf === S.frame) {
+    // the flash guard just took over from (or handed back to) "Rotates with Earth": keep looking where we were
+    const sfa = Math.atan2(-D.sun.dir[2], D.sun.dir[0]);
+    cam.yaw += ef === 'sun' ? D.era - sfa : (cam.faS != null ? cam.faS : sfa) - D.era;
+  }
+  // say why, once per choice of that frame (also when it is chosen while time is already too fast)
+  if (S.frame !== 'spin') cam.guardTold = false;
+  else if (ef === 'sun' && !cam.guardTold) { cam.guardTold = true; toast('Too fast to ride along with the surface — holding the Sun side until time slows down', 5000); }
+  cam.ef = ef; cam.pf = S.frame;
+  if (ef === 'sun') {
+    const tfa = Math.atan2(-D.sun.dir[2], D.sun.dir[0]);
+    if (cam.faS == null) cam.faS = tfa;
+    else { const d = ((tfa - cam.faS + Math.PI) % TAU + TAU) % TAU - Math.PI, mx = 3 * dt; cam.faS += clamp(d, -mx, mx); }
+  } else cam.faS = null;
+  const ko = keyOrbit();
+  if (ko) {
+    const sc = Math.min(1.6, Math.sqrt(Math.max(0.35, cam.dist - 0.6)) / 1.2) * (S.fov / 40);
+    cam.yaw += ko[0] * dt * 1.6 * sc; cam.pitch = clamp(cam.pitch + ko[1] * dt * 1.2 * sc, -1.5, 1.5);
+    cam.vYaw = 0; cam.vPitch = 0;
+  }
+  // flick inertia: the globe keeps gliding after you let go, then settles
+  if (!cam.hold && (cam.vYaw || cam.vPitch)) {
+    cam.yaw += cam.vYaw * dt; cam.pitch = clamp(cam.pitch + cam.vPitch * dt, -1.5, 1.5);
+    const f = Math.exp(-dt * 1.25);
+    cam.vYaw *= f; cam.vPitch *= f;
+    if (Math.abs(cam.vYaw) < 0.004) cam.vYaw = 0;
+    if (Math.abs(cam.vPitch) < 0.004) cam.vPitch = 0;
+  }
+  tickTour(dt); tickShower(dt);
+  const cw = canvasEl.clientWidth || 1;
+  const bc = document.body.classList;
+  const want_off = (bc.contains('panel-on') && !bc.contains('ui-hidden') && window.innerWidth > 860) ? Math.min(0.5, 352 / cw) : 0;
+  D.offX = (D.offX || 0) + (want_off - (D.offX || 0)) * (1 - Math.exp(-dt * 7));
+  // magnetic polarity reversal animation (smooth in/out)
+  const df = cam.flipT - cam.flip;
+  cam.flip += Math.sign(df) * Math.min(Math.abs(df), dt / 3.5);
+}
+
+(async function boot() {
+  const canvas = document.getElementById('c');
+  if (window.innerWidth <= 860) document.body.classList.remove('panel-on');
+  // web fonts load without blocking the first paint (system fonts cover the gap)
+  const fl = document.createElement('link'); fl.rel = 'stylesheet';
+  fl.href = 'https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap';
+  fl.referrerPolicy = 'no-referrer';
+  document.head.append(fl);
+  document.addEventListener('gpulost', (ev) => { showFallback(Object.assign(new Error(ev.detail || 'GPU connection lost'), { lost: true })); });
+  // gentle fly-in at start (none for reduced motion); set before the shaders build so a scene picked meanwhile keeps its own framing
+  cam.dist = RM ? 3.4 : 6.5; cam.distT = 3.4;
+  try {
+    buildPanel(); buildDock(); buildInput();
+    await initGPU(canvas, SRC);
+    refreshAll();
+    updateHUD();
+  } catch (e) { showFallback(e); return; }
+
+  let last = performance.now(), loopErrs = 0, nFrames = 0, slowSince = 0, slowShown = false;
+  const bootNote = document.getElementById('boot');
+  function loop(now) {
+    if (GPU.lost) return;                      // the device is gone: the fallback card says so, and there is nothing to draw
+    requestAnimationFrame(loop);               // re-arm first: one bad frame must not end the animation
+    if (now - last < 9.5) return;              // displays faster than ~100 Hz: skip alternate frames, dt keeps accumulating
+    const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+    if (window.__freeze) return;
+    try {
+      resizeGPU();                             // size first, so this frame's uniforms match its targets
+      derive(dt);
+      updateCamera(dt);
+      packUniforms();
+      updatePins(false);
+      renderGPU(nowSec());
+      autoQuality(dt);
+      window.__frames = (window.__frames || 0) + 1;
+      if (bootNote && ++nFrames === 2) bootNote.remove();
+      updateHUDTick(dt);
+      // One quiet pointer, never an automatic change: if the frame rate stays low for a few seconds, say where Quality lives
+      if (!slowShown && !S.auto && S.quality !== 'low' && nFrames > 30) {
+        if (GPU.ema > 1 / 24) { if (!slowSince) slowSince = now; else if (now - slowSince > 4000) { slowShown = true; toast(`Running at ${Math.round(1 / GPU.ema)} fps. Quality, under Camera & look, can lighten the load.`, 6500); } }
+        else slowSince = 0;
+      }
+    } catch (err) {
+      if (loopErrs++ < 5) console.error('Earth: frame failed:', err);
+      if (loopErrs === 30) toast('Something went wrong drawing the planet — try reloading', 8000);
+    }
+  }
+  let acc = 0;
+  function updateHUDTick(dt) {
+    acc += dt;
+    if (acc > 0.12) { acc = 0; updateHUD(); updateProbe(); }
+  }
+  requestAnimationFrame(loop);
+})();
+
+</script>
+</body>
+</html>
