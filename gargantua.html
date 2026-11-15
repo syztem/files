@@ -55,14 +55,13 @@ body.clean .hud{display:none!important}
 #spectrumWrap span{color:var(--ink);white-space:nowrap;padding-bottom:1px;text-shadow:0 0 3px #000,0 0 9px rgba(0,0,0,.9),0 0 18px rgba(0,0,0,.75)}
 #spectrumWrap,#spectrumWrap *{pointer-events:none}
 
-#panel{top:20px;right:22px;bottom:64px;width:320px;display:flex;flex-direction:column;gap:0;
+#panel{top:20px;right:22px;max-height:calc(100% - 84px);width:320px;display:flex;flex-direction:column;gap:0;
   background:var(--panel);border:1px solid var(--line);border-radius:2px;backdrop-filter:blur(8px)}
 #panelHead{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line)}
 #headBtns{display:flex;gap:6px}
 #panelHead .chip{flex:0 0 auto}
 #panelHead strong{font-family:var(--display);font-weight:800;font-size:18px;letter-spacing:.12em}
 #panelBody{overflow-y:auto;overscroll-behavior:contain;scroll-padding-block:6px;padding:4px 12px 12px;display:flex;flex-direction:column;gap:0;scrollbar-width:thin;scrollbar-color:rgba(236,230,216,.45) transparent}
-#panel.closed{bottom:auto}
 #panel.closed #panelBody{display:none}
 #panel.closed #panelHead{border-bottom:0}
 fieldset{border:0;margin:0;padding:10px 0 8px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -76,10 +75,11 @@ legend{font-family:var(--display);font-weight:500;font-size:14px;letter-spacing:
 #qualitySeg{display:grid;grid-template-columns:repeat(4,1fr)}
 button.chip{font:inherit;color:var(--ink);background:transparent;border:1px solid var(--edge);border-radius:2px;padding:6px 9px;cursor:pointer;flex:1 1 auto}
 @media (hover:hover){button.chip:hover:not(:disabled){border-color:var(--ember)}}
-button.chip:active:not(:disabled){transform:translateY(1px)}
+button.chip:active:not(:disabled),#soundBtn:active:not(:disabled){transform:translateY(1px)}
+@media (pointer:coarse){.kbd{display:none}}
 button.chip:disabled{opacity:.45;cursor:default}
 button.chip[aria-pressed="true"]{background:var(--ember);color:var(--void);border-color:var(--ember)}
-.check{display:flex;align-items:flex-start;gap:8px;min-height:24px;padding-top:4px;color:var(--ink);cursor:pointer}
+.check{display:flex;align-items:flex-start;gap:8px;min-height:24px;padding-top:4px;color:var(--ink);cursor:pointer;text-wrap:balance}
 .check input{accent-color:var(--ember);width:14px;height:14px;margin:1px 0 0;flex:none}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;margin:0;cursor:pointer}
 input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--edge)}
@@ -97,7 +97,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
 #fatal div:focus{outline:none}
 #fatal h2{font-family:var(--display);font-size:28px;letter-spacing:.08em;line-height:1.1;margin:0 0 8px;color:var(--ember)}
 #fatal pre:empty{display:none}
-#fatal pre{white-space:pre-wrap;color:var(--dim);margin:10px 0 0;max-height:40vh;overflow:auto}
+#fatal p{margin:14px 0 0}
+#fatal pre{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--dim);margin:10px 0 0;max-height:40vh;overflow:auto}
 #toast{position:fixed;left:50%;bottom:66px;transform:translateX(-50%);z-index:4;width:max-content;max-width:calc(100% - 32px);padding:8px 14px;text-align:center;
   background:rgba(4,5,10,.92);border:1px solid var(--edge);border-radius:2px;pointer-events:none;opacity:0;transition:opacity .25s ease}
 #toast.show{opacity:1}
@@ -111,25 +112,25 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
   #panel{left:16px;right:16px;top:auto;bottom:62px;width:auto;max-height:min(56%,calc(100% - 62px - 190px))}
   #panel.closed{top:auto;bottom:62px}
 }
-@media (max-width:760px) and (max-height:300px){
-  #title p{display:none}
-  #title h1{font-size:26px}
-  #soundBtn{margin-top:2px;padding:5px 12px 4px;font-size:16px}
-}
 @media (max-width:760px) and (max-height:640px){
   #panel{max-height:min(56%,calc(100% - 62px - 112px))}
 }
-@media (max-width:760px) and (max-height:300px){#panel{max-height:calc(100% - 62px - 84px)}}
+@media (max-width:760px) and (max-height:300px){
+  #title h1{font-size:26px}
+  #soundBtn{margin-top:2px;padding:5px 12px 4px;font-size:16px}
+  #panel{max-height:calc(100% - 62px - 84px)}
+}
 @media (max-height:420px){#title p{display:none}}
 @media (min-width:761px){body:has(#panel:not(.closed)) #boot{right:342px}}
 @media (min-width:600px) and (max-width:760px) and (max-height:420px){   /* a phone on its side: controls go to the right, like a desktop */
-  #title p{display:none}
   #panel{left:auto;right:16px;top:14px;bottom:62px;width:300px;max-height:none}
   #panel.closed{top:14px;bottom:auto}
 }
 @media (forced-colors:active){
-  button[aria-pressed="true"],#soundBtn.on{background:Highlight;color:HighlightText;border-color:Highlight;forced-color-adjust:none}
-  button[aria-pressed="true"]:focus-visible,#soundBtn.on:focus-visible{outline-color:CanvasText}
+  button.chip[aria-pressed="true"],#soundBtn.on{background:Highlight;color:HighlightText;border-color:Highlight;forced-color-adjust:none}
+  button.chip[aria-pressed="true"]:focus-visible,#soundBtn.on:focus-visible{outline-color:CanvasText}
+  #soundBtn{border:1px solid ButtonText}
+  button.chip:disabled,#soundBtn:disabled{opacity:1}
   input[type=range]::-webkit-slider-runnable-track{background:CanvasText;forced-color-adjust:none}
   input[type=range]::-moz-range-track{background:CanvasText;forced-color-adjust:none}
   input[type=range]::-webkit-slider-thumb{background:Highlight;forced-color-adjust:none}
@@ -151,7 +152,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
 </header>
 
 <aside class="hud" id="panel" aria-label="Controls">
-  <div id="panelHead"><strong>CONTROLS</strong><div id="headBtns"><button class="chip" id="resetBtn" type="button" aria-label="Reset settings, keeping camera position, render quality and volume">Reset</button><button class="chip" id="panelToggle" type="button" aria-expanded="true" aria-controls="panelBody" aria-label="Hide controls">Hide</button></div></div>
+  <div id="panelHead"><strong>CONTROLS</strong><div id="headBtns"><button class="chip" id="resetBtn" type="button" aria-label="Reset settings. Camera view, quality, frame-rate hold, HDR output and volume are kept">Reset</button><button class="chip" id="panelToggle" type="button" aria-expanded="true" aria-controls="panelBody" aria-label="Hide controls">Hide</button></div></div>
   <div id="panelBody">
     <fieldset>
       <legend>RENDER</legend>
@@ -175,7 +176,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
       <div class="row"><label for="spin">Spin a/M</label><input id="spin" type="range" min="0" max="0.998" step="0.002" value="0.6"><output id="spinO" for="spin"></output></div>
       <label class="check"><input id="shift" type="checkbox"> Doppler and gravitational shift</label>
       <div class="row"><label for="speed">Disk speed</label><input id="speed" type="range" min="0" max="12" step="0.1" value="3"><output id="speedO" for="speed"></output></div>
-      <label class="check"><input id="pause" type="checkbox"> Pause motion (Space)</label>
+      <label class="check"><input id="pause" type="checkbox"> Pause motion <span class="kbd">(Space)</span></label>
     </fieldset>
     <fieldset>
       <legend>ACCRETION DISK</legend>
@@ -205,6 +206,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
         <button class="chip" data-t="agx" type="button" aria-pressed="true">AgX punchy</button>
         <button class="chip" data-t="aces" type="button" aria-pressed="false">ACES filmic</button>
       </div>
+      <p class="hint" id="toneHint" hidden>HDR output uses its own tone curve, so these two are off.</p>
       <div class="row"><label for="expo">Exposure</label><input id="expo" type="range" min="-3" max="3" step="0.05" value="0"><output id="expoO" for="expo"></output></div>
       <div class="row"><label for="bloom">Bloom</label><input id="bloom" type="range" min="0" max="0.5" step="0.005" value="0.07"><output id="bloomO" for="bloom"></output></div>
       <div class="row"><label for="glow">Glow</label><input id="glow" type="range" min="0" max="0.5" step="0.005" value="0.06"><output id="glowO" for="glow"></output></div>
@@ -219,7 +221,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
       <div class="row"><label for="vol">Volume</label><input id="vol" type="range" min="0" max="1" step="0.01" value="0.8"><output id="volO" for="vol"></output></div>
       <div class="row"><label for="weight">Low end</label><input id="weight" type="range" min="0" max="1" step="0.01" value="0.75"><output id="weightO" for="weight"></output></div>
       <label class="check"><input id="react" type="checkbox" checked> Light pulses with the bass and impacts</label>
-      <p class="hint">Press the sound button at the top left to start. Synthesized live: sub-bass, organ pad, disk rumble, air and slow impacts. Moving closer makes it heavier.</p>
+      <p class="hint" id="soundHint">Press the sound button at the top left to start. Synthesized live: sub-bass, organ pad, disk rumble, air and slow impacts. Moving closer makes it heavier.</p>
     </fieldset>
     <p class="hint" id="keysHint">Keys: Space pauses, H hides everything, F toggles fullscreen, Esc closes this panel.</p>
   </div>
@@ -229,7 +231,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
 
 <div id="toast" role="status" aria-live="polite"></div>
 
-<div id="fatal"><div role="alert" tabindex="-1"><h2 id="fatalTitle">WEBGPU NEEDED</h2><span id="fatalMsg"></span><pre id="fatalLog"></pre></div></div>
+<div id="fatal"><div role="alert" tabindex="-1"><h2 id="fatalTitle">WEBGPU NEEDED</h2><span id="fatalMsg"></span><pre id="fatalLog"></pre><p><button class="chip" id="reloadBtn" type="button">Reload</button></p></div></div>
 
 <script type="x-shader/wgsl" id="geoWGSL">
 struct U {
@@ -485,7 +487,8 @@ fn diskDensity(x: vec3f, r: f32, hd: f32) -> f32 {
 
     var sl = stepScale * max(0.14 * (r - rh), 0.2);   // a smaller floor spends the 760 steps crawling near the horizon and paints prograde rays black
     sl *= 1.0 + clamp((r - 12.0) / 12.0, 0.0, 1.0);   // far out the field is nearly flat, so the steps can double
-    sl = max(sl, min(0.3 * (r - 8.0), select(1e9, r - rout, r >= rout)));   // and at every tier a nearly straight ray takes long steps; none can reach the gas, which ends at rout, and above the disk the limit below still applies
+    sl = max(sl, min(0.3 * (r - 8.0), select(1e9, r - rout, r >= rout)));   // and at every tier a nearly straight ray takes long steps; none can reach the gas, which ends at rout (above the disk the limit below still applies)
+    if (r < rEsc) { sl = min(sl, max(rEsc * 1.01 - r, 0.01 * rEsc)); }   // no step, long or short, lands far past the escape radius, so neighbouring rays leave from the same shell
     let hd = diskH(r);
     let nearDisk = r > rin * 0.85 && r < rout * 1.12;
     if (nearDisk) {
@@ -504,10 +507,9 @@ fn diskDensity(x: vec3f, r: f32, hd: f32) -> f32 {
 
     if (nearDisk) {
       let xm = 0.5 * (x + xn);
-      let hm = diskH(r);
-      if (abs(xm.z) < 2.6 * hm) {
+      if (abs(xm.z) < 2.6 * hd) {
         let g0 = ksLF(xm, a);
-        let dens = diskDensity(xm, g0.r, hm);
+        let dens = diskDensity(xm, g0.r, hd);
         if (dens > 0.0005) {
           var g = 1.0;
           if (u.disk.w > 0.5) {
@@ -567,7 +569,7 @@ fn safe(c: vec3f) -> vec3f {
 fn tap(uv: vec2f, o: vec2f, t: vec2f) -> vec3f { return safe(textureSampleLevel(src, smp, uv + o * t, 0.0).rgb); }
 fn kw(c: vec3f) -> f32 { return 1.0 / (1.0 + dot(c, vec3f(0.2126, 0.7152, 0.0722)) * 0.5); }
 
-// 13-tap downsample. The first level weights each 2x2 group by 1/(1+luma) so single hot pixels cannot flicker.
+// 13-tap downsample. The first level weights each 2x2 group by 1/(1 + luma/2) so single hot pixels cannot flicker.
 fn down13(uv: vec2f, first: bool) -> vec3f {
   let t = 1.0 / vec2f(textureDimensions(src));
   let a = tap(uv, vec2f(-2.0, 2.0), t); let b = tap(uv, vec2f(0.0, 2.0), t); let c = tap(uv, vec2f(2.0, 2.0), t);
@@ -715,13 +717,13 @@ fn sceneAt(uv: vec2f) -> vec3f {
 const $ = id => document.getElementById(id);
 $("boot").hidden = false;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const RM = matchMedia("(prefers-reduced-motion: reduce)"), reduceMotion = RM.matches;
 const HOVER = matchMedia("(hover:hover)");
 const SHEET = matchMedia("(max-width:599px), (max-width:760px) and (min-height:421px)");   // phone layout: the controls are a bottom sheet
 
 /* ------------------------------------------------------------------ state */
 const QUALITY = {
-  draft:  { steps: 150, stepScale: 1.6,  cap: 0.6 },
+  draft:  { steps: 150, stepScale: 1.6,  cap: 0.6, pix: 1.33e6 },   // the emergency tier stays light on a 4K screen too
   low:    { steps: 240, stepScale: 1.15, cap: 0.85 },
   medium: { steps: 400, stepScale: 0.8,  cap: 1.0 },
   high:   { steps: 760, stepScale: 0.45, cap: 1.5 },   // 1.5x supersampling, tapered so the internal image stays near 8.3 MP
@@ -729,7 +731,7 @@ const QUALITY = {
 const MAXPIX = 8.3e6;
 function capFor(Q, w, h) {
   const px = Math.max(1, (w || canvas.width) * (h || canvas.height));
-  return Math.min(Q.cap, Math.max(1, Math.sqrt(MAXPIX / px)));
+  return Math.min(Q.cap, Math.max(1, Math.sqrt(MAXPIX / px)), Math.sqrt((Q.pix || 1e12) / px));
 }
 const S = {
   a: 0.6, shift: false, speed: 3, rout: 15, temp: 4400, thick: 0.2, opac: 2.2,
@@ -739,16 +741,18 @@ const S = {
   vol: 0.8, weight: 0.75, paused: false, idle: true, drift: false, react: true,
   scale: 1, simTime: 0,
 };
+const BASE = { ...S, orbit: true };       // the full-motion defaults
 if (reduceMotion) { S.speed = 0.5; S.grain = 0; S.react = false; }
 const DEFAULTS = { ...S };   // what Reset returns to
-matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", e => {   // honour a mid-session change of the OS setting
-  if (e.matches) { S.orbit = false; S.drift = false; S.speed = Math.min(S.speed, 0.5); S.grain = 0; S.react = false; INTRO.on = false; INTRO.fade = 99; cam.dist = S.dist; cam.inc = S.inc;
+RM.addEventListener("change", e => {   // honour a mid-session change of the OS setting
+  if (e.matches) { S.orbit = false; S.drift = false; S.speed = Math.min(S.speed, 0.5); S.grain = 0; S.react = false; INTRO.on = false; INTRO.fade = 99; driftA = 0; cam.dist = S.dist; cam.inc = S.inc;
     Object.assign(DEFAULTS, { orbit: false, drift: false, speed: Math.min(DEFAULTS.speed, 0.5), grain: 0, react: false }); syncUI(); }
+  else Object.assign(DEFAULTS, { orbit: BASE.orbit, drift: BASE.drift, speed: BASE.speed, grain: BASE.grain, react: BASE.react });   // Reset offers motion again; nothing starts moving by itself
 });
 // smoothed camera actually rendered
 const INTRO = { on: !reduceMotion, fade: reduceMotion ? 99 : 0 };   // slow fly-in from far out, and a fade up from black
 const cam = { dist: INTRO.on ? 118 : S.dist, inc: INTRO.on ? 62 : S.inc, az: S.az, fov: S.fov };
-let driftT = 0, idleT = 0;
+let driftT = 0, driftA = 0, idleT = 0;   // driftA: how much of the cinematic drift is applied, 0 to 1
 
 /* ---------------------------------------------------------- Kerr numbers */
 function kerr(a) {
@@ -1008,29 +1012,33 @@ function drawSpectrum() {
 /* ---------------------------------------------------------------- fatal */
 let toastTimer = 0;
 function toast(msg, ms = 2400) {
+  const t = $("toast");
+  ms = Math.max(ms, 1500 + 60 * msg.length);   // long enough to read
+  t.textContent = msg; t.classList.add("show"); placeToast();
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.classList.remove("show"); toastTimer = setTimeout(() => { t.textContent = ""; }, 400); }, ms);   // an unseen message must not stay readable
+}
+function placeToast() {   // keep the message clear of the open controls: left of the side panel, above the sheet on a phone
   const t = $("toast"), p = $("panel");
-  t.textContent = msg; t.classList.add("show");
-  // keep the message clear of the open controls: left of the side panel, above the sheet on a phone
   const pr = !document.body.classList.contains("clean") && !p.classList.contains("closed") ? p.getBoundingClientRect() : null;
   t.style.left = t.style.bottom = t.style.maxWidth = "";
   if (pr && !SHEET.matches) { t.style.left = pr.left / 2 + "px"; t.style.maxWidth = Math.max(160, pr.left - 32) + "px"; }
   else if (pr) t.style.bottom = (innerHeight - pr.top + 8) + "px";
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.classList.remove("show"); toastTimer = setTimeout(() => { t.textContent = ""; }, 400); }, ms);   // an unseen message must not stay readable
 }
 function fatal(title, msg, log) {
   G.dead = true; Sound.kill(); $("boot").hidden = true; try { if (G.device) G.device.destroy(); } catch (e) {}
   $("fatalTitle").textContent = title; $("fatalMsg").textContent = msg; $("fatalLog").textContent = log || "";
   $("fatal").style.display = "flex";
   ["view", "title", "panel", "spectrumWrap"].forEach(id => { $(id).inert = true; });
-  $("fatal").firstElementChild.focus();
+  if (self === top || document.hasFocus()) $("fatal").firstElementChild.focus({ preventScroll: true });   // embedded in another page, do not pull its focus or scroll it
 }
+$("reloadBtn").addEventListener("click", () => location.reload());
 
 /* ---------------------------------------------------------------- WebGPU */
 const canvas = $("view");
 const G = { ready: false };
 async function initGPU() {
-  if (!navigator.gpu) { fatal("WEBGPU NEEDED", "This simulation needs WebGPU. Open it in a current Chrome or Edge, or in Safari 26 or later. If you already are, update the browser and reload."); return; }
+  if (!navigator.gpu) { fatal("WEBGPU NEEDED", !isSecureContext ? "WebGPU only works on a secure page. Open this page over https, or from localhost, then reload." : "This simulation needs WebGPU. Open it in a current Chrome or Edge, or in Safari 26 or later. On iPhone and iPad every browser needs iOS 26 or later. If you already have one of these, update it and reload."); return; }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) { fatal("NO GPU ADAPTER", "The browser supports WebGPU but found no usable graphics adapter. Turn on hardware acceleration in the browser settings, update your graphics driver, then reload."); return; }
   const feats = [];
@@ -1038,7 +1046,7 @@ async function initGPU() {
   const device = await adapter.requestDevice({ requiredFeatures: feats });
   G.device = device; G.hasTS = feats.length > 0;
   device.lost.then(info => { if (info.reason !== "destroyed" && !G.dead) fatal("GPU DEVICE LOST", "The graphics device was reset. Reload the page to start again.", info.message); });
-  device.addEventListener("uncapturederror", e => { console.error(e.error); if (!G.errShown && !G.dead) { G.errShown = true; fatal("GPU ERROR", "The renderer hit an error it could not recover from. Reload the page; if it happens again, update your graphics driver.", e.error.message); } });
+  device.addEventListener("uncapturederror", e => { console.error(e.error); if (!G.dead) { fatal("GPU ERROR", typeof GPUOutOfMemoryError !== "undefined" && e.error instanceof GPUOutOfMemoryError ? "The graphics card ran out of memory. Close other tabs or make the window smaller, then reload." : "The renderer hit an error it could not recover from. Reload the page; if it happens again, update your graphics driver.", e.error.message); } });
 
   G.headless = !!window.__noCanvas;   // test hook: composite into a texture instead of the canvas
   G.ctx = G.headless ? null : canvas.getContext("webgpu");
@@ -1107,7 +1115,7 @@ async function initGPU() {
     G.qread = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     G.qbusy = false;
   }
-  G.ready = true; G.t0 = performance.now();
+  G.ready = true;
   if (S.hdr) configureCanvas();   // HDR was ticked while the shaders compiled
   resize(true);
   requestAnimationFrame(frame);
@@ -1117,7 +1125,7 @@ function configureCanvas() {
   if (G.headless) { G.canvasFormat = fmt; return; }
   if (S.hdr) {
     try { G.ctx.configure({ device: G.device, format: "rgba16float", alphaMode: "opaque", toneMapping: { mode: "extended" } }); fmt = "rgba16float"; ok = true; }
-    catch (e) { S.hdr = false; $("hdr").checked = false; toast("HDR output is not available in this browser."); }
+    catch (e) { S.hdr = false; $("hdr").checked = false; toast("HDR output is not available in this browser."); syncUI(); }
   }
   if (!ok) G.ctx.configure({ device: G.device, format: fmt, alphaMode: "opaque" });
   G.canvasFormat = fmt; G.still = 0; G.sig = "";   // a reconfigured canvas is blank: repaint even if paused
@@ -1130,7 +1138,7 @@ function resize(force) {
   let cw = Math.max(2, Math.floor(canvas.clientWidth * dpr)), ch = Math.max(2, Math.floor(canvas.clientHeight * dpr));
   const maxT = G.device.limits.maxTextureDimension2D;
   const lim = Math.min(1, 3840 / cw, maxT / ch, Math.sqrt(2 * MAXPIX / (cw * ch)));   // never ask the device for a texture it cannot make
-  if (lim < 1) { cw = Math.floor(cw * lim); ch = Math.floor(ch * lim); }
+  if (lim < 1) { cw = Math.max(2, Math.floor(cw * lim)); ch = Math.max(2, Math.floor(ch * lim)); }
   if (!force && (canvas.width !== cw || canvas.height !== ch)) {   // let a dragged window edge settle before reallocating ~160 MB of textures
     const key = cw + "x" + ch, t = performance.now();
     if (G.rsKey !== key) { G.rsKey = key; G.rsAt = t; return; }
@@ -1181,14 +1189,15 @@ function frame(now) {
 
   // camera
   if (S.orbit && !S.paused && !drag.active) S.az += dt * 0.012;
-  const kUI = 1 - Math.exp(-dt * 7);
+  const kUI = RM.matches ? 1 : 1 - Math.exp(-dt * 7);
   let rate = 7, kdt = dt;
   if (INTRO.on) { INTRO.t = (INTRO.t || 0) + idt; rate = 1.15; kdt = idt; if (INTRO.t > 10 || (Math.abs(cam.dist - S.dist) < 0.4 && Math.abs(cam.inc - S.inc) < 0.2)) INTRO.on = false; }   // the intro runs on wall time, so a slow GPU still gets it in seconds
   INTRO.fade = Math.min(99, INTRO.fade + (INTRO.fade < 2.8 ? idt : dt));
   if (S.drift && !S.paused) driftT += dt;
-  const tgtDist = S.drift ? clamp(S.dist * (1 + 0.28 * Math.sin(driftT * 0.045)), 12, 120) : S.dist;
-  const tgtInc = S.drift ? clamp(S.inc + 11 * Math.sin(driftT * 0.031 + 1.3), 2, 178) : S.inc;
-  const k = 1 - Math.exp(-kdt * rate);
+  if (!S.paused) driftA += ((S.drift ? 1 : 0) - driftA) * (1 - Math.exp(-dt * 0.9));   // ticking the box eases the drift in over a few seconds instead of jumping the view
+  const tgtDist = clamp(S.dist * (1 + 0.28 * driftA * Math.sin(driftT * 0.045)), 12, 120);
+  const tgtInc = clamp(S.inc + 11 * driftA * Math.sin(driftT * 0.031 + 1.3), 2, 178);
+  const k = RM.matches ? 1 : 1 - Math.exp(-kdt * rate);
   cam.dist += (tgtDist - cam.dist) * k; cam.inc += (tgtInc - cam.inc) * k; cam.az += (S.az - cam.az) * k; cam.fov += (S.fov - cam.fov) * k;
   idleT += Math.min(rawMs, 1000) / 1000;   // real time, so a slow GPU does not stretch the idle delay
   const ae = document.activeElement;
@@ -1221,12 +1230,13 @@ function frame(now) {
     motion += dAng / (2 * tanF / G.ih);
   }
   prevCam = { ...cam };
-  const alpha = G.frame === 0 ? 1 : clamp(0.14 + motion * 0.3, 0.14, 0.92);
+  let alpha = G.frame === 0 ? 1 : clamp(0.14 + motion * 0.3, 0.14, 0.92);
 
   // a paused picture that has converged costs no GPU time: keep showing it
   const calm = S.paused && INTRO.fade >= 2.8 && !INTRO.on;
   const sig = calm ? [JSON.stringify(S), ...[cam.dist, cam.inc, cam.az, cam.fov].map(v => Math.round(v * 1e4)), Math.round(G.shift * 1e3), Math.round(G.shiftY * 1e3), G.iw, G.ih, canvas.width, canvas.height].join("|") : "";
   G.still = calm && sig === G.sig ? (G.still || 0) + 1 : 0; G.sig = sig;
+  if (calm && G.still === 0) alpha = 1;   // a paused picture that just changed starts clean, with nothing of the old one blended in
   if (G.still > 24) { hudT += dt; if (hudT > 0.2) { hudT = 0; Sound.update(); } drawSpectrum(); return; }
 
   const K = kerr(S.a), Q = QUALITY[S.quality];
@@ -1292,16 +1302,17 @@ function frame(now) {
     else if (frameMs < 17.4) { slowT += 0.6; if (slowT > 4) { want = S.scale + 0.05; slowT = 0; } }
     want = clamp(Math.round(want * 20) / 20, 0.25, capFor(Q));
     if (Math.round(want * 20) !== Math.round(S.scale * 20)) { S.scale = want; gpuMs = 0; resize(false); }
-  } else if (!S.govern) { const cp = capFor(Q); if (S.scale !== cp) { S.scale = cp; resize(false); } }
+  }
 
   // slow-start rescue: if this GPU cannot carry the tier, step down and say so (never overrides a tier the person picked)
-  if (!S.govern && !G.userQ && (!G.headless || window.__rescue) && G.frame > 3 && (G.headless || now - G.t0 < 30000)) {   // only in the first 30 s, so heavy sliders on a fast GPU never trip it
-    G.slowN = rawMs > 70 ? (G.slowN || 0) + 1 : 0;
+  if (!S.govern && !G.userQ && (!G.headless || window.__rescue) && G.frame > 3 && (G.headless || now - G.t0 < 30000 || G.slowN > 0)) {   // only in the first 30 s, so heavy sliders on a fast GPU never trip it; a run of slow frames already being counted may finish
+    G.slowN = rawMs > 55 ? (G.slowN || 0) + 1 : 0; G.slowMin = G.slowN > 1 ? Math.min(G.slowMin, rawMs) : rawMs;   // frame times sit on the display's refresh grid: this counts 15 pictures a second and slower
     if (G.slowN >= 6 && S.quality !== "draft") {
-      G.slowN = 0;
-      S.quality = { high: "medium", medium: "low", low: "draft" }[S.quality];
+      G.slowN = 0; G.t0 = now;   // each step gets a fresh window to prove itself
+      const TQ = ["high", "medium", "low", "draft"];
+      S.quality = TQ[Math.min(3, TQ.indexOf(S.quality) + (G.slowMin > 600 ? 3 : G.slowMin > 250 ? 2 : 1))];   // a run of very slow frames skips tiers; one hitch does not
       S.scale = capFor(QUALITY[S.quality]); resize(false); syncUI();
-      toast("This GPU is struggling, so quality dropped to " + S.quality[0].toUpperCase() + S.quality.slice(1) + ". Open Controls, then RENDER, to change it.", 6000);
+      toast("This GPU is struggling, so quality dropped to " + S.quality[0].toUpperCase() + S.quality.slice(1) + (document.getElementById("panel").classList.contains("closed") ? ". Open Controls, then RENDER, to change it." : ". Change it under RENDER."), 6000);
     }
   }
 
@@ -1327,29 +1338,34 @@ function syncUI() {
     const el = $(id), out = $(id + "O"), txt = fmt(+S[key]);
     el.value = S[key];
     if (out.textContent !== txt) out.textContent = txt;
-    const vt = / M$/.test(txt) ? txt.slice(0, -2) + " gravitational radii" : txt;   // a screen reader would say "em"
+    const vt = / M$/.test(txt) ? txt.slice(0, -2) + " gravitational radii" : txt.replace(/×$/, " times");   // a screen reader would say "em"
     if (el.getAttribute("aria-valuetext") !== vt) el.setAttribute("aria-valuetext", vt);
   }
   $("pause").checked = S.paused;
   $("shift").checked = S.shift; $("orbit").checked = S.orbit; $("govern").checked = S.govern; $("hdr").checked = S.hdr; $("spikes").checked = S.spikes; $("idle").checked = S.idle; $("drift").checked = S.drift; $("react").checked = S.react;
-  document.querySelectorAll("#toneSeg button").forEach(b => { b.setAttribute("aria-pressed", !S.hdr && b.dataset.t === S.tone); b.disabled = S.hdr; b.title = S.hdr ? "HDR output uses its own tone curve" : ""; });   // HDR output has its own tone curve
+  document.querySelectorAll("#toneSeg button").forEach(b => { b.setAttribute("aria-pressed", !S.hdr && b.dataset.t === S.tone); b.disabled = S.hdr; });
+  $("toneHint").hidden = !S.hdr;
   document.querySelectorAll("#camSeg button").forEach(b => { const c = CAMS[b.dataset.c]; b.setAttribute("aria-pressed", S.dist === c.dist && S.inc === c.inc && S.fov === c.fov); });
-  const film = Math.abs(S.a - 0.6) < 1e-6 && !S.shift, sci = S.a >= 0.9975 && S.shift;
+  const film = Math.abs(S.a - 0.6) < 1e-6 && !S.shift && S.temp === 4400, sci = S.a >= 0.9975 && S.shift && S.temp === 6500;
   $("presetFilm").setAttribute("aria-pressed", film); $("presetScience").setAttribute("aria-pressed", sci);
   document.querySelectorAll("#qualitySeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.q === S.quality));
 }
 document.querySelectorAll("output").forEach(o => o.setAttribute("aria-live", "off"));   // the slider itself announces its value
-for (const [id, key] of binds) $(id).addEventListener("input", e => { S[key] = +e.target.value; syncUI(); });
+for (const [id, key] of binds) $(id).addEventListener("input", e => { S[key] = +e.target.value; syncUI(); if (key === "speed") pausedNote(); });
 const coarse = matchMedia("(pointer:coarse)");
-function setPaused(v) { if (v) endIntro(); S.paused = v; syncUI(); toast(v ? (coarse.matches ? "Paused. Uncheck Pause motion to resume." : "Paused. Press Space or uncheck Pause motion.") : "Resumed."); }
+function setPaused(v) { if (v) endIntro(); S.paused = v; syncUI(); toast(v ? (coarse.matches ? "Paused. Uncheck Pause motion to resume." : "Paused. Press Space or uncheck Pause motion to resume.") : "Resumed."); }
 $("pause").addEventListener("change", e => setPaused(e.target.checked));
 $("shift").addEventListener("change", e => { S.shift = e.target.checked; syncUI(); });
-$("orbit").addEventListener("change", e => { S.orbit = e.target.checked; });
+$("orbit").addEventListener("change", e => { S.orbit = e.target.checked; pausedNote(!byPtr(e.target)); });
 $("spikes").addEventListener("change", e => { S.spikes = e.target.checked; });
 document.querySelectorAll("#toneSeg button").forEach(b => b.addEventListener("click", () => { S.tone = b.dataset.t; syncUI(); }));
+const pausedNote = kb => {   // kb: the change came from the keyboard, where Space belongs to the focused checkbox
+  const m = coarse.matches || kb ? "Motion is paused. Uncheck Pause motion to see this change." : "Motion is paused. Press Space to see this change.";
+  if (S.paused && !($("toast").classList.contains("show") && $("toast").textContent === m)) toast(m);   // said once, not on every slider step
+};
 $("govern").addEventListener("change", e => { S.govern = e.target.checked; if (!S.govern) { S.scale = capFor(QUALITY[S.quality]); resize(false); } });
 $("idle").addEventListener("change", e => { S.idle = e.target.checked; if (!S.idle) document.body.classList.remove("idle"); });
-$("drift").addEventListener("change", e => { S.drift = e.target.checked; });
+$("drift").addEventListener("change", e => { S.drift = e.target.checked; pausedNote(!byPtr(e.target)); });
 $("react").addEventListener("change", e => { S.react = e.target.checked; });
 const CAMS = { film: { dist: 38, inc: 86, fov: 36 }, tilt: { dist: 30, inc: 68, fov: 40 }, pole: { dist: 40, inc: 6, fov: 36 }, close: { dist: 16, inc: 80, fov: 56 } };
 document.querySelectorAll("#camSeg button").forEach(b => b.addEventListener("click", () => { INTRO.on = false; Object.assign(S, CAMS[b.dataset.c]); syncUI(); }));
@@ -1358,25 +1374,28 @@ $("hdr").addEventListener("change", e => { S.hdr = e.target.checked; if (G.ready
 $("presetFilm").addEventListener("click", () => { S.a = 0.6; S.shift = false; S.temp = 4400; S.expo = 0; syncUI(); });
 $("presetScience").addEventListener("click", () => { S.a = 0.998; S.shift = true; S.temp = 6500; S.expo = 1; syncUI(); });
 const RESET_KEYS = ["a", "shift", "speed", "rout", "temp", "thick", "opac", "expo", "bloom", "glow", "streak", "chroma", "grain", "vign", "spikes", "tone", "weight", "orbit", "drift", "react", "idle"];
-$("resetBtn").addEventListener("click", () => { RESET_KEYS.forEach(k => { S[k] = DEFAULTS[k]; }); if (S.paused) setPaused(false); document.body.classList.remove("idle"); syncUI(); toast("Settings reset. Camera position, render quality and volume kept."); });
+$("resetBtn").addEventListener("click", () => { RESET_KEYS.forEach(k => { S[k] = DEFAULTS[k]; }); if (S.paused) setPaused(false); document.body.classList.remove("idle"); syncUI(); toast("Settings reset. Kept: camera view, quality, frame-rate hold" + ($("hdrRow").style.display === "none" ? "" : ", HDR output") + " and volume."); });
 document.querySelectorAll("#qualitySeg button").forEach(b => b.addEventListener("click", () => {
   G.userQ = true; S.quality = b.dataset.q; const cp = capFor(QUALITY[S.quality]); S.scale = S.govern ? Math.min(S.scale, cp) : cp; resize(false); syncUI(); }));
 function setPanel(open) {
   $("panel").classList.toggle("closed", !open);
   const b = $("panelToggle"); b.textContent = open ? "Hide" : "Show";
   b.setAttribute("aria-expanded", open); b.setAttribute("aria-label", open ? "Hide controls" : "Show controls");
+  if ($("toast").classList.contains("show")) placeToast();
 }
 $("panelToggle").addEventListener("click", () => setPanel($("panel").classList.contains("closed")));
 $("soundBtn").addEventListener("click", async () => {
   const b = $("soundBtn");
   try { const on = await Sound.toggle(); b.classList.toggle("on", on); b.textContent = on ? "TURN SOUND OFF" : "TURN SOUND ON"; }
   catch (e) {
-    if (window.AudioContext || window.webkitAudioContext) toast("Sound could not start. Check that this tab is not muted and an audio device is connected, then try again.", 5000);   // transient: the button stays live
-    else { b.disabled = true; b.textContent = "SOUND UNAVAILABLE"; toast("This browser has no Web Audio, so sound is unavailable.", 5000); }
+    toast("Sound could not start. Check that this tab is not muted and an audio device is connected, then try again.", 5000);   // transient: the button stays live
   }
 });
-if (!(window.AudioContext || window.webkitAudioContext)) { $("soundBtn").disabled = true; $("soundBtn").textContent = "SOUND UNAVAILABLE"; }
-if (!matchMedia("(dynamic-range: high)").matches) $("hdrRow").style.display = "none";
+if (!(window.AudioContext || window.webkitAudioContext)) { $("soundBtn").disabled = true; $("soundBtn").textContent = "SOUND UNAVAILABLE"; $("soundHint").textContent = "Sound is unavailable in this browser."; }
+const HDRQ = matchMedia("(dynamic-range: high)");   // follows the window from one display to another
+const hdrAvail = () => { $("hdrRow").style.display = HDRQ.matches ? "" : "none";
+  $("resetBtn").setAttribute("aria-label", "Reset settings. Camera view, quality, frame-rate hold" + (HDRQ.matches ? ", HDR output" : "") + " and volume are kept"); if (!HDRQ.matches && S.hdr) { S.hdr = false; if (G.ready) configureCanvas(); syncUI(); } };
+hdrAvail(); HDRQ.addEventListener("change", hdrAvail);
 if (matchMedia("(max-width:760px)").matches) setPanel(false);
 
 // pointer: drag to orbit, pinch or wheel to move in and out
@@ -1404,23 +1423,30 @@ canvas.addEventListener("wheel", e => {
   S.dist = clamp(S.dist * Math.exp(dy * 0.0012), 12, 120); syncUI();
 }, { passive: false });
 let ptrFocus = null;   // the control the last click or tap landed on: Space there still means Pause
+const byPtr = el => !!ptrFocus && (el.contains(ptrFocus) || [...(el.labels || [])].some(l => l.contains(ptrFocus)));   // was this control, or its label, the one the pointer pressed?
 document.addEventListener("pointerdown", e => { ptrFocus = e.target; }, true);
-document.addEventListener("keydown", e => { if (e.key === "Tab" || e.key.startsWith("Arrow")) ptrFocus = null; }, true);
+document.addEventListener("keydown", e => {
+  const key = e.key || "";
+  if (key === "Tab" || key.startsWith("Arrow")) ptrFocus = null;
+  if (e.repeat && (key === "Enter" || key === " ") && e.target.closest && e.target.closest("button")) e.preventDefault();   // a held key presses a button once
+}, true);
 addEventListener("keydown", e => {
   if (G.dead || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;   // leave Ctrl+F, Cmd+H and held keys to the browser
   const k = e.key && e.key.length === 1 && /[a-z]/i.test(e.key) ? e.key.toLowerCase() : e.code === "KeyH" ? "h" : e.code === "KeyF" ? "f" : "";   // the letter on the key cap first, the physical key only for non-Latin layouts
   if (e.code === "Space") {
     const tg = e.target, bare = tg === document.body || tg === document.documentElement || tg === canvas || tg.type === "range";
-    const byPointer = ptrFocus && tg.contains && (tg.contains(ptrFocus) || [...(tg.labels || [])].some(l => l.contains(ptrFocus)));
+    const byPointer = tg.contains && byPtr(tg);
     if (!bare && !byPointer) return;   // Space belongs to a button or checkbox the person reached with the keyboard
     e.preventDefault(); if (!bare && tg.blur) tg.blur();   // a control left focused by a click must not fire again on key-up
     setPaused(!S.paused);
   } else if (e.key === "Escape" && !$("panel").classList.contains("closed") && !document.body.classList.contains("clean")) {
     const inside = $("panelBody").contains(document.activeElement); setPanel(false); if (inside) $("panelToggle").focus();
-  } else if (k === "h") {
+  } else if (k === "h" || (e.key === "Escape" && document.body.classList.contains("clean"))) {   // Escape also brings everything back
     const clean = document.body.classList.toggle("clean");
-    const ae = document.activeElement; if (clean && ae && ae.closest && ae.closest(".hud")) ae.blur();
-    toast(clean ? "Controls hidden. Press H to show them." : "Controls shown.", clean ? 6000 : undefined);
+    const ae = document.activeElement;
+    if (clean && ae && ae.closest && ae.closest(".hud")) { G.cleanAE = ptrFocus ? null : ae; ae.blur(); }   // remember where a keyboard user was
+    else if (!clean && G.cleanAE) { G.cleanAE.focus(); G.cleanAE = null; }
+    toast(clean ? "Everything hidden. Press H or Esc to show it again." : "Everything shown.", clean ? 6000 : undefined);
   } else if (k === "f") {
     const el = document.documentElement;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
