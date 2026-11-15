@@ -1,624 +1,353 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta http-equiv="content-type" content="text/html; charset=UTF-8">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Forge · topology</title>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>house · topology</title><link rel="icon" href="data:,"><!-- house · topology: single-file build of house-dash /map.html (kit v6, as built 2026-11-09).
+     kit.css is inlined. htmx 4.0.1 polls /healthz via #poll; the node panel is local state. -->
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.1" integrity="sha384-Qp9rdC8H7EqOoX+nR0P3RPG2Noji+qdwJlGpfzwQJsfOpp3sGwIdSP9xO3+UlEhn" crossorigin="anonymous"></script>
 <style>
-  :root {
-    --bg: #0c0d10;
-    --ink: #e8e6e1;
-    --mute: #8a8680;
-    --line: #2a2c33;
-    --card: #14161c;
-    --cubert: #6ea8ff;
-    --strix: #7ddea0;
-    --blackbird: #e0a86a;
-    --sandbox: #c4a0ff;
-    --owner: #f0e6d0;
-    --tele: #5ec8d8;
-    --accent: #e8e6e1;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body {
-    background: var(--bg);
-    color: var(--ink);
-    font: 15px/1.45 "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-    min-height: 100%;
-  }
-  .wrap {
-    max-width: 1120px;
-    margin: 0 auto;
-    padding: 48px 28px 80px;
-  }
-  .kicker {
-    color: var(--mute);
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 18px;
-  }
-  h1 {
-    font: 400 42px/1.12 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-    letter-spacing: -0.02em;
-    max-width: 16ch;
-    margin-bottom: 14px;
-  }
-  h1 em { font-style: italic; color: var(--mute); font-weight: 400; }
-  .lede {
-    color: var(--mute);
-    max-width: 42ch;
-    margin-bottom: 40px;
-    font-size: 15px;
-  }
-  .board {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    overflow: hidden;
-    position: relative;
-  }
-  svg.topo {
-    display: block;
-    width: 100%;
-    height: auto;
-    touch-action: manipulation;
-  }
-  .node {
-    cursor: pointer;
-  }
-  .node rect, .node circle {
-    transition: fill 120ms ease, stroke 120ms ease, filter 120ms ease;
-  }
-  .node:hover rect, .node:focus-visible rect,
-  .node:hover circle, .node:focus-visible circle {
-    filter: brightness(1.15);
-  }
-  .node.active rect, .node.active circle {
-    stroke-width: 2.2;
-    filter: brightness(1.2);
-  }
-  .edge {
-    fill: none;
-    stroke: #3a3d48;
-    stroke-width: 1.25;
-    opacity: 0.9;
-  }
-  .edge.on {
-    stroke: var(--ink);
-    stroke-width: 1.6;
-    opacity: 1;
-  }
-  .edge.dash { stroke-dasharray: 4 4; }
-  .lbl {
-    font: 600 11px/1 "IBM Plex Sans", system-ui, sans-serif;
-    fill: var(--ink);
-    pointer-events: none;
-  }
-  .sub {
-    font: 400 9.5px/1.15 "IBM Plex Sans", system-ui, sans-serif;
-    fill: var(--mute);
-    pointer-events: none;
-  }
-  .host {
-    font: 600 10px/1 "IBM Plex Sans", system-ui, sans-serif;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    fill: var(--mute);
-  }
-  .panel {
-    display: grid;
-    grid-template-columns: 1fr 280px;
-    gap: 0;
-    border-top: 1px solid var(--line);
-  }
-  @media (max-width: 820px) {
-    .panel { grid-template-columns: 1fr; }
-    h1 { font-size: 32px; }
-  }
-  .legend {
-    padding: 18px 22px 22px;
-    border-right: 1px solid var(--line);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 18px;
-    align-content: start;
-  }
-  .leg {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--mute);
-  }
-  .dot {
-    width: 9px; height: 9px; border-radius: 50%;
-    flex: 0 0 auto;
-  }
-  .detail {
-    padding: 18px 22px 22px;
-    min-height: 140px;
-  }
-  .detail .tag {
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--mute);
-    margin-bottom: 8px;
-  }
-  .detail h2 {
-    font: 500 20px/1.2 "Iowan Old Style", Palatino, Georgia, serif;
-    margin-bottom: 8px;
-  }
-  .detail p {
-    color: var(--mute);
-    font-size: 13.5px;
-    max-width: 36ch;
-  }
-  .detail ul {
-    margin-top: 10px;
-    padding-left: 0;
-    list-style: none;
-  }
-  .detail li {
-    color: var(--ink);
-    font-size: 13px;
-    padding: 4px 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .detail li:last-child { border-bottom: 0; }
-  .detail li span {
-    color: var(--mute);
-    margin-left: 6px;
-    font-size: 12px;
-  }
-  .loop {
-    margin-top: 28px;
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 8px;
-  }
-  @media (max-width: 820px) {
-    .loop { grid-template-columns: repeat(3, 1fr); }
-  }
-  .step {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 12px 12px;
-    min-height: 88px;
-  }
-  .step b {
-    display: block;
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--mute);
-    margin-bottom: 6px;
-  }
-  .step span {
-    font-size: 13.5px;
-    color: var(--ink);
-  }
-  footer {
-    margin-top: 36px;
-    color: var(--mute);
-    font-size: 12px;
-  }
-  footer a { color: var(--mute); }
+/* house-dash kit v6 (2026-11-09) — the Forge-topology look: one palette, every swatch has a job.
+   Hosts colour what lives where (cubert blue · strix green · blackbird amber · sandbox violet · owner cream · sensors cyan · cloud eyes lilac);
+   health keeps the tri-state (green / amber / coral) on values, dots and thin bars only. Nowrap by construction: every cell min-width:0 + ellipsis,
+   full text in title=. Serif display for the page voice, Plex Sans for prose, mono for numbers. */
+:root{
+ --bg:#0c0d10;--card:#14161c;--card2:#181a21;--line:#2a2c33;--ink:#e8e6e1;--mute:#8a8680;--mute2:#b4b0a8;
+ --cubert:#6ea8ff;--strix:#7ddea0;--blackbird:#e0a86a;--sandbox:#c4a0ff;--owner:#f0e6d0;--tele:#5ec8d8;--eyes:#d0a0e8;
+ --ok:#7ddea0;--warn:#e0a86a;--bad:#f08a8a;--barb:#20222a;
+ --f-cubert:#121820;--f-strix:#101a14;--f-blackbird:#1a1610;--f-sandbox:#16121c;--f-owner:#1a1814;--f-tele:#0f1a1c;--f-eyes:#1a1420;
+ --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+ --sans:"IBM Plex Sans","Segoe UI",system-ui,-apple-system,sans-serif;
+ --mono:ui-monospace,"SF Mono",Menlo,"JetBrains Mono",Consolas,monospace;
+ --hc:var(--ink);--hf:var(--card)}
+*{box-sizing:border-box}html{background:var(--bg);color-scheme:dark}
+body{margin:0;color:var(--ink);font:13px/18px var(--sans);font-variant-numeric:tabular-nums;white-space:nowrap;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;
+ background:radial-gradient(1200px 500px at 15% -10%,rgba(110,168,255,.07),transparent 60%),radial-gradient(900px 400px at 85% 0%,rgba(125,222,160,.06),transparent 60%),var(--bg)}
+i{font-style:normal}p{margin:0}a{color:inherit}
+.m{font-family:var(--mono)}.t2{color:var(--mute2)}.t3{color:var(--mute)}.g{color:var(--ok)}.w{color:var(--warn)}.b{color:var(--bad)}
+.lav,.eyes{color:var(--eyes)}.blue,.cubert{color:var(--cubert)}.mint,.strix{color:var(--strix)}.cyan,.tele{color:var(--tele)}.amber,.blackbird{color:var(--blackbird)}.violet,.sandbox{color:var(--sandbox)}.cream,.owner{color:var(--owner)}
+.wrap{max-width:1600px;margin:0 auto;padding:22px 28px 40px;display:flex;flex-direction:column;gap:14px}
+#live{display:flex;flex-direction:column;gap:14px}
+/* page voice: kicker · serif title · lede (static shell), then the live nav bar */
+.hdr{display:flex;align-items:flex-end;gap:28px;padding:4px 2px 2px}
+.hdr .kicker{color:var(--mute);font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.hdr h1{margin:0;font:400 34px/1.08 var(--serif);letter-spacing:-.02em;color:var(--ink)}.hdr h1 em{font-style:italic;color:var(--mute);font-weight:400}
+.hdr .lede{color:var(--mute);font-size:13.5px;white-space:normal;max-width:52ch;padding-bottom:4px}
+.hdr .sp{flex:1}
+/* nav: host bands as links, the active page underlined in its host colour; feed pills in sensor cyan */
+.nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px 22px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);padding:10px 0 2px;border-top:1px solid var(--line)}
+.nav a{color:var(--mute);text-decoration:none;padding:3px 0;border-bottom:2px solid transparent;font-weight:600}.nav .sp{flex:1}
+.nav a:hover{color:var(--ink)}
+body[data-page=strix] .nav a[data-p=strix]{color:var(--strix);border-color:var(--strix)}
+body[data-page=forge] .nav a[data-p=forge]{color:var(--owner);border-color:var(--owner)}
+body[data-page=house] .nav a[data-p=house]{color:var(--cubert);border-color:var(--cubert)}
+body[data-page=map] .nav a[data-p=map]{color:var(--eyes);border-color:var(--eyes)}
+.pill{font:11px/16px var(--mono);letter-spacing:0;text-transform:none;padding:2px 9px;border:1px solid var(--line);border-radius:12px;color:var(--tele);background:var(--f-tele)}
+.pill.g{color:var(--ok);border-color:rgba(125,222,160,.35)}.pill.w{color:var(--warn);border-color:rgba(224,168,106,.45);background:var(--f-blackbird)}.pill.b{color:var(--bad);border-color:rgba(240,138,138,.5);background:#1c1214}.pill.t3{color:var(--mute);background:transparent}
+/* host accents: a card/tile/step says where it lives */
+.h-cubert{--hc:var(--cubert);--hf:var(--f-cubert)}.h-strix{--hc:var(--strix);--hf:var(--f-strix)}.h-blackbird{--hc:var(--blackbird);--hf:var(--f-blackbird)}
+.h-sandbox{--hc:var(--sandbox);--hf:var(--f-sandbox)}.h-owner{--hc:var(--owner);--hf:var(--f-owner)}.h-tele{--hc:var(--tele);--hf:var(--f-tele)}.h-eyes{--hc:var(--eyes);--hf:var(--f-eyes)}
+/* attention line */
+.att{display:flex;gap:18px;align-items:center;padding:9px 16px;border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:10px;background:var(--f-blackbird);font-size:12.5px;overflow:hidden}
+.att .d{width:7px;height:7px;border-radius:50%;flex:none}.att .d.w{background:var(--warn)}.att .d.b{background:var(--bad)}
+.att span.e{min-width:0;overflow:hidden;text-overflow:ellipsis}.att b{color:var(--owner);font-weight:600}
+/* tiles */
+.tiles{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px}.tiles.t4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.tile{background:linear-gradient(180deg,var(--hf),var(--card));border:1px solid var(--line);border-top:2px solid var(--hc);border-radius:12px;padding:11px 14px 11px;min-width:0;display:flex;flex-direction:column;gap:4px;transition:border-color 120ms ease,filter 120ms ease}
+.tile:hover{filter:brightness(1.12)}
+.tile .k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--hc);display:flex;justify-content:space-between;gap:6px;font-weight:600}
+.tile .n{font:500 22px/26px var(--mono);letter-spacing:-.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}.tile .n small{font-size:11.5px;color:var(--mute);margin-left:4px;font-family:var(--sans)}
+.tile .s{font-size:12px;color:var(--mute2);min-width:0;overflow:hidden;text-overflow:ellipsis}
+.bar{position:relative;height:4px;background:var(--barb);border-radius:2px;overflow:hidden;margin-top:3px;flex:none}.bar i{position:absolute;inset:0 auto 0 0;background:var(--hc);border-radius:2px}
+.bar.blue i{background:var(--cubert)}.bar.mint i{background:var(--strix)}.bar.cyan i{background:var(--tele)}.bar.violet i{background:var(--sandbox)}.bar.w i{background:var(--warn)}.bar.b i{background:var(--bad)}.bar.g i{background:var(--ok)}
+.hbar{display:flex;gap:8px;align-items:center;justify-content:flex-end}.hbar .bar{width:150px;height:6px;margin:0}.hbar .bar.sm{width:90px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--mute);vertical-align:1px}.dot.g{background:var(--ok)}.dot.w{background:var(--warn)}.dot.b{background:var(--bad)}
+/* cards + rows */
+.run,.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.grid.f{display:grid;grid-template-columns:330px 340px minmax(0,1fr);gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 16px 11px;min-width:0;position:relative;overflow:hidden}.card.span2{grid-column:span 2}
+.card:before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--hc)}
+.card[class*=" h-"]{background:linear-gradient(135deg,var(--hf) 0%,var(--card) 42%)}
+.ch{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:10px}
+.ch h2{margin:0;font:600 10.5px/16px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--hc);flex:none}
+.ch h2:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--hc);margin-right:8px;vertical-align:1px}
+.ch .tot{font-family:var(--mono);font-size:12px;color:var(--mute2);min-width:0;overflow:hidden;text-overflow:ellipsis}
+.sh{margin:12px 0 4px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:600}
+.rows{display:flex;flex-direction:column}.row{display:flex;justify-content:space-between;gap:12px;height:23px;align-items:center;border-top:1px solid var(--line)}.row:first-child{border-top:0}
+.row .l{color:var(--mute2);font-size:12.5px;flex:none;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:55%}.row .v{font-family:var(--mono);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.pips{display:inline-flex;gap:3px}.pips s{width:9px;height:9px;border-radius:2px;background:var(--barb);text-decoration:none;display:inline-block}.pips s.d{background:var(--hc)}
+/* fold + tables */
+.fold{display:flex;align-items:center;gap:12px;color:var(--mute);font:italic 400 13px/1 var(--serif);letter-spacing:.02em;margin-top:6px}.fold:before,.fold:after{content:"";flex:1;height:1px;background:var(--line)}
+.tbl{display:grid;gap:0 12px;font-size:12.5px}.tbl .h{color:var(--mute);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:0 0 6px;font-weight:600}.tbl>span{min-width:0;overflow:hidden;text-overflow:ellipsis;padding:4px 0;border-top:1px solid var(--line)}.tbl>span.h{border-top:0}.tbl .r{text-align:right;font-family:var(--mono)}
+/* the control loop (forge page): six steps, each coloured by the host that owns it */
+.loop{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:20px}
+.step{background:linear-gradient(180deg,var(--hf),var(--card));border:1px solid var(--line);border-radius:12px;padding:11px 13px 10px;min-height:84px;min-width:0;display:flex;flex-direction:column;gap:3px;position:relative}
+.step:after{content:"›";position:absolute;right:-16px;top:50%;transform:translateY(-58%);color:var(--hc);opacity:.75;font:400 24px/1 var(--serif)}.step:last-child:after{content:""}
+.step b{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--hc);font-weight:600;margin-bottom:2px}
+.step .v{font:500 15px/20px var(--mono);min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.step .s{font-size:12px;color:var(--mute2);min-width:0;overflow:hidden;text-overflow:ellipsis}
+.step .hbar{justify-content:flex-start}.step .hbar .bar{width:100%}
+.kv{display:flex;flex-direction:column;gap:1px;flex:none}.kv .k{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}.kv .v{font-family:var(--mono)}
+/* timeline */
+.tl{display:flex;flex-direction:column}.grid.f .tl{max-height:1040px;overflow-y:auto;overscroll-behavior:contain;padding-right:4px}
+.ev{display:grid;grid-template-columns:44px 14px minmax(0,1fr) auto;gap:0 10px;padding:6px 0;border-top:1px solid var(--line);align-items:start}.ev:first-child{border-top:0}
+.ev .t{font-family:var(--mono);color:var(--mute2);font-size:12px;padding-top:1px}
+.ev .ic{width:9px;height:9px;border-radius:50%;margin-top:4px;background:var(--mute)}
+.ev .ic.s{background:var(--strix)}.ev .ic.r{background:var(--ok)}.ev .ic.c{background:var(--cubert)}.ev .ic.f{background:var(--cubert)}.ev .ic.x{background:var(--bad)}.ev .ic.a{background:var(--eyes)}.ev .ic.g{background:var(--warn)}.ev .ic.j{background:var(--cubert)}
+.ev .who{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:600}
+.ev .what{min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}.ev .sub{font-family:var(--mono);font-size:12px;color:var(--mute2);overflow:hidden;text-overflow:ellipsis}
+.ev .rt{font-family:var(--mono);font-size:12px;color:var(--mute2);text-align:right}
+.ev.now{background:linear-gradient(90deg,rgba(125,222,160,.10),transparent);margin:0 -16px;padding-left:16px;padding-right:16px;border-radius:6px}
+.ver{font:500 15px/20px var(--mono);padding:11px 13px;border:1px solid var(--line);border-left:3px solid var(--owner);border-radius:10px;background:var(--f-owner);min-width:0}.ver>span{display:block;overflow:hidden;text-overflow:ellipsis;color:var(--owner)}.ver>span.g{color:var(--ok)}.ver>span.b{color:var(--bad)}.ver>span.w{color:var(--warn)}.ver small{display:block;font-size:11px;color:var(--mute);margin-top:3px;font-family:var(--sans)}
+.foot{color:var(--mute);font-size:11.5px;display:flex;gap:18px;padding-top:6px;border-top:1px solid var(--line)}.foot .sp{flex:1}.foot a{color:var(--mute)}
+/* legend (map + footers) */
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:11.5px;color:var(--mute2)}.leg{display:flex;align-items:center;gap:7px}.leg i{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--hc)}
+/* responsive: tablet 4 tiles, phone 2 tiles + single column; the fold collapses the second half behind a tap */
+@media (max-width:1100px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}.run,.grid3,.grid.f{grid-template-columns:1fr 1fr}.card.span2{grid-column:span 2}.loop{grid-template-columns:repeat(3,minmax(0,1fr))}.step:after{content:""}.hdr{flex-wrap:wrap;gap:10px 28px}}
+@media (max-width:640px){.tiles,.tiles.t4{grid-template-columns:repeat(2,minmax(0,1fr))}.run,.grid3,.grid.f{grid-template-columns:1fr}.card.span2{grid-column:auto}.wrap{padding:12px 12px 28px}.hbar .bar{width:90px}.loop{grid-template-columns:repeat(2,minmax(0,1fr))}.hdr h1{font-size:26px}.hdr .lede{display:none}
+ .fold{cursor:pointer}.fold~*{display:none}body.more .fold~*{display:grid}.fold:after{content:"▾ tap";flex:none;height:auto;background:none;letter-spacing:0;text-transform:none}body.more .fold:after{content:"▴"}}
+
+/* hero: the three facts that matter, before the tile wall */
+.hero{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.tile.wide{grid-column:1/-1}.tile.wide .n{font-size:19px;line-height:24px}
+.tile.big{padding:13px 16px 12px;gap:5px}.tile.big .n{font-size:30px;line-height:34px}.tile.big .n small{font-size:12px}.tile.big .s{font-size:12.5px}
+/* loop steps carry state: amber = question, coral = page */
+.step.warn{border-color:rgba(224,168,106,.55);border-top:2px solid var(--warn)}.step.warn b{color:var(--warn)}
+.step.bad{border-color:rgba(240,138,138,.6);border-top:2px solid var(--bad);background:linear-gradient(180deg,#1c1214,var(--card))}.step.bad b{color:var(--bad)}
+.step.ok{border-top:2px solid var(--hc)}
+/* map page: the topology board on kit tokens */
+.board{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+svg.topo{display:block;width:100%;height:auto;touch-action:manipulation}
+.node{cursor:pointer}.node rect{transition:filter 120ms ease,stroke-width 120ms ease;fill:var(--hf);stroke:var(--hc);stroke-width:1.3}
+.node:hover rect,.node:focus-visible rect{filter:brightness(1.18)}.node.active rect{stroke-width:2.4;filter:brightness(1.22)}
+.node.live rect{filter:drop-shadow(0 0 6px var(--hc))}
+.node .lbl{font:600 11px/1 var(--sans);fill:var(--ink);pointer-events:none}.node .sub{font:400 9.5px/1.15 var(--sans);fill:var(--mute2);pointer-events:none}
+.topo .host{font:600 10px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;fill:var(--mute)}
+.topo .edge{fill:none;stroke:#3a3d48;stroke-width:1.25;opacity:.9}.topo .edge.on{stroke:var(--ink);stroke-width:1.6;opacity:1}.topo .edge.dash{stroke-dasharray:4 4}
+.topo .edge.c-cubert{stroke:var(--cubert)}.topo .edge.c-strix{stroke:var(--strix)}.topo .edge.c-tele{stroke:var(--tele)}.topo .edge.c-eyes{stroke:var(--eyes)}.topo .edge.c-blackbird{stroke:var(--blackbird)}.topo .edge.c-sandbox{stroke:var(--sandbox)}.topo .edge.c-owner{stroke:var(--owner)}
+.panel{display:grid;grid-template-columns:1fr 320px;border-top:1px solid var(--line)}
+.panel .left{padding:16px 22px 18px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;min-width:0}.panel .legend{white-space:normal;align-items:center}.panel .legend .sp{flex:1}
+.mini{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mini-card{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 14px 8px;min-width:0;position:relative;overflow:hidden}.mini-card:before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--hc)}.mini-card .row{height:22px}.mini-card .row .v{font-size:12px}.hint{font-size:11.5px;margin-top:auto}
+.detail{padding:16px 22px 20px;min-height:140px;white-space:normal}
+.detail .tag{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hc);font-weight:600;margin-bottom:6px}
+.detail h2{margin:0 0 6px;font:500 20px/1.2 var(--serif);color:var(--ink)}
+.detail p{color:var(--mute2);font-size:13px;max-width:40ch}
+.detail ul{margin:10px 0 0;padding:0;list-style:none}.detail li{color:var(--ink);font-size:12.5px;padding:4px 0;border-top:1px solid var(--line)}.detail li:first-child{border-top:0}.detail li span{color:var(--mute);margin-left:6px;font-size:11.5px}
+.map-steps .step{min-height:72px}
+@media (max-width:820px){.panel{grid-template-columns:1fr}.panel .left{border-right:0;border-bottom:1px solid var(--line)}.mini{grid-template-columns:1fr}.hero{grid-template-columns:1fr}}
+/* R4: production-line strip (T3 frames) */
+.prodline{margin-top:12px}.pl{display:grid;grid-template-columns:repeat(auto-fill,240px);gap:12px;margin-top:8px}.plc{margin:0;width:240px;min-width:0}
+.plc img,.plph{display:block;width:240px;height:135px;border:1px solid var(--line);border-radius:8px;background:var(--card2);object-fit:contain}
+.plph{display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase}
+.plc figcaption{margin-top:5px;font:11.5px/16px var(--mono);color:var(--mute2);white-space:normal;overflow-wrap:anywhere;max-height:50px;overflow:hidden}
 </style>
-</head>
-<body>
-<div class="wrap">
-  <div class="kicker">House · system of record</div>
-  <h1>Forge as a <em>topology</em>, not a thread.</h1>
-  <p class="lede">Owner brief → cubert controller → strix builder. Sensors close the loop. Seats are job-named; one brain.</p>
+</head><body data-page="map"><div class="wrap">
+<header class="hdr"><div><div class="kicker">House · system of record · as built 2026-11-09</div><h1>Forge as a <em>topology</em>, not a thread.</h1></div><span class="sp"></span><p class="lede">Owner brief → cubert controller → strix builder. Sensors close the loop. Seats are job-named; one brain. Click a node.</p></header>
+<div class="nav"><a href="./" data-p="strix">strix</a><a href="./forge.html" data-p="forge">forge</a><a href="./house.html" data-p="house">house</a><a href="./map.html" data-p="map">map</a><span class="sp"></span><span class="pill g" id="pill-strix">strix 1 s</span><span class="pill g" id="pill-cubert">cubert 6 s</span><span class="pill t3" id="pill-t">19:14:01</span></div>
 
-  <div class="board">
-    <svg class="topo" viewBox="0 0 1040 560" role="img" aria-label="Forge topology">
-      <!-- host bands -->
-      <text class="host" x="52" y="36">Owner</text>
-      <text class="host" x="220" y="36">Cubert · brain</text>
-      <text class="host" x="480" y="36">Strix · build</text>
-      <text class="host" x="760" y="36">Blackbird · QC</text>
-      <text class="host" x="920" y="36">Sandbox</text>
+<div id="poll" hidden hx-get="/healthz" hx-trigger="load, every 10s" hx-swap="none" hx-config="timeout:8s"></div>
+<div class="board">
+<svg class="topo" viewBox="0 0 1040 600" role="img" aria-label="House topology">
+ <text class="host" x="40" y="34">Owner</text>
+ <text class="host" x="200" y="34">Cubert · brain</text>
+ <text class="host" x="430" y="34">Strix · build</text>
+ <text class="host" x="750" y="34">Blackbird · QC</text>
+ <text class="host" x="910" y="34">Sandbox</text>
+ <line class="edge dash" x1="185" y1="44" x2="185" y2="590"></line>
+ <line class="edge dash" x1="415" y1="44" x2="415" y2="590"></line>
+ <line class="edge dash" x1="735" y1="44" x2="735" y2="590"></line>
+ <line class="edge dash" x1="898" y1="44" x2="898" y2="590"></line>
 
-      <!-- faint columns -->
-      <line class="edge dash" x1="180" y1="48" x2="180" y2="520"></line>
-      <line class="edge dash" x1="420" y1="48" x2="420" y2="520"></line>
-      <line class="edge dash" x1="720" y1="48" x2="720" y2="520"></line>
-      <line class="edge dash" x1="900" y1="48" x2="900" y2="520"></line>
+ <g id="edges">
+  <path id="e-owner-hermes" class="edge c-owner" d="M160,108 C180,108 180,108 200,108"></path>
+  <path id="e-hermes-foreman" class="edge c-cubert" d="M275,136 L275,160"></path>
+  <path id="e-foreman-pisay" class="edge c-cubert" d="M275,204 L275,222"></path>
+  <path id="e-pisay-pi" class="edge on" d="M350,244 C390,244 400,158 430,158"></path>
+  <path id="e-pi-gate" class="edge on" d="M580,158 L610,158"></path>
+  <path id="e-pi-seat" class="edge on" d="M505,186 L505,220"></path>
+  <path id="e-seat-prod" class="edge" d="M505,276 L505,310"></path>
+  <path id="e-prod-tools" class="edge" d="M505,366 L505,400"></path>
+  <path id="e-hermes-eyes" class="edge c-eyes dash on" d="M350,96 C420,78 500,82 560,82"></path>
+  <path id="e-eyes-prod" class="edge c-eyes dash" d="M680,82 C740,120 700,300 580,338"></path>
+  <path id="e-hermes-drive" class="edge c-cubert dash" d="M215,136 C150,180 150,280 200,306"></path>
+  <path id="e-hermes-audit" class="edge c-cubert dash" d="M215,136 C140,200 140,330 200,368"></path>
+  <path id="e-hermes-kev" class="edge c-cubert dash" d="M215,136 C130,220 130,390 200,430"></path>
+  <path id="e-htele-dash" class="edge c-tele dash" d="M350,554 C620,592 890,560 910,234"></path>
+  <path id="e-ssens-dash" class="edge c-tele" d="M720,492 C800,492 880,440 910,234"></path>
+  <path id="e-ssens-healthz" class="edge c-tele dash" d="M720,512 C820,530 880,420 910,374"></path>
+  <path id="e-bb-prod" class="edge c-blackbird" d="M750,158 C700,200 620,300 580,338"></path>
+  <path id="e-bbtunnel-viewer" class="edge c-blackbird dash" d="M750,374 C600,430 300,430 160,274"></path>
+  <path id="e-mac-viewer" class="edge c-owner" d="M100,208 L100,250"></path>
+  <path id="e-t3-seat" class="edge c-strix" d="M610,368 C590,340 580,300 580,276"></path>
+  <path id="e-gate-penpot" class="edge c-sandbox dash" d="M720,158 C820,110 900,120 910,304"></path>
+  <path id="e-health-ssens" class="edge c-tele dash" d="M350,492 C390,492 400,498 430,498"></path>
+ </g>
 
-      <!-- edges (under nodes) -->
-      <g id="edges">
-        <path id="e-owner-hermes" class="edge" d="M120,120 C160,120 180,150 220,150"></path>
-        <path id="e-hermes-foreman" class="edge" d="M300,150 L300,210"></path>
-        <path id="e-foreman-pisay" class="edge" d="M300,250 L300,300"></path>
-        <path id="e-pisay-pi" class="edge on" d="M340,320 C400,320 450,200 500,200"></path>
-        <path id="e-pi-gate" class="edge on" d="M580,200 L640,200"></path>
-        <path id="e-pi-seat" class="edge on" d="M540,240 L540,300"></path>
-        <path id="e-pi-prod" class="edge on" d="M540,240 C540,360 540,380 540,400"></path>
-        <path id="e-prod-tools" class="edge" d="M540,440 L540,480"></path>
-        <path id="e-seat-gpu" class="edge dash" d="M600,320 C640,320 640,400 600,430"></path>
-        <path id="e-hermes-eyes" class="edge on" d="M340,170 C420,120 500,120 560,160"></path>
-        <path id="e-eyes-prod" class="edge dash" d="M620,180 C620,280 580,360 560,400"></path>
-        <path id="e-tele-all" class="edge dash" d="M300,480 C400,500 500,500 620,480"></path>
-        <path id="e-bb-qc" class="edge" d="M780,200 C720,240 620,360 580,400"></path>
-        <path id="e-bb-tunnel" class="edge dash" d="M780,240 C700,260 420,280 340,280"></path>
-        <path id="e-sb-penpot" class="edge dash" d="M960,200 C860,220 700,240 640,220"></path>
-        <path id="e-viewer" class="edge" d="M260,360 C200,360 140,300 120,240"></path>
-        <path id="e-bench" class="edge dash" d="M120,200 C160,280 220,340 260,360"></path>
-        <path id="e-drive" class="edge dash" d="M260,210 C260,260 280,280 300,300"></path>
-        <path id="e-audit" class="edge" d="M340,150 C380,100 480,90 560,140"></path>
-      </g>
+ <g class="node h-owner" data-id="owner" tabindex="0" transform="translate(40,80)"><rect width="120" height="56" rx="10"></rect><text class="lbl" x="14" y="24">Owner</text><text class="sub" x="14" y="40">Discord · 911 only</text></g>
+ <g class="node h-owner" data-id="mac" tabindex="0" transform="translate(40,160)"><rect width="120" height="48" rx="10"></rect><text class="lbl" x="14" y="22">M4 MBP</text><text class="sub" x="14" y="36">perf truth · tunnels</text></g>
+ <g class="node h-cubert" data-id="viewer" tabindex="0" transform="translate(40,250)"><rect width="120" height="48" rx="10"></rect><text class="lbl" x="14" y="22">:8770 viewer</text><text class="sub" x="14" y="36">shipped prods</text></g>
 
-      <!-- OWNER -->
-      <g class="node" data-id="owner" tabindex="0" transform="translate(52,90)">
-        <rect width="110" height="56" rx="10" fill="#1a1814" stroke="var(--owner)"></rect>
-        <text class="lbl" x="14" y="24">Owner</text>
-        <text class="sub" x="14" y="40">Discord · M4 bench</text>
-      </g>
-      <g class="node" data-id="mac" tabindex="0" transform="translate(52,170)">
-        <rect width="110" height="48" rx="10" fill="#1a1814" stroke="var(--owner)"></rect>
-        <text class="lbl" x="14" y="22">M4 MBP</text>
-        <text class="sub" x="14" y="36">perf truth</text>
-      </g>
-      <g class="node" data-id="viewer" tabindex="0" transform="translate(200,340)">
-        <rect width="120" height="48" rx="10" fill="#1a1c24" stroke="var(--cubert)"></rect>
-        <text class="lbl" x="14" y="22">:8770 viewer</text>
-        <text class="sub" x="14" y="36">shipped prods</text>
-      </g>
+ <g class="node h-cubert live" data-id="hermes" tabindex="0" transform="translate(200,80)"><rect width="150" height="56" rx="10"></rect><text class="lbl" x="14" y="24">Hermes v0.23.1</text><text class="sub" x="14" y="40">one brain · Discord · jobs</text></g>
+ <g class="node h-cubert" data-id="foreman" tabindex="0" transform="translate(200,160)"><rect width="150" height="44" rx="10"></rect><text class="lbl" x="14" y="20">foreman</text><text class="sub" x="14" y="34">5-min ladder</text></g>
+ <g class="node h-cubert" data-id="pisay" tabindex="0" transform="translate(200,222)"><rect width="150" height="44" rx="10"></rect><text class="lbl" x="14" y="20">pi-say</text><text class="sub" x="14" y="34">only actuator</text></g>
+ <g class="node h-cubert" data-id="drive" tabindex="0" transform="translate(200,284)"><rect width="150" height="44" rx="10"></rect><text class="lbl" x="14" y="20">drive</text><text class="sub" x="14" y="34">job ↔ session</text></g>
+ <g class="node h-eyes" data-id="audit" tabindex="0" transform="translate(200,346)"><rect width="150" height="44" rx="10"></rect><text class="lbl" x="14" y="20">audit-verdict</text><text class="sub" x="14" y="34">verifier · raw files</text></g>
+ <g class="node h-cubert" data-id="kev" tabindex="0" transform="translate(200,408)"><rect width="150" height="44" rx="10"></rect><text class="lbl" x="14" y="20">kev-watch</text><text class="sub" x="14" y="34">CISA KEV · 14:10</text></g>
+ <g class="node h-tele" data-id="health" tabindex="0" transform="translate(200,470)"><rect width="150" height="44" rx="10"></rect><text class="lbl" x="14" y="20">forge-health</text><text class="sub" x="14" y="34">:00 / :20 / :40</text></g>
+ <g class="node h-tele live" data-id="htele" tabindex="0" transform="translate(200,532)"><rect width="150" height="44" rx="10"></rect><text class="lbl" x="14" y="20">house-telemetry</text><text class="sub" x="14" y="34">cubert.json · 10 s</text></g>
 
-      <!-- CUBERT -->
-      <g class="node" data-id="hermes" tabindex="0" transform="translate(220,120)">
-        <rect width="140" height="56" rx="10" fill="#121820" stroke="var(--cubert)"></rect>
-        <text class="lbl" x="14" y="24">Hermes</text>
-        <text class="sub" x="14" y="40">brain · Discord · jobs</text>
-      </g>
-      <g class="node" data-id="foreman" tabindex="0" transform="translate(230,210)">
-        <rect width="120" height="44" rx="10" fill="#121820" stroke="var(--cubert)"></rect>
-        <text class="lbl" x="14" y="20">foreman</text>
-        <text class="sub" x="14" y="34">5-min ladder</text>
-      </g>
-      <g class="node" data-id="pisay" tabindex="0" transform="translate(230,300)">
-        <rect width="120" height="44" rx="10" fill="#121820" stroke="var(--cubert)"></rect>
-        <text class="lbl" x="14" y="20">pi-say</text>
-        <text class="sub" x="14" y="34">only actuator</text>
-      </g>
-      <g class="node" data-id="drive" tabindex="0" transform="translate(230,380)">
-        <rect width="120" height="44" rx="10" fill="#121820" stroke="var(--cubert)"></rect>
-        <text class="lbl" x="14" y="20">drive</text>
-        <text class="sub" x="14" y="34">job ↔ session</text>
-      </g>
-      <g class="node" data-id="audit" tabindex="0" transform="translate(230,460)">
-        <rect width="120" height="44" rx="10" fill="#121820" stroke="var(--cubert)"></rect>
-        <text class="lbl" x="14" y="20">audit-verdict</text>
-        <text class="sub" x="14" y="34">raw files only</text>
-      </g>
-      <g class="node" data-id="tele" tabindex="0" transform="translate(50,460)">
-        <rect width="140" height="48" rx="10" fill="#0f1a1c" stroke="var(--tele)"></rect>
-        <text class="lbl" x="14" y="22">telemetry</text>
-        <text class="sub" x="14" y="36">house-telemetry</text>
-      </g>
-      <g class="node" data-id="health" tabindex="0" transform="translate(50,390)">
-        <rect width="140" height="44" rx="10" fill="#0f1a1c" stroke="var(--tele)"></rect>
-        <text class="lbl" x="14" y="20">forge-health</text>
-        <text class="sub" x="14" y="34">:00 / :20 / :40</text>
-      </g>
+ <g class="node h-eyes" data-id="eyes" tabindex="0" transform="translate(560,60)"><rect width="120" height="44" rx="10"></rect><text class="lbl" x="14" y="20">eyes</text><text class="sub" x="14" y="34">cloud vision</text></g>
+ <g class="node h-strix active" data-id="pi" tabindex="0" transform="translate(430,130)"><rect width="150" height="56" rx="10"></rect><text class="lbl" x="14" y="24">pi 1.5.0 · forge</text><text class="sub" x="14" y="40">sole builder</text></g>
+ <g class="node h-strix" data-id="gate" tabindex="0" transform="translate(610,130)"><rect width="110" height="56" rx="10"></rect><text class="lbl" x="14" y="24">gate v4</text><text class="sub" x="14" y="40">every bash</text></g>
+ <g class="node h-strix live" data-id="seat" tabindex="0" transform="translate(430,220)"><rect width="150" height="56" rx="10"></rect><text class="lbl" x="14" y="24">seat-swarm :8085</text><text class="sub" x="14" y="40">b1030 · Ornith 122B</text></g>
+ <g class="node h-strix" data-id="embed" tabindex="0" transform="translate(610,220)"><rect width="110" height="48" rx="10"></rect><text class="lbl" x="14" y="22">embed :8082</text><text class="sub" x="14" y="36">rag · CPU</text></g>
+ <g class="node h-strix" data-id="image" tabindex="0" transform="translate(610,280)"><rect width="110" height="44" rx="10"></rect><text class="lbl" x="14" y="20">image :8095</text><text class="sub" x="14" y="34">parked</text></g>
+ <g class="node h-strix" data-id="prod" tabindex="0" transform="translate(430,310)"><rect width="150" height="56" rx="10"></rect><text class="lbl" x="14" y="24">prod</text><text class="sub" x="14" y="40">~/prods/&lt;id&gt; · build.sh</text></g>
+ <g class="node h-strix" data-id="t3" tabindex="0" transform="translate(610,340)"><rect width="110" height="56" rx="10"></rect><text class="lbl" x="14" y="24">T3 Code</text><text class="sub" x="14" y="40">:3883 · Pi → seat</text></g>
+ <g class="node h-strix" data-id="tools" tabindex="0" transform="translate(430,400)"><rect width="190" height="48" rx="10"></rect><text class="lbl" x="14" y="22">forge-* tools</text><text class="sub" x="14" y="36">new · asset · judge · perf · bake</text></g>
+ <g class="node h-tele live" data-id="ssens" tabindex="0" transform="translate(430,470)"><rect width="290" height="56" rx="10"></rect><text class="lbl" x="14" y="24">strix sensors</text><text class="sub" x="14" y="40">telemetry :9101 · deadman · seat-probe · promo-watch</text></g>
 
-      <!-- STRIX -->
-      <g class="node active" data-id="pi" tabindex="0" transform="translate(460,170)">
-        <rect width="140" height="56" rx="10" fill="#101a14" stroke="var(--strix)"></rect>
-        <text class="lbl" x="14" y="24">pi · forge</text>
-        <text class="sub" x="14" y="40">sole builder</text>
-      </g>
-      <g class="node" data-id="gate" tabindex="0" transform="translate(640,170)">
-        <rect width="110" height="56" rx="10" fill="#101a14" stroke="var(--strix)"></rect>
-        <text class="lbl" x="14" y="24">gate v4</text>
-        <text class="sub" x="14" y="40">every bash</text>
-      </g>
-      <g class="node" data-id="seat" tabindex="0" transform="translate(480,300)">
-        <rect width="140" height="56" rx="10" fill="#101a14" stroke="var(--strix)"></rect>
-        <text class="lbl" x="14" y="24">seat-swarm</text>
-        <text class="sub" x="14" y="40">:8085 · GPU</text>
-      </g>
-      <g class="node" data-id="embed" tabindex="0" transform="translate(640,300)">
-        <rect width="110" height="48" rx="10" fill="#101a14" stroke="var(--strix)"></rect>
-        <text class="lbl" x="14" y="22">embed</text>
-        <text class="sub" x="14" y="36">:8082 rag</text>
-      </g>
-      <g class="node" data-id="prod" tabindex="0" transform="translate(480,400)">
-        <rect width="140" height="56" rx="10" fill="#101a14" stroke="var(--strix)"></rect>
-        <text class="lbl" x="14" y="24">prod</text>
-        <text class="sub" x="14" y="40">~/prods/&lt;id&gt;</text>
-      </g>
-      <g class="node" data-id="tools" tabindex="0" transform="translate(480,480)">
-        <rect width="200" height="48" rx="10" fill="#101a14" stroke="var(--strix)"></rect>
-        <text class="lbl" x="14" y="22">forge-* tools</text>
-        <text class="sub" x="14" y="36">new · asset · judge · perf · bake</text>
-      </g>
-      <g class="node" data-id="eyes" tabindex="0" transform="translate(560,120)">
-        <rect width="120" height="44" rx="10" fill="#1a1420" stroke="#d0a0e8"></rect>
-        <text class="lbl" x="14" y="20">eyes</text>
-        <text class="sub" x="14" y="34">cloud vision</text>
-      </g>
+ <g class="node h-blackbird" data-id="bb" tabindex="0" transform="translate(750,130)"><rect width="140" height="56" rx="10"></rect><text class="lbl" x="14" y="24">QC appliance</text><text class="sub" x="14" y="40">Omarchy rc · Chromium 156</text></g>
+ <g class="node h-blackbird" data-id="bbvnc" tabindex="0" transform="translate(750,210)"><rect width="140" height="48" rx="10"></rect><text class="lbl" x="14" y="22">Xvnc :20</text><text class="sub" x="14" y="36">idle · on demand</text></g>
+ <g class="node h-blackbird" data-id="bbeyes" tabindex="0" transform="translate(750,280)"><rect width="140" height="48" rx="10"></rect><text class="lbl" x="14" y="22">qc-eyes</text><text class="sub" x="14" y="36">local VLM · disabled</text></g>
+ <g class="node h-blackbird" data-id="bbtunnel" tabindex="0" transform="translate(750,350)"><rect width="140" height="48" rx="10"></rect><text class="lbl" x="14" y="22">viewer tunnel</text><text class="sub" x="14" y="36">→ cubert :8770</text></g>
 
-      <!-- BLACKBIRD -->
-      <g class="node" data-id="bb" tabindex="0" transform="translate(740,160)">
-        <rect width="130" height="56" rx="10" fill="#1a1610" stroke="var(--blackbird)"></rect>
-        <text class="lbl" x="14" y="24">QC appliance</text>
-        <text class="sub" x="14" y="40">Iris Xe · WebGPU</text>
-      </g>
-      <g class="node" data-id="bbvnc" tabindex="0" transform="translate(740,240)">
-        <rect width="130" height="48" rx="10" fill="#1a1610" stroke="var(--blackbird)"></rect>
-        <text class="lbl" x="14" y="22">Xvnc :20</text>
-        <text class="sub" x="14" y="36">bot Chromium</text>
-      </g>
-      <g class="node" data-id="bbeyes" tabindex="0" transform="translate(740,310)">
-        <rect width="130" height="48" rx="10" fill="#1a1610" stroke="var(--blackbird)"></rect>
-        <text class="lbl" x="14" y="22">qc-eyes</text>
-        <text class="sub" x="14" y="36">local VLM · advisory</text>
-      </g>
-      <g class="node" data-id="bbtunnel" tabindex="0" transform="translate(740,380)">
-        <rect width="130" height="48" rx="10" fill="#1a1610" stroke="var(--blackbird)"></rect>
-        <text class="lbl" x="14" y="22">viewer tunnel</text>
-        <text class="sub" x="14" y="36">→ cubert :8770</text>
-      </g>
-
-      <!-- SANDBOX -->
-      <g class="node" data-id="sb" tabindex="0" transform="translate(920,160)">
-        <rect width="100" height="56" rx="10" fill="#16121c" stroke="var(--sandbox)"></rect>
-        <text class="lbl" x="14" y="24">sandbox</text>
-        <text class="sub" x="14" y="40">.17 · Pi hop</text>
-      </g>
-      <g class="node" data-id="penpot" tabindex="0" transform="translate(920,240)">
-        <rect width="100" height="48" rx="10" fill="#16121c" stroke="var(--sandbox)"></rect>
-        <text class="lbl" x="14" y="22">Penpot</text>
-        <text class="sub" x="14" y="36">forge egress</text>
-      </g>
-      <g class="node" data-id="dash" tabindex="0" transform="translate(920,310)">
-        <rect width="100" height="48" rx="10" fill="#16121c" stroke="var(--sandbox)"></rect>
-        <text class="lbl" x="14" y="22">dashboard</text>
-        <text class="sub" x="14" y="36">PWA surface</text>
-      </g>
-    </svg>
-
-    <div class="panel">
-      <div class="legend">
-        <div class="leg"><i class="dot" style="background:var(--owner)"></i>Owner / M4</div>
-        <div class="leg"><i class="dot" style="background:var(--cubert)"></i>Cubert</div>
-        <div class="leg"><i class="dot" style="background:var(--strix)"></i>Strix</div>
-        <div class="leg"><i class="dot" style="background:var(--blackbird)"></i>Blackbird</div>
-        <div class="leg"><i class="dot" style="background:var(--sandbox)"></i>Sandbox</div>
-        <div class="leg"><i class="dot" style="background:var(--tele)"></i>Sensors</div>
-        <div class="leg"><i class="dot" style="background:#d0a0e8"></i>Cloud eyes</div>
-      </div>
-      <div class="detail" id="detail">
-    <div class="tag">Strix</div>
-    <h2>pi · user forge</h2>
-    <p>Sole builder. Jail: loopback + Penpot egress, pinned charter, one prod per unit.</p>
-    <ul><li>pi 1.4+ via pi-say</li><li>~/.pi/agent root-owned</li><li>I3 jail</li></ul></div>
-    </div>
+ <g class="node h-sandbox" data-id="sb" tabindex="0" transform="translate(910,130)"><rect width="110" height="56" rx="10"></rect><text class="lbl" x="14" y="24">sandbox</text><text class="sub" x="14" y="40">.17 · Pi · hop</text></g>
+ <g class="node h-sandbox live" data-id="dash" tabindex="0" transform="translate(910,210)"><rect width="110" height="48" rx="10"></rect><text class="lbl" x="14" y="22">house-dash</text><text class="sub" x="14" y="36">:8090 · this</text></g>
+ <g class="node h-sandbox" data-id="penpot" tabindex="0" transform="translate(910,280)"><rect width="110" height="48" rx="10"></rect><text class="lbl" x="14" y="22">Penpot</text><text class="sub" x="14" y="36">:9001 · egress</text></g>
+ <g class="node h-tele live" data-id="healthz" tabindex="0" transform="translate(910,350)"><rect width="110" height="48" rx="10"></rect><text class="lbl" x="14" y="22">/healthz</text><text class="sub" x="14" y="36">dead-man read</text></g>
+</svg>
+<div class="panel">
+ <div class="left">
+  <div class="legend"><span class="leg h-owner"><i></i>Owner / M4</span><span class="leg h-cubert"><i></i>Cubert</span><span class="leg h-strix"><i></i>Strix</span><span class="leg h-blackbird"><i></i>Blackbird</span><span class="leg h-sandbox"><i></i>Sandbox</span><span class="leg h-tele"><i></i>Sensors</span><span class="leg h-eyes"><i></i>Cloud eyes · audit</span><span class="sp"></span><span class="t3">solid = the build path · dashed = sensing, egress, tunnels</span></div>
+  <div class="mini">
+   <div class="mini-card h-tele"><div class="ch"><h2>Live</h2><span class="tot" id="live-at">19:14:01</span></div>
+    <div class="rows">
+     <div class="row"><span class="l">control plane</span><span class="v g" id="lv-ok">ok · dead-man sees cubert</span></div>
+     <div class="row"><span class="l">cubert.json</span><span class="v g" id="lv-cub">6 s old · pushed every 10 s</span></div>
+     <div class="row"><span class="l">strix :9101</span><span class="v g" id="lv-strix">1 s old · snapshot every 5 s</span></div>
+     <div class="row"><span class="l">oldest heartbeat</span><span class="v " id="lv-hb">14 m · foreman ≤ 15 m · forge-health ≤ 45 m</span></div>
+     <div class="row"><span class="l">missing</span><span class="v g" id="lv-miss">none</span></div>
+    </div></div>
+   <div class="mini-card h-owner"><div class="ch"><h2>From the Mac</h2><span class="tot">ssh -L, then localhost</span></div>
+    <div class="rows">
+     <div class="row"><span class="l">this dash</span><span class="v">ssh -L 8090:127.0.0.1:8090 sandbox</span></div>
+     <div class="row"><span class="l">T3 Code · pi</span><span class="v">ssh -L 3883:127.0.0.1:3883 strix</span></div>
+     <div class="row"><span class="l">shipped prods</span><span class="v">ssh -L 8770:127.0.0.1:8770 cubert</span></div>
+     <div class="row"><span class="l">Penpot</span><span class="v">http://192.168.4.17:9001 · from .10 only</span></div>
+     <div class="row"><span class="l">seat API</span><span class="v">http://192.168.4.20:8085/v1 · cubert only</span></div>
+    </div></div>
+   <div class="mini-card h-cubert"><div class="ch"><h2>Laws</h2><span class="tot">the short list</span></div>
+    <div class="rows">
+     <div class="row"><span class="l">I1</span><span class="v">pi-say is the only actuator</span></div>
+     <div class="row"><span class="l">I2</span><span class="v">DONE is a record, never prose</span></div>
+     <div class="row"><span class="l">I3</span><span class="v">forge is jailed · loopback + Penpot</span></div>
+     <div class="row"><span class="l">I5</span><span class="v">one GPU arbiter · gpu-run</span></div>
+     <div class="row"><span class="l">I8</span><span class="v">one brain · cubert</span></div>
+    </div></div>
+   <div class="mini-card h-strix"><div class="ch"><h2>Seat</h2><span class="tot">as built</span></div>
+    <div class="rows">
+     <div class="row"><span class="l">engine</span><span class="v">llama.cpp b1030 · native (Vulkan)</span></div>
+     <div class="row"><span class="l">weights</span><span class="v">Ornith-1.5-122B · Q4_K_M</span></div>
+     <div class="row"><span class="l">shape</span><span class="v">2 slots × 196k · vision · no draft head · no-think</span></div>
+     <div class="row"><span class="l">rollback</span><span class="v">po-revert.sh all → ctx393-np2</span></div>
+     <div class="row"><span class="l">guard</span><span class="v">promo-watch to 11-20 · 1 rollback / 24 h</span></div>
+    </div></div>
   </div>
-
-  <div class="loop" aria-label="control loop">
-    <div class="step"><b>01 setpoint</b><span>owner brief · JOB · BUDGET · gates</span></div>
-    <div class="step"><b>02 controller</b><span>foreman ladder · drive</span></div>
-    <div class="step"><b>03 actuator</b><span>pi-say → pi unit</span></div>
-    <div class="step"><b>04 plant</b><span>prod · build.sh · GPU lock</span></div>
-    <div class="step"><b>05 sensors</b><span>gate.jsonl · health · telemetry</span></div>
-    <div class="step"><b>06 audit</b><span>raw files → verdict</span></div>
-  </div>
-
-  <footer>
-    Source: house FORGE.md · served <code>/forge-map/</code> · template energy from <a href="https://scintapp.github.io/">scintapp.github.io</a>
-  </footer>
+  <p class="t3 hint">click a node, or Tab + Enter · the detail on the right is the node's as-built card</p>
+ </div>
+ <div class="detail h-strix" id="detail"><div class="tag">Strix</div><h2>pi 1.5.0 · user forge</h2><p>Sole builder. Jail: loopback + Penpot egress, pinned charter, one prod per unit, every bash through house-gate.</p><ul><li>pi-say only</li><li>~/.pi/agent root-owned</li><li>house-gate v4 extension</li></ul></div>
+</div>
 </div>
 
+<div class="loop map-steps">
+ <div class="step h-owner"><b>01 setpoint</b><span class="s">owner brief · JOB · BUDGET · gates</span></div>
+ <div class="step h-cubert"><b>02 controller</b><span class="s">foreman ladder · drive</span></div>
+ <div class="step h-strix"><b>03 actuator</b><span class="s">pi-say → pi unit</span></div>
+ <div class="step h-strix"><b>04 plant</b><span class="s">prod · build.sh · GPU lock</span></div>
+ <div class="step h-tele"><b>05 sensors</b><span class="s">gate.jsonl · health · telemetry</span></div>
+ <div class="step h-eyes"><b>06 audit</b><span class="s">raw files → verdict</span></div>
+</div>
+
+<div class="foot"><span>Source: house FORGE.md + LIVE.md · as built 2026-11-09 · served by house-dash</span><span class="sp"></span><span>read-only · renders, never acts</span></div>
+</div>
 <script>
 const DATA = {
-  owner: {
-    host: "Owner",
-    title: "Owner",
-    blurb: "Discord is the surface. Flags win. M4 bench is the only perf truth.",
-    items: ["briefs / pause flags", "M4 bench p95 ≤ 16.6 ms", "no second brain"]
-  },
-  mac: {
-    host: "Owner",
-    title: "M4 MBP",
-    blurb: "Owner machine. Solid-60 gate lives here — strix numbers only rank cheaper-or-not.",
-    items: ["bench/index.html", "CfT fullscreen", "m4_est is a screen"]
-  },
-  viewer: {
-    host: "Cubert",
-    title: ":8770 house-viewer",
-    blurb: "Loopback static serve of /sd-backup/projects. Ship target for live WebGPU pieces.",
-    items: ["house-viewer.service", "Mac tunnels in", "never MP4"]
-  },
-  hermes: {
-    host: "Cubert",
-    title: "Hermes",
-    blurb: "Sole brain. Configures, judges, audits. Forge profile owns eyes tools.",
-    items: ["default + peeps gateway", "profiles: forge / verifier / …", "I8 one brain"]
-  },
-  foreman: {
-    host: "Cubert",
-    title: "foreman",
-    blurb: "5-minute controller ladder over forge jobs. Digests status; never builds.",
-    items: ["user timer", "rungs · rescue", "bin/foreman --status"]
-  },
-  pisay: {
-    host: "Cubert → Strix",
-    title: "pi-say",
-    blurb: "Only legal path to the builder. Owner jobs, foreman, and smokes alike.",
-    items: ["I1 sole actuator", "wall 43200 s", "PAUSE-* respected"]
-  },
-  drive: {
-    host: "Cubert",
-    title: "drive",
-    blurb: "Binds a handed-over job to a session. Watchdog wakes on done/fail/overrun.",
-    items: ["STATE.json", "drive-watch cron", "one job per session"]
-  },
-  audit: {
-    host: "Cubert",
-    title: "audit-verdict",
-    blurb: "No claim counts until re-derived from raw files by the verifier profile.",
-    items: ["house/audit/verdicts/", "I2 DONE ≠ prose", "re-derive only"]
-  },
-  tele: {
-    host: "Fleet",
-    title: "house-telemetry",
-    blurb: "Cross-host sensor stream. Feeds health and the dash — not a control plane.",
-    items: ["house-telemetry.py", "host counters", "no secrets in chat"]
-  },
-  health: {
-    host: "Cubert / Strix",
-    title: "forge-health",
-    blurb: "Periodic pulse + OnFailure notify. Seat probe and promo-watch sit beside it.",
-    items: [":00/:20/:40", "forge-notify@", "seat-promo-watch"]
-  },
-  pi: {
-    host: "Strix",
-    title: "pi · user forge",
-    blurb: "Sole builder. Jail: loopback + Penpot egress, pinned charter, one prod per unit.",
-    items: ["pi 1.4+ via pi-say", "~/.pi/agent root-owned", "I3 jail"]
-  },
-  gate: {
-    host: "Strix",
-    title: "house-gate v4",
-    blurb: "Deterministic bash gate. Ten rule classes. No model. Append-only log.",
-    items: ["gpu-lock · network · destroy", "gate.jsonl +a", "no fail-open"]
-  },
-  seat: {
-    host: "Strix",
-    title: "seat-swarm :8085",
-    blurb: "Build seat. GPU belongs here. HIP Blender refused while the seat is up.",
-    items: ["job-named env", "I5 one GPU gate", "promo law D-PR"]
-  },
-  embed: {
-    host: "Strix",
-    title: "embed :8082",
-    blurb: "CPU embed for forge-rag offline specs. Not a builder.",
-    items: ["Qwen3-Embedding", "forge-rag", "CPU only"]
-  },
-  prod: {
-    host: "Strix",
-    title: "prod tree",
-    blurb: "The plant. Git worktree under ~/prods/<id>. build.sh is law.",
-    items: ["BRIEF · ART · gates", "out/frames · judge", "GPU flock"]
-  },
-  tools: {
-    host: "Strix",
-    title: "forge-* tools",
-    blurb: "new · concept · asset · judge · shots · bake · perf · rag · report.",
-    items: ["forge-judge smoke", "forge-perf exclusive", "Blender CPU while seat up"]
-  },
-  eyes: {
-    host: "Cubert cloud",
-    title: "eyes_*",
-    blurb: "Cloud vision on forge profile. Scores and compares frames. Never local seat for grade.",
-    items: ["eyes_score / look / compare", "anchors 2…7.5", "Anthropic path"]
-  },
-  bb: {
-    host: "Blackbird",
-    title: "QC appliance",
-    blurb: "Second device. Real Iris Xe WebGPU. Relative fps only (Xvnc has no vblank).",
-    items: ["profile qc", "hardware WebGPU", "RUNBOOK qc-blackbird"]
-  },
-  bbvnc: {
-    host: "Blackbird",
-    title: "Xvnc :20",
-    blurb: "Bot screen + Chromium with ANV. GUIs only via qc-x11-run.",
-    items: [":20 only, never :0", "Bot Screen", "H-100 seat guard"]
-  },
-  bbeyes: {
-    host: "Blackbird",
-    title: "qc-eyes",
-    blurb: "Local VLM loopback. Advisory only — kappa too low for grade.",
-    items: ["Gemma / Qwen VLMs", "advisory", "not a ship gate"]
-  },
-  bbtunnel: {
-    host: "Blackbird → Cubert",
-    title: "viewer tunnel",
-    blurb: "qc-cubert-viewer-tunnel pulls :8770 pages onto the QC box.",
-    items: ["user unit", "127.0.0.1:8770", "stills + fps"]
-  },
-  sb: {
-    host: "Sandbox",
-    title: "sandbox .17",
-    blurb: "Dashboard + Penpot host. No 40.x. Hop cubert→sandbox with pinned key.",
-    items: ["syzke hop", "no 40.x", "sandbox-pi-ops"]
-  },
-  penpot: {
-    host: "Sandbox",
-    title: "Penpot",
-    blurb: "Only non-loopback egress allowed from the forge jail.",
-    items: ["nft forge_egress", "design surface", "LAN-only"]
-  },
-  dash: {
-    host: "Sandbox",
-    title: "dashboard PWA",
-    blurb: "House monitor surface. Not the builder. Brain stays on cubert.",
-    items: [":9119 class", "profile surfaces", "I8 no second brain"]
-  }
+ owner:{host:"Owner",title:"Owner",blurb:"Discord is the surface. Flags win. Only true criticals reach the phone: brain down, a unit failed, a job failed, exploited-with-no-fix.",items:["briefs / pause flags","house-notify · webhook, bot fallback","no second brain (I8)"]},
+ mac:{host:"Owner",title:"M4 MBP",blurb:"Thin SSH/tmux client and the only perf truth. Everything web is reached through a tunnel.",items:["bench/index.html · CfT fullscreen","ssh -L 8770 cubert · 3883 strix","m4_est is a screen, not a number"]},
+ viewer:{host:"Cubert",title:":8770 house-viewer",blurb:"Loopback static serve of /sd-backup/projects. Ship target for live WebGPU pieces; blackbird pulls it through its own tunnel.",items:["house-viewer.service","Mac + blackbird tunnel in","never MP4"]},
+ hermes:{host:"Cubert",title:"Hermes v0.23.1",blurb:"Sole brain since the 11-09 update. default + peeps on one gateway. Configures, judges, audits; never builds.",items:["profiles forge / verifier / …","Opus 5.5 stack · Anthropic","drive · cron · skills · memory"]},
+ foreman:{host:"Cubert",title:"foreman",blurb:"5-minute controller ladder over forge jobs. Digests status, rescues, restarts; never builds.",items:["foreman.timer","rungs · rescue · steer","PAUSE-* respected"]},
+ pisay:{host:"Cubert → Strix",title:"pi-say",blurb:"The only legal path to the builder (I1). Owner jobs, foreman and smokes alike go through it.",items:["strix-dispatch forced key","wall 43200 s","refuses under PAUSE-*"]},
+ drive:{host:"Cubert",title:"drive",blurb:"Binds a handed-over job to a session. The watchdog wakes a fresh agent on done, fail, overrun or blocked.",items:["STATE.json · drive.log","drive-watch cron · 5 min","absolute --log (H-102)"]},
+ audit:{host:"Cubert · verifier",title:"audit-verdict",blurb:"No claim counts until the verifier profile re-derives it from the raw files. Wording misses come back as DISPUTED, and that is the point.",items:["house/audit/verdicts/","DONE ≠ prose (I2)","r1 DISPUTED → r2"]},
+ kev:{host:"Cubert",title:"kev-watch",blurb:"CISA KEV daily at 14:10 against a measured package inventory of every host; Debian/Arch trackers decide fix state; OSV weekly on Sundays.",items:["PAGE = exploited + no fix","log-only = Debian unimportant","house/kev-watch/ · state.json"]},
+ health:{host:"Cubert",title:"forge-health",blurb:"Read-only pulse every 20 minutes (08:00–21:20). Posts only on FAIL; P0 pings; a planned seat window stops the timer first.",items:["forge-health-notify v3","unit OnFailure · 1 page / h","forge-health -q = silence"]},
+ htele:{host:"Cubert → Sandbox",title:"house-telemetry",blurb:"Pushes cubert.json (drive, foreman, audits, health, heartbeat) to sandbox every 10 s. The dash and /healthz read it.",items:["/var/lib/house-cubert/cubert.json","heartbeat.json per unit","not a control plane"]},
+ eyes:{host:"Cubert · forge profile",title:"eyes_*",blurb:"Cloud vision on the forge profile scores and compares frames. The local seat never grades.",items:["eyes_score / look / compare","anchors 2 … 7.5","Anthropic path"]},
+ pi:{host:"Strix",title:"pi 1.5.0 · user forge",blurb:"Sole builder. Jail: loopback + Penpot egress, pinned charter, one prod per unit, every bash through house-gate.",items:["pi-say only","~/.pi/agent root-owned","house-gate v4 extension"]},
+ gate:{host:"Strix",title:"house-gate v4",blurb:"Deterministic bash gate. Ten rule classes. No model in the loop. Append-only log.",items:["gpu-lock · network · destroy","gate.jsonl +a","no fail-open"]},
+ seat:{host:"Strix",title:"seat-swarm :8085",blurb:"The build seat: Ornith-1.5-122B Q4_K_M on llama.cpp b1030 (native, Vulkan), vision, no draft head, thinking off, 2 × 196k. Took the seat 11-13 01:59 after a paired same-day bench (16 vs 10 green moves of 18). dsh-seat does not work on it.",items:["env ornith-r2t · rollback ctx393-np2","promo-watch guard to 11-20","GTT ~80 GiB · gpu-run arbiter"]},
+ embed:{host:"Strix",title:"embed :8082",blurb:"CPU embedding seat for forge-rag offline specs. Not a builder.",items:["Qwen3-Embedding-0.6B","forge-rag","4 × 8k"]},
+ image:{host:"Strix",title:"image :8095",blurb:"Image seat parked since 10-28 (owner call). FLUX.2 klein 4B in its own venv.",items:["disabled","owner O3/K20","no llama-server"]},
+ prod:{host:"Strix",title:"prod tree",blurb:"The plant. Git worktree under ~/prods/<id>; build.sh is law; frames to out/ for the judge.",items:["BRIEF · ART · gates","out/frames · forge-judge","GPU flock"]},
+ t3:{host:"Strix",title:"T3 Code · Mia fork",blurb:"Browser cockpit for pi, loopback only. Pi runs beside the prods against the local seat through T3's own gateway.",items:["t3code-strix user unit","ssh -L 3883 strix · pair once","~/t3-pair.txt (7 d)"]},
+ tools:{host:"Strix",title:"forge-* tools",blurb:"new · concept · asset · judge · shots · bake · perf · rag · report. Perf is exclusive; Blender stays CPU while the seat is up.",items:["forge-judge smoke","forge-perf · gpu-run -x","blender-hip refused under a seat"]},
+ ssens:{host:"Strix",title:"strix sensors",blurb:"house-telemetry :9101 feeds the dash; cubert-deadman reads sandbox /healthz and pages once per fail window; seat-probe pages after five misses; seat-promo-watch is the 7-day rollback guard.",items:["forge-notify@ · 900 s cooldown","seat-probe · alert-only","promo-watch · one rollback / 24 h"]},
+ bb:{host:"Blackbird",title:"QC appliance",blurb:"Second device, hardware WebGPU. Omarchy rc on the frozen 10-22 snapshot; chromium 156 + brotli 1.2.1 pulled one-off for the KEV; sshd key-only, UFW /22.",items:["profile qc · user qc","Chromium 156","hardened 11-09"]},
+ bbvnc:{host:"Blackbird",title:"Xvnc :20",blurb:"Bot screen + Chromium with ANV. Stopped while idle; GUIs only via qc-x11-run.",items:[":20 only, never :0","start on demand","H-100 seat guard"]},
+ bbeyes:{host:"Blackbird",title:"qc-eyes",blurb:"Local VLM on loopback. Advisory only; kappa too low for grade. Disabled until asked.",items:["Gemma / Qwen VLMs","advisory","not a ship gate"]},
+ bbtunnel:{host:"Blackbird → Cubert",title:"viewer tunnel",blurb:"qc-cubert-viewer-tunnel pulls :8770 pages onto the QC box for stills and relative fps.",items:["user unit","127.0.0.1:8770","Xvnc has no vblank"]},
+ sb:{host:"Sandbox",title:"sandbox .17",blurb:"Raspberry Pi: dashboard + Penpot host. No 40.x. Hop from cubert with the pinned key.",items:["syzke hop","UFW /22 since 11-09","sandbox-pi-ops"]},
+ dash:{host:"Sandbox",title:"house-dash :8090",blurb:"This. One Go binary, four pages, server-rendered fragments over SSE every 5 s. Source: ~/admin/staging/house-dash-w1.",items:["strix · forge · house · map","htmx + hx-sse, vendored","v6 · 11-09"]},
+ penpot:{host:"Sandbox",title:"Penpot :9001",blurb:"Design surface and the only non-loopback egress allowed from the forge jail.",items:["nft forge_egress","UFW from .10 only","2.18 · 11-09 images"]},
+ healthz:{host:"Sandbox",title:"/healthz",blurb:"What strix's dead-man reads: cubert.json age, strix snapshot age, per-unit heartbeat thresholds (foreman 900 s, forge-health 2700 s).",items:["ok · cubert_age_s · strix_age_s","threshold ≥ 2× the timer","one page per fail window"]}
 };
-
 const edgesByNode = {
-  owner: ["e-owner-hermes", "e-viewer", "e-bench"],
-  mac: ["e-bench"],
-  viewer: ["e-viewer", "e-bench", "e-bb-tunnel"],
-  hermes: ["e-owner-hermes", "e-hermes-foreman", "e-hermes-eyes", "e-drive", "e-audit"],
-  foreman: ["e-hermes-foreman", "e-foreman-pisay"],
-  pisay: ["e-foreman-pisay", "e-pisay-pi", "e-drive"],
-  drive: ["e-drive"],
-  audit: ["e-audit"],
-  tele: ["e-tele-all"],
-  health: ["e-tele-all"],
-  pi: ["e-pisay-pi", "e-pi-gate", "e-pi-seat", "e-pi-prod", "e-hermes-eyes"],
-  gate: ["e-pi-gate", "e-sb-penpot"],
-  seat: ["e-pi-seat", "e-seat-gpu"],
-  embed: ["e-pi-seat"],
-  prod: ["e-pi-prod", "e-prod-tools", "e-eyes-prod", "e-bb-qc", "e-seat-gpu"],
-  tools: ["e-prod-tools"],
-  eyes: ["e-hermes-eyes", "e-eyes-prod", "e-audit"],
-  bb: ["e-bb-qc"],
-  bbvnc: ["e-bb-qc", "e-bb-tunnel"],
-  bbeyes: ["e-bb-qc"],
-  bbtunnel: ["e-bb-tunnel"],
-  sb: ["e-sb-penpot"],
-  penpot: ["e-sb-penpot"],
-  dash: ["e-sb-penpot"]
+ owner:["e-owner-hermes"], mac:["e-mac-viewer"], viewer:["e-mac-viewer","e-bbtunnel-viewer"],
+ hermes:["e-owner-hermes","e-hermes-foreman","e-hermes-eyes","e-hermes-drive","e-hermes-audit","e-hermes-kev"],
+ foreman:["e-hermes-foreman","e-foreman-pisay"], pisay:["e-foreman-pisay","e-pisay-pi"], drive:["e-hermes-drive"], audit:["e-hermes-audit"], kev:["e-hermes-kev"],
+ health:["e-health-ssens"], htele:["e-htele-dash"], eyes:["e-hermes-eyes","e-eyes-prod"],
+ pi:["e-pisay-pi","e-pi-gate","e-pi-seat","e-hermes-eyes"], gate:["e-pi-gate","e-gate-penpot"], seat:["e-pi-seat","e-seat-prod","e-t3-seat"], embed:[], image:[],
+ prod:["e-seat-prod","e-prod-tools","e-eyes-prod","e-bb-prod"], t3:["e-t3-seat"], tools:["e-prod-tools"], ssens:["e-ssens-dash","e-ssens-healthz","e-health-ssens"],
+ bb:["e-bb-prod"], bbvnc:["e-bb-prod"], bbeyes:[], bbtunnel:["e-bbtunnel-viewer"],
+ sb:["e-htele-dash","e-ssens-dash"], dash:["e-htele-dash","e-ssens-dash"], penpot:["e-gate-penpot"], healthz:["e-ssens-healthz"]
 };
-
+const hostCls = {owner:"h-owner",mac:"h-owner",viewer:"h-cubert",hermes:"h-cubert",foreman:"h-cubert",pisay:"h-cubert",drive:"h-cubert",audit:"h-eyes",kev:"h-cubert",health:"h-tele",htele:"h-tele",eyes:"h-eyes",pi:"h-strix",gate:"h-strix",seat:"h-strix",embed:"h-strix",image:"h-strix",prod:"h-strix",t3:"h-strix",tools:"h-strix",ssens:"h-tele",bb:"h-blackbird",bbvnc:"h-blackbird",bbeyes:"h-blackbird",bbtunnel:"h-blackbird",sb:"h-sandbox",dash:"h-sandbox",penpot:"h-sandbox",healthz:"h-tele"};
 const detail = document.getElementById("detail");
 const nodes = [...document.querySelectorAll(".node")];
 const edges = [...document.querySelectorAll("#edges .edge")];
-
-function show(id) {
-  const d = DATA[id];
-  if (!d) return;
+function show(id){
+  const d = DATA[id]; if (!d) return;
   nodes.forEach(n => n.classList.toggle("active", n.dataset.id === id));
   const on = new Set(edgesByNode[id] || []);
   edges.forEach(e => e.classList.toggle("on", on.has(e.id)));
-  detail.innerHTML = `
-    <div class="tag">${d.host}</div>
-    <h2>${d.title}</h2>
-    <p>${d.blurb}</p>
-    <ul>${d.items.map(i => {
-      const [a,b] = i.split(" · ");
-      return `<li>${a}${b ? `<span>${b}</span>` : ""}</li>`;
-    }).join("")}</ul>`;
+  detail.className = "detail " + (hostCls[id] || "");
+  detail.innerHTML = `<div class="tag">${d.host}</div><h2>${d.title}</h2><p>${d.blurb}</p><ul>${d.items.map(i=>{const [a,b]=i.split(" · ");return `<li>${a}${b?`<span>${b}</span>`:""}</li>`;}).join("")}</ul>`;
 }
-
-nodes.forEach(n => {
-  n.addEventListener("click", () => show(n.dataset.id));
-  n.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); show(n.dataset.id); }
-  });
-});
-
+nodes.forEach(n => { n.addEventListener("click", () => show(n.dataset.id)); n.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); show(n.dataset.id); } }); });
 show("pi");
+// live strip: htmx 4 polls /healthz (see #poll, hx-swap="none"); the JSON body arrives as ctx.text
+const $ = id => document.getElementById(id);
+const f = s => s == null ? '…' : (s < 0 ? '0 s' : (s < 60 ? s + ' s' : Math.round(s/60) + ' m'));
+const clock = t => new Date(t*1000).toLocaleTimeString([], {hour12:false});
+const set = (id, txt, cls) => { const el = $(id); el.textContent = txt; el.className = 'v ' + (cls || ''); };
+const live = (id, ok) => document.querySelector(`.node[data-id="${id}"]`).classList.toggle('live', !!ok);
+function paint(h){
+  const ps = $('pill-strix'), pc = $('pill-cubert');
+  ps.textContent = 'strix ' + f(h.strix_age_s); pc.textContent = 'cubert ' + f(h.cubert_age_s);
+  ps.className = 'pill ' + (h.strix_age_s > 60 ? 'w' : 'g'); pc.className = 'pill ' + (h.cubert_age_s > 60 ? 'w' : 'g');
+  $('pill-t').textContent = clock(h.t);
+  $('live-at').textContent = clock(h.t);
+  set('lv-ok', h.ok ? 'ok · dead-man sees cubert' : ('DOWN · ' + (h.detail || '')), h.ok ? 'g' : 'b');
+  set('lv-cub', f(h.cubert_age_s) + ' old · pushed every 10 s', h.cubert_age_s > 60 ? 'w' : 'g');
+  set('lv-strix', f(h.strix_age_s) + ' old · snapshot every 5 s', h.strix_age_s > 60 ? 'w' : 'g');
+  set('lv-hb', f(h.max_heartbeat_age_s) + ' · foreman ≤ 15 m · forge-health ≤ 45 m', h.max_heartbeat_age_s > 2700 ? 'w' : '');
+  set('lv-miss', (h.heartbeat_missing && h.heartbeat_missing.length) ? h.heartbeat_missing.join(', ') : 'none', (h.heartbeat_missing && h.heartbeat_missing.length) ? 'w' : 'g');
+  live('seat', h.strix_age_s <= 60); live('ssens', h.strix_age_s <= 60); live('htele', h.cubert_age_s <= 60); live('hermes', h.ok === true); live('healthz', h.ok === true); live('dash', true);
+}
+document.addEventListener('htmx:after:request', e => {
+  const src = (e.detail && e.detail.ctx && e.detail.ctx.sourceElement) || e.target;
+  if (!src || src.id !== 'poll') return;
+  try { paint(JSON.parse(e.detail.ctx.text)); }
+  catch (err) { console.warn('healthz: could not paint', err); }
+});
 </script>
-
 
 </body></html>
