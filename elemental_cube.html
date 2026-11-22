@@ -1,0 +1,1009 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!--
+  elemental holocube: single-file build for GitHub Pages
+  Host: commit this file as index.html (repo root or /docs) and serve it over HTTPS (WebGPU needs a secure context).
+  Loads three.js r186 (WebGPU + TSL) and htmx 4.0.2 from jsDelivr at pinned versions; everything else is in this file.
+  URL switches: ?t=SECONDS freezes the clock, ?elements=0 switches off the light the faces cast, ?atmo=0 switches off the atmosphere.
+  The corner controls (pause, fullscreen) are an optional htmx layer: hx-on:* attributes call __eholo.togglePause() and
+  __eholo.toggleFullscreen(). They stay hidden unless the scene is running and htmx loaded; the scene itself never needs htmx.
+  While the libraries load the page says "Loading..." (after 0.7 s); if they cannot load it says so instead of staying black.
+  The htmx integrity hash is the one the htmx 4 docs publish for this exact URL. If the console ever reports an integrity
+  mismatch, recompute it: curl -sL https://cdn.jsdelivr.net/npm/htmx.org@4.0.2 | openssl dgst -sha384 -binary | openssl base64 -A
+-->
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>elemental holocube</title>
+<meta name="description" content="A hologram cube whose six faces animate as fire, ice, water, earth, electricity and nature, on a lit studio stage. Drag to orbit.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+canvas{display:block;cursor:grab;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+canvas:active{cursor:grabbing}
+.note{position:fixed;inset:0;margin:0;padding:2rem;display:grid;place-items:center;text-align:center;color:#9fb3c8;font:16px/1.5 system-ui,sans-serif}
+/* corner controls (optional htmx layer): invisible, and not clickable, until the pointer moves or a control takes keyboard focus */
+.hud{position:fixed;right:max(14px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));z-index:2;display:flex;gap:8px;opacity:0;pointer-events:none;transition:opacity .35s}
+.hud[hidden]{display:none}
+.hud[data-on]{opacity:1;pointer-events:auto}
+.hud:has(:focus-visible){opacity:1;pointer-events:auto}
+/* no backdrop-filter here: it would re-blur the live WebGPU canvas every frame while the overlay is up; the fill alone keeps the label above 4.5:1 */
+.hud button{font:500 12px/1 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#aab9cc;background:rgba(6,9,15,.78);border:1px solid rgba(160,185,220,.24);border-radius:999px;padding:10px 15px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.hud button:hover{color:#fff;border-color:rgba(190,215,255,.55)}
+.hud button:focus-visible{outline:2px solid #8fb8ff;outline-offset:2px}
+@media (pointer:coarse){.hud button{padding:15px 18px}}
+@media (prefers-reduced-motion:reduce){.hud{transition:none}}
+</style>
+<!-- the import map must come before any module is requested, so before the modulepreload links and the module script -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.webgpu.js",
+    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.webgpu.js",
+    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.tsl.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+  }
+}
+</script>
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.core.js">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.webgpu.js">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.tsl.js">
+<script defer src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.2" integrity="sha384-6NzMyCdh08UZ4b4M17SJJKQLdDijx4z2IqqKLKD0Q/PzCFQLpFuk3konY0WgqbTy" crossorigin="anonymous"></script>
+<script type="module">
+// elemental holocube (EHOLO-YARD-361eae90): a hologram cube with six element faces (fire, ice, water, earth, electricity, nature)
+// on a lit studio stage, three.js r186 WebGPU renderer + TSL. The faces light the stage, the haze and the dust around them.
+// Drag to orbit, wheel / pinch to zoom; the eye stays inside the studio wall.
+import * as THREE from 'three';
+import {
+  Fn, float, vec2, vec3, vec4, uniform, fwidth, mix, smoothstep, clamp, abs, max, min, sin, cos, exp, pow, fract, floor, step, length, normalize, dot,
+  positionLocal, positionWorld, cameraPosition, modelWorldMatrix, cameraViewMatrix, mx_noise_float, hash, PI,
+  instanceIndex, varying, uv, atan, screenCoordinate, screenUV,
+} from 'three/tsl';
+import { pass, renderOutput } from 'three/tsl';
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { LineSegments2 } from 'three/addons/lines/webgpu/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+
+// ---- clock + URL switches (keep this working; the bench driver tests each move with them) ----
+// ?t=SECONDS freezes the clock at that time: drive EVERY animated value from now(), shader time included.
+// (three's TSL `time` node follows the frame clock, not now(): use a uniform you set from now() each frame instead.)
+// A ?t that is not a finite number is ignored (the clock runs); a negative one is clamped to 0.
+// ?elements=0 switches off the light the faces cast on the stage, the haze and the dust (the faces themselves stay as they are); ?atmo=0 switches the atmosphere off.
+// prefers-reduced-motion: reduce slows the running clock and calms the electric strobe and the mains flicker; it never applies under ?t.
+const Q = new URLSearchParams(location.search);
+const T_PARAM = Q.has('t') ? parseFloat(Q.get('t')) : NaN;
+const FROZEN = Number.isFinite(T_PARAM) ? Math.max(0, T_PARAM) : null;
+const SWITCH = { elements: Q.get('elements') !== '0', atmo: Q.get('atmo') !== '0' };
+const CALM = FROZEN === null && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+const CALM_RATE = 0.35;                         // running-clock speed under reduced motion
+let t0 = performance.now();
+let pausedAt = null;                            // scene time while the corner pause is on: the clock stands still, the camera stays live
+function now() { return FROZEN !== null ? FROZEN : pausedAt !== null ? pausedAt : (performance.now() - t0) / 1000 * (CALM ? CALM_RATE : 1); }
+// pause / resume without a jump: on resume the running clock restarts from the time it stopped at. Returns true while paused.
+function togglePause() {
+  if (FROZEN !== null) return true;             // ?t already holds the clock
+  if (pausedAt === null) pausedAt = now();
+  else { t0 = performance.now() - pausedAt / (CALM ? CALM_RATE : 1) * 1000; pausedAt = null; }
+  return pausedAt !== null;
+}
+window.__eholo = { t: FROZEN, elements: SWITCH.elements, atmo: SWITCH.atmo, calm: CALM, now, togglePause };
+document.getElementById('boot')?.remove();      // single-file build: the page's loading note has done its job once the module is running
+
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.domElement.setAttribute('role', 'img');
+renderer.domElement.setAttribute('aria-label', 'Interactive 3D cube whose six faces animate as fire, ice, water, earth, electricity and nature. Drag to orbit, scroll or pinch to zoom.');
+document.body.appendChild(renderer.domElement);
+try { await renderer.init(); }
+catch (err) {
+  // neither WebGPU nor WebGL 2 could start: say so, instead of leaving a silent black page
+  window.__eholo.error = String((err && err.message) || err);
+  const note = document.createElement('p');
+  note.setAttribute('role', 'alert');
+  note.textContent = 'This piece needs WebGPU or WebGL 2, and this browser could not start either. Try a current Chrome, Edge, Safari or Firefox with hardware acceleration turned on.';
+  note.style.cssText = 'position:fixed;inset:0;margin:0;padding:2rem;display:grid;place-items:center;text-align:center;color:#9fb3c8;font:16px/1.5 system-ui,sans-serif';
+  document.body.appendChild(note);
+  throw err;
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x020306);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(2.4, 1.6, 3.2);
+camera.lookAt(0, 0, 0);
+
+// ---------------------------------------------------------------- shared uniforms (all driven from now())
+const uT = uniform(0);                          // shader clock = now()
+const uUp = uniform(new THREE.Vector3(0, 1, 0)); // world up in cube space (flames rise with the world, not the face)
+const uFlick = uniform(1);                      // hologram mains flicker
+// the electric face carries four live arcs: A.xy B.xy in face coords, and (seed, strength)
+const BOLTS = 4;
+const uBoltAB = [], uBoltS = [];
+for (let i = 0; i < BOLTS; i++) { uBoltAB.push(uniform(new THREE.Vector4())); uBoltS.push(uniform(new THREE.Vector2())); }
+
+// ---------------------------------------------------------------- noise helpers
+// JS-side hash in [0, 1): the same input gives the same value on every run (the ice facets, the arcs and the flicker draw on it)
+const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+const fbm = (p, oct, lac = 2.03) => {
+  let s = float(0), a = 0.5, f = 1;
+  for (let i = 0; i < oct; i++) { s = s.add(mx_noise_float(p.mul(f).add(vec3(i * 1.7, i * 3.1, i * 2.3))).mul(a)); f *= lac; a *= 0.5; }
+  return s;
+};
+// moving-cell voronoi: F2 - F1 (thin bright webs = caustics)
+const voro = (p, T, sp) => {
+  const ip = floor(p), fp = fract(p);
+  // cell columns and rows wrap into [0, 1024): the hash seed is then never negative however far a layer has drifted (a negative seed saturates
+  // to 0, every such cell would share one hash and the web would turn into a regular grid after ~2.8 h). Inside that range these are the plain ids.
+  const wrap = (v) => v.sub(floor(v.div(1024)).mul(1024));
+  const cols = [-1, 0, 1].map((i) => wrap(ip.x.add(i + 512)));
+  const rows = [-1, 0, 1].map((j) => wrap(ip.y.add(j + 512)).mul(1031));
+  let f1 = float(9), f2 = float(9);
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const id = cols[i + 1].add(rows[j + 1]);
+    const h1 = hash(id), h2 = hash(id.add(3000017));
+    const pt = vec2(i + 0.5, j + 0.5).add(vec2(sin(T.mul(sp).add(h1.mul(6.283))), cos(T.mul(sp * 0.83).add(h2.mul(6.283)))).mul(0.38));
+    const d = length(pt.sub(fp));
+    f2 = min(f2, max(f1, d)); f1 = min(f1, d);
+  }
+  return f2.sub(f1);
+};
+
+// ---------------------------------------------------------------- the six elements (q = face coords in [-1, 1])
+function fire(q, up2, T, seed) {
+  const k = length(up2);
+  const dir = up2.div(max(k, 0.001));
+  const yv = dot(q, dir), xv = q.x.mul(dir.y).sub(q.y.mul(dir.x));
+  const h = yv.mul(0.5).add(0.5);                                     // 0 = bottom edge, 1 = top
+  const warp = fbm(vec3(xv.mul(1.3), yv.mul(1.2).sub(T.mul(1.1)), T.mul(0.25).add(seed)), 2);
+  // stretched along the flow: tall separate tongues
+  const n = fbm(vec3(xv.mul(3.1).add(warp.mul(1.2)), yv.mul(1.45).sub(T.mul(2.3)), T.mul(0.45).add(seed)), 5);
+  const tongues = n.mul(2.1).add(0.82).sub(h.mul(1.15));
+  // a face lying flat (world up through it): boiling fire seen from above
+  const flat = fbm(vec3(q.mul(2.4).add(warp), T.mul(0.8).add(seed)), 5).mul(2.4).add(0.42);
+  const f = mix(flat, tongues, smoothstep(0.15, 0.55, k));
+  // embers: sparse sparks rising in the flow. The cell row wraps into [-64, 64) so the hash seed stays positive at any time
+  // (a negative float seed saturates to 0, every cell would share one hash and the embers would die); the field repeats every 128 rows, seamlessly.
+  const ec = vec2(xv.mul(7), yv.mul(7).sub(T.mul(4.2)));
+  const cell = floor(ec), row = cell.y.sub(floor(cell.y.add(64).div(128)).mul(128));
+  const id = cell.x.add(row.mul(57)).add(seed * 13 + 4000);
+  const hid = hash(id);
+  const ep = vec2(hash(id.add(17)), hash(id.add(31))).mul(0.7).add(0.15);
+  const ember = float(1).sub(smoothstep(0.0, 0.075, length(fract(ec).sub(ep)))).mul(smoothstep(0.82, 0.86, hid)).mul(smoothstep(-0.2, 0.5, h));
+  const fc = clamp(f, 0, 1.2);
+  return vec3(0.6, 0.05, 0.004).mul(smoothstep(0.0, 0.12, fc))
+    .add(vec3(1.0, 0.28, 0.02).mul(smoothstep(0.12, 0.42, fc)).mul(1.1))
+    .add(vec3(1.0, 0.55, 0.1).mul(smoothstep(0.45, 0.8, fc)).mul(0.75))
+    .add(vec3(1.0, 0.85, 0.55).mul(smoothstep(0.95, 1.2, fc)).mul(0.45))
+    .add(vec3(1.0, 0.55, 0.15).mul(ember).mul(3.0));
+}
+
+function water(q, T, seed, par) {
+  // swell: four analytic sine trains (exact gradient for glints)
+  const W = [[2.1, 0.9, 1.3, 0.07], [-1.3, 2.4, 1.7, 0.055], [3.7, -2.2, 2.3, 0.03], [-4.6, -3.1, 2.9, 0.02],
+    [11.3, 6.1, 4.1, 0.007], [-8.2, 12.7, 4.6, 0.006], [15.1, -9.4, 5.3, 0.005], [-17.9, -5.2, 5.9, 0.004]];
+  let gx = float(0), gy = float(0), hgt = float(0);
+  W.forEach(([kx, ky, w, a], i) => {
+    const ph = q.x.mul(kx).add(q.y.mul(ky)).sub(T.mul(w)).add(seed + i * 1.9);
+    hgt = hgt.add(sin(ph).mul(a));
+    const c = cos(ph).mul(a); gx = gx.add(c.mul(kx)); gy = gy.add(c.mul(ky));
+  });
+  // drops: rings that start, spread and fade
+  for (let j = 0; j < 3; j++) {
+    const P = 2.6 + j * 0.45, tt = T.div(P).add(j / 3 + seed * 0.1);
+    const e = floor(tt), age = fract(tt).mul(P);
+    const c = vec2(hash(e.mul(7).add(j * 131 + 11)), hash(e.mul(7).add(j * 131 + 57))).mul(1.5).sub(0.75);
+    const rel = q.sub(c), r = max(length(rel), 0.001);
+    const x = r.sub(age.mul(0.5));
+    const env = exp(x.mul(x).mul(-70)).mul(exp(age.mul(-0.85)));
+    hgt = hgt.add(sin(x.mul(40)).mul(env).mul(0.008));
+    const dr = cos(x.mul(40)).mul(env).mul(0.7);
+    gx = gx.add(dr.mul(rel.x).div(r)); gy = gy.add(dr.mul(rel.y).div(r));
+  }
+  const nrm = normalize(vec3(gx.negate(), gy.negate(), 1));
+  // looking down into the water: the floor caustics under the swell, refracted by it
+  const qq = q.add(par.mul(0.55)).add(nrm.xy.mul(0.12));   // the caustic floor lies under the surface: parallax
+  // caustic net: two drifting voronoi edge layers, domain-warped so the filaments curve, with uneven focus
+  const wq = (pp, k) => pp.add(vec2(mx_noise_float(vec3(pp.mul(0.9), T.mul(0.22).add(k))), mx_noise_float(vec3(pp.mul(0.9).add(7.7), T.mul(0.22).sub(k)))).mul(0.62));
+  const p1 = wq(qq.mul(2.3).add(vec2(T.mul(0.06), T.mul(0.04))).add(seed), 1.0);
+  const p2 = wq(qq.mul(3.6).sub(vec2(T.mul(0.05), T.mul(-0.07))).add(seed + 5.3), 4.0);
+  const e1 = voro(p1, T, 0.7), e2 = voro(p2, T, 0.9);
+  const wid = mx_noise_float(vec3(qq.mul(1.3), T.mul(0.3).add(seed))).mul(0.07).add(0.13);
+  const l1 = float(1).sub(smoothstep(0.0, wid, e1)), l2 = float(1).sub(smoothstep(0.0, wid.mul(0.8), e2));
+  const halo = exp(e1.mul(-6)).mul(0.3).add(exp(e2.mul(-8)).mul(0.15));
+  const caus = l1.mul(l1).mul(l1).mul(0.75).add(l2.mul(l2).mul(l2).mul(0.3)).add(l1.mul(l2).mul(1.6)).add(halo)
+    .mul(mx_noise_float(vec3(qq.mul(0.9), T.mul(0.15).add(seed * 2.0))).mul(0.6).add(0.7));
+  // the surface itself: a soft sky sheen sliding over the swell, plus sun glints
+  const sl = nrm.x.mul(0.8).add(nrm.y.mul(0.6));
+  const sheen = smoothstep(0.02, 0.14, sl).mul(0.35).add(smoothstep(0.1, 0.2, sl).mul(0.35));
+  const hv = normalize(vec3(0.16, 0.21, 1));
+  const spec = pow(max(dot(nrm, hv), 0), 700).mul(2.2).add(pow(max(dot(nrm, normalize(vec3(-0.22, 0.1, 1))), 0), 1000).mul(1.4));
+  const depth = float(1).sub(length(q).mul(0.35));
+  const deep = mix(vec3(0.0, 0.02, 0.1), vec3(0.01, 0.1, 0.38), hgt.mul(3).add(0.5).clamp(0, 1)).mul(depth.add(0.3));
+  return deep.add(vec3(0.03, 0.32, 1.0).mul(caus.mul(0.75))).add(vec3(0.15, 0.45, 1.0).mul(sheen.mul(0.8))).add(vec3(1.2, 1.6, 2.0).mul(spec));
+}
+
+function electric(q, T, fi, par) {
+  const plasma = fbm(vec3(q.add(par.mul(0.4)).mul(1.7), T.mul(0.35).add(fi)), 3);
+  let col = mix(vec3(0.004, 0.002, 0.02), vec3(0.06, 0.015, 0.16), plasma.mul(1.4).add(0.45).clamp(0, 1).pow(1.5));
+  // ionised web: ridged noise, jittered at 20 Hz so it crackles
+  const Tq = floor(T.mul(20)).div(20);
+  const web = pow(float(1).sub(abs(mx_noise_float(vec3(q.mul(2.2), Tq.mul(1.7).add(fi * 5))))), 40);
+  col = col.add(vec3(0.35, 0.25, 1.2).mul(web.mul(0.35)));
+  let glowSum = float(0);
+  for (let b = 0; b < BOLTS; b++) {
+    const AB = uBoltAB[b], S = uBoltS[b];
+    const A = AB.xy, D = AB.zw.sub(AB.xy);
+    const Ln = max(length(D), 0.01), dirb = D.div(Ln);
+    const rel = q.sub(A);
+    const s = dot(rel, dirb).div(Ln), d = rel.x.mul(dirb.y.negate()).add(rel.y.mul(dirb.x));
+    const sc = clamp(s, 0, 1), env = sin(sc.mul(PI));
+    const u = sc.mul(Ln);
+    const disp = mx_noise_float(vec2(u.mul(2.6), S.x)).mul(0.3)
+      .add(mx_noise_float(vec2(u.mul(7.5), S.x.add(3.1))).mul(0.09))
+      .add(mx_noise_float(vec2(u.mul(21.0), S.x.add(7.7))).mul(0.03)).mul(env);
+    const dd = abs(d.sub(disp));
+    const on = smoothstep(-0.03, 0.0, s).mul(smoothstep(-1.03, -1.0, s.negate()));
+    // a fork leaves the main channel at s = 0.45
+    const fork = abs(d.sub(disp).sub(sc.sub(0.45).max(0).mul(mx_noise_float(vec2(S.x, 4.2)).mul(1.6))))
+      .add(float(1).sub(smoothstep(0.3, 0.45, s)));
+    const fOn = float(1).sub(smoothstep(0.6, 0.8, s));
+    const core = float(1).sub(smoothstep(0.008, 0.026, dd)).mul(3.4).add(float(1).sub(smoothstep(0.005, 0.018, fork)).mul(fOn).mul(2.0));
+    const glow = exp(dd.mul(-18)).mul(0.75).add(exp(dd.mul(-5)).mul(0.14)).add(exp(fork.mul(-20)).mul(fOn).mul(0.35));
+    col = col.add(vec3(0.9, 1.0, 1.4).mul(core).add(vec3(0.35, 0.45, 1.6).mul(glow)).mul(on).mul(S.y));
+    glowSum = glowSum.add(glow.mul(on).mul(S.y));
+  }
+  // the face's own plasma lifts around live channels
+  return col.add(vec3(0.25, 0.1, 0.6).mul(glowSum.mul(plasma.add(0.6)).mul(0.3)));
+}
+
+// cold glints: a sparse grid of four-point stars that twinkle (ice frost, earth's gold flecks)
+const glints = (q, T, dens, seed, rate, sharp) => {
+  const gq = q.mul(dens).add(seed * 3.1);
+  const gc = floor(gq), gid = gc.x.add(gc.y.mul(71)).add(seed * 37 + 900);
+  const gd = fract(gq).sub(vec2(hash(gid), hash(gid.add(19))).mul(0.6).add(0.2));
+  const tw = pow(sin(T.mul(hash(gid.add(5)).mul(rate).add(rate * 0.5)).add(hash(gid.add(9)).mul(40))).mul(0.5).add(0.5), sharp)
+    .mul(smoothstep(0.55, 0.6, hash(gid.add(23))));
+  const ax = abs(gd.x), ay = abs(gd.y);
+  const rays = float(0.0006).div(ax.mul(ay).add(0.0006)).mul(exp(length(gd).mul(-11)));
+  return rays.mul(0.6).add(exp(dot(gd, gd).mul(-1400)).mul(2.0)).mul(tw);
+};
+
+function ice(q, T, seed, par) {
+  // the block: a cut crystal. Long straight fractures at 60-degree steps split the face into flat facets; each facet is a plane
+  // with its own depth of cold blue, and a slow sheen slides across the facets as if light moved through the ice.
+  const qd = q.add(par.mul(0.22));
+  let fid = float(0), crack = float(0), chalo = float(0), bevel = float(0);
+  for (let k = 0; k < 7; k++) {
+    const ang = (k % 3) * Math.PI / 3 + (rnd(k * 7.1 + seed) - 0.5) * 0.35 + 0.3;
+    const nx = -Math.sin(ang), ny = Math.cos(ang);
+    const c = vec2((rnd(k * 3.3 + seed + 1) - 0.5) * 1.3, (rnd(k * 5.7 + seed + 2) - 0.5) * 1.3);
+    const sd = dot(qd.sub(c), vec2(nx, ny));
+    fid = fid.add(step(0, sd).mul(Math.pow(2, k)));
+    const ad = abs(sd), aa = fwidth(sd).max(0.001);
+    // each fracture is a bevel: the lit side of the facet edge catches a bright strip, the far side falls into shadow
+    bevel = bevel.add(sd.greaterThan(0).select(exp(sd.mul(-22)).mul(0.6), exp(sd.mul(30)).mul(-0.35)));
+    const along = abs(dot(qd.sub(c), vec2(ny, -nx))), len = 0.7 + 0.8 * rnd(k * 4.3 + seed + 6);
+    const w = float(1).sub(along.div(len).clamp(0, 1)).mul(0.006 + 0.004 * rnd(k * 9.1 + seed));
+    crack = crack.add(float(1).sub(smoothstep(w, aa.mul(1.5).add(w), ad)).mul(smoothstep(0.0, 0.002, w)).mul(0.55 + 0.45 * rnd(k * 2.9 + seed + 4)));
+    chalo = chalo.add(exp(ad.mul(-70)));
+  }
+  const h1 = hash(fid.add(seed * 13 + 101)), h2 = hash(fid.add(seed * 13 + 202));
+  const tilt = dot(qd, vec2(h1.sub(0.5), h2.sub(0.5)).mul(0.9));
+  const depthV = h1.mul(0.75).add(tilt).clamp(0, 1);
+  const fb = fbm(vec3(qd.mul(2.4), seed), 2);
+  let col = mix(mix(vec3(0.006, 0.04, 0.08), vec3(0.06, 0.36, 0.5), smoothstep(0.0, 0.55, depthV)), vec3(0.4, 0.82, 0.95), smoothstep(0.55, 1.0, depthV))
+    .mul(fb.mul(0.35).add(0.9));
+  col = col.mul(bevel.min(0).add(1).max(0.2)).add(vec3(0.45, 0.85, 1.0).mul(bevel.max(0).min(1.2).mul(0.5)));
+  const sheen = pow(sin(h2.mul(9.0).add(qd.x.add(qd.y).mul(1.4)).sub(T.mul(0.6))).mul(0.5).add(0.5), 10);
+  col = col.add(vec3(0.5, 0.9, 1.0).mul(sheen.mul(0.55)));
+  col = col.add(vec3(0.75, 0.96, 1.08).mul(crack.min(1.0).mul(1.1))).add(vec3(0.3, 0.75, 1.0).mul(chalo.mul(0.08)));
+  // window frost: fern-like dendrites that grow inward from the frame, branch at 60 degrees, hold, then thaw (each on its own cycle)
+  let fern = float(0), fhalo = float(0);
+  const ca = 1.0 / Math.tan(Math.PI / 3), sA = Math.sin(Math.PI / 3);
+  for (let k = 0; k < 7; k++) {
+    const P = 9.0 + (k % 3) * 1.7, tt = T.div(P).add(k * 0.37 + seed * 0.05);
+    const e = floor(tt), age = fract(tt);
+    const hk = (n) => hash(e.mul(13).add(k * 977 + n * 131 + 11));
+    const side = k % 4, u0 = hk(1).mul(1.6).sub(0.8);
+    const o = [vec2(float(-1), u0), vec2(float(1), u0), vec2(u0, float(-1)), vec2(u0, float(1))][side];
+    const th = [0, Math.PI, Math.PI / 2, -Math.PI / 2][side];
+    const ang = hk(2).sub(0.5).mul(0.9).add(th);
+    const dir = vec2(cos(ang), sin(ang));
+    const L = smoothstep(0.0, 0.7, age).mul(hk(3).mul(0.5).add(0.55));
+    const fade = float(1).sub(smoothstep(0.86, 1.0, age));
+    const p = q.sub(o);
+    const x = dot(p, dir), y = abs(p.x.mul(dir.y).sub(p.y.mul(dir.x)));
+    const spine = length(vec2(x.sub(clamp(x, 0, L)), y));
+    const ks = 0.075;
+    const w = x.sub(y.mul(ca)), xb = floor(w.div(ks).add(0.5)).mul(ks);
+    const perp = abs(w.sub(xb)).mul(sA);
+    const bl = L.sub(xb).mul(0.42).min(xb.mul(0.8)).max(0);
+    const sAlong = y.div(sA);
+    const neg = xb.lessThan(0).select(float(9), float(0));
+    const br = length(vec2(perp, sAlong.sub(bl).max(0))).add(neg);
+    // second-order needles off each branch (finer, shorter)
+    const ks2 = 0.026;
+    const w2 = sAlong.sub(perp.mul(ca)), xb2 = floor(w2.div(ks2).add(0.5)).mul(ks2);
+    const tw = abs(w2.sub(xb2)).mul(sA);
+    const nd = length(vec2(tw, perp.div(sA).sub(bl.sub(xb2).mul(0.35).max(0)).max(0)))
+      .add(sAlong.greaterThan(bl).select(float(9), float(0))).add(neg);
+    const d = min(spine, min(br.add(0.0015), nd.add(0.003)));
+    const aa = fwidth(d).max(0.0012);
+    const taper = float(1).sub(x.div(L.max(0.01)).clamp(0, 1).mul(0.6));
+    fern = fern.add(float(1).sub(smoothstep(0.0, aa.mul(1.5).add(0.009), d)).mul(fade).mul(taper));
+    fhalo = fhalo.add(exp(d.mul(-55)).mul(fade));
+  }
+  // sugary rime packed along the frame, sparkling where it catches the light
+  const ed = float(1).sub(max(abs(q.x), abs(q.y)));
+  const rimeW = fbm(vec3(q.mul(3.0), seed + 7.0), 2).mul(0.04).add(0.045);
+  const gr = mx_noise_float(vec3(q.mul(38), seed + 3.0)).mul(0.5).add(0.5);
+  const rime = float(1).sub(smoothstep(rimeW.mul(0.5), rimeW, ed));
+  col = mix(col, vec3(0.62, 0.88, 0.97).mul(gr.mul(0.3).add(0.75)), rime.mul(0.85));
+  col = col.add(vec3(0.7, 0.95, 1.1).mul(fern.min(1.0).mul(0.95))).add(vec3(0.25, 0.68, 1.0).mul(fhalo.mul(0.22)));
+  return col.add(vec3(0.85, 0.97, 1.0).mul(glints(q, T, 6.0, seed, 3.0, 14).add(glints(q, T, 11.0, seed + 5.0, 4.0, 18))).mul(2.6));
+}
+
+function earth(q, T, seed, par) {
+  const wq = (p) => p.add(vec2(mx_noise_float(vec3(p.mul(1.3), seed)), mx_noise_float(vec3(p.mul(1.3).add(9.1), seed))).mul(0.25));
+  const p = wq(q);
+  const c1 = voro(p.mul(1.9).add(seed), T, 0.0);           // the big fractures
+  const c2 = voro(p.mul(4.6).add(seed + 3.7), T, 0.0);     // hairline cracks
+  // stone: relief from a 3-octave height field, lit from the upper left, plates rising away from the cracks
+  const hf = (pp) => fbm(vec3(pp.mul(3.4), seed + 1.0), 3);
+  const e = 0.012;
+  const h0 = hf(p), hx = hf(p.add(vec2(e, 0))), hy = hf(p.add(vec2(0, e)));
+  const nS = normalize(vec3(hx.sub(h0).mul(-9.0), hy.sub(h0).mul(-9.0), 1));
+  const lit = dot(nS, normalize(vec3(-0.5, 0.55, 0.65))).max(0);
+  const bev = smoothstep(0.0, 0.09, c1).mul(0.6).add(smoothstep(0.0, 0.04, c2).mul(0.4));
+  const grain = mx_noise_float(vec3(q.mul(26), seed)).mul(0.5).add(0.5);
+  const strata = sin(p.y.mul(14).add(mx_noise_float(vec3(p.mul(2.0), seed + 6.0)).mul(3))).mul(0.5).add(0.5);
+  const alb = mix(vec3(0.035, 0.032, 0.03), vec3(0.14, 0.12, 0.1), h0.add(0.5).clamp(0, 1)).mul(grain.mul(0.5).add(0.7)).mul(strata.mul(0.3).add(0.85));
+  // molten ore in the fractures: a slow heavy pulse travelling along the veins
+  const flow = sin(mx_noise_float(vec3(p.mul(1.1), seed + 4.0)).mul(9).sub(T.mul(1.05))).mul(0.5).add(0.5);
+  const heat = flow.mul(0.8).add(0.35);
+  const core = float(1).sub(smoothstep(0.0, fwidth(c1).mul(1.2).add(0.008), c1));
+  const fineOn = smoothstep(0.25, 0.45, mx_noise_float(vec3(p.mul(1.7), seed + 8.0)));
+  const fineL = float(1).sub(smoothstep(0.0, fwidth(c2).mul(1.2).add(0.006), c2));
+  const deep = voro(wq(q.add(par.mul(0.08))).mul(1.9).add(seed), T, 0.0);   // the glow sits a little under the stone
+  const glowV = exp(deep.mul(-50)).mul(0.25);
+  let col = alb.mul(lit.mul(1.4).add(0.12)).mul(bev.mul(0.8).add(0.2));
+  col = col.mul(float(1).sub(fineL.mul(float(1).sub(fineOn)).mul(0.8)));                       // dead hairline cracks: dark
+  col = col.add(alb.mul(vec3(2.0, 1.4, 0.5)).mul(exp(c1.mul(-30))).mul(heat));               // stone lip lit by its vein
+  // the vein is crystalline ore: gold with bright facets that flash along it, not a molten seam
+  const facet = pow(mx_noise_float(vec3(p.mul(30), seed + 2.0)).mul(0.5).add(0.5), 4).mul(4);
+  col = col.add(vec3(1.0, 0.7, 0.2).mul(core.mul(facet.add(0.9)).add(fineL.mul(fineOn).mul(0.7))).mul(heat))
+    .add(vec3(1.0, 0.92, 0.6).mul(core.mul(smoothstep(0.75, 1.0, flow)).mul(0.9)))
+    .add(vec3(0.9, 0.55, 0.1).mul(glowV.mul(heat)));
+  return col.add(vec3(1.0, 0.78, 0.3).mul(glints(q, T, 10.0, seed + 2.0, 1.2, 12)).mul(bev).mul(0.9));
+}
+
+function nature(q, T, seed, par) {
+  const moss = fbm(vec3(q.add(par.mul(0.3)).mul(3.0), seed), 3);
+  let col = mix(vec3(0.003, 0.016, 0.006), vec3(0.015, 0.06, 0.022), moss.mul(1.2).add(0.5).clamp(0, 1));
+  // a slow wave of bioluminescence breathing across the face
+  const wave = pow(sin(length(q.sub(vec2(-0.7, -0.8))).mul(4.0).sub(T.mul(1.6))).mul(0.5).add(0.5), 6);
+  const VINES = [[0.45, -0.38, 1.0], [-0.5, 0.42, 2.3]];
+  let glow = float(0);
+  VINES.forEach(([th, off, ph], vi) => {
+    const ca = Math.cos(th), sa = Math.sin(th);
+    const x = q.x.mul(ca).add(q.y.mul(sa)), y = q.y.mul(ca).sub(q.x.mul(sa));
+    const sway = sin(T.mul(0.7).add(ph)).mul(0.3);
+    const yc = (xx) => sin(xx.mul(2.1).add(ph).add(sway)).mul(0.16).add(sin(xx.mul(4.7).add(ph * 1.7)).mul(0.04)).add(off);
+    const dyc = (xx) => cos(xx.mul(2.1).add(ph).add(sway)).mul(0.336).add(cos(xx.mul(4.7).add(ph * 1.7)).mul(0.188));
+    const sl = dyc(x);
+    const dv = abs(y.sub(yc(x))).div(sl.mul(sl).add(1).sqrt());
+    const pulseAt = (xx) => { const z = fract(xx.mul(0.45).sub(T.mul(0.28)).add(ph * 0.13)).sub(0.5).mul(7); return exp(z.mul(z).negate()); };
+    // leaves: alternating along the vine, three cells around this pixel, each swaying on its stalk
+    const sL = 0.42;
+    const n0 = floor(x.div(sL));
+    for (let j = -1; j <= 1; j++) {
+      const n = n0.add(j), xn = n.add(0.5).mul(sL);
+      const hn = hash(n.add(vi * 101 + 500 + seed));
+      const side = fract(n.mul(0.5)).mul(4).sub(1);
+      const la = atan(dyc(xn), float(1)).add(side.mul(sin(T.mul(1.2).add(hn.mul(6.28))).mul(0.12).add(0.8)));
+      const dir = vec2(cos(la), sin(la));
+      const d = vec2(x, y).sub(vec2(xn, yc(xn)));
+      const Ll = hn.mul(0.12).add(0.38);
+      const u = dot(d, dir).div(Ll), vs = d.y.mul(dir.x).sub(d.x.mul(dir.y)).div(Ll), v = abs(vs);
+      const uc = clamp(u, 0, 1);
+      // f32 PI is a hair above pi, so sin(PI) is slightly negative past the tip, and pow of a negative is NaN: clamp the base
+      const wv = pow(sin(uc.mul(PI)).max(0), 0.7).mul(0.3).mul(float(1).sub(uc.mul(0.35)));
+      const edgeD = v.sub(wv);
+      const fw = fwidth(edgeD).max(0.002);
+      const inside = float(1).sub(smoothstep(fw.negate(), fw, edgeD)).mul(hn.greaterThan(0.1).select(float(1), float(0)));
+      const midrib = float(1).sub(smoothstep(0.0, fwidth(v).add(0.012), v)).mul(float(1).sub(smoothstep(0.75, 0.92, u)));
+      const sv = abs(fract(u.mul(3.0).sub(v.mul(1.6))).sub(0.5));
+      const veins = float(1).sub(smoothstep(0.0, fwidth(sv).mul(1.5).add(0.05), sv)).mul(smoothstep(0.02, 0.12, wv.sub(v))).mul(smoothstep(0.08, 0.2, u));
+      const pl = pulseAt(xn).mul(1.3).add(wave.mul(0.45));
+      // lamina: two-tone across the midrib (the leaf is folded), lighter at the tip, darker at the margin
+      const fold = vs.greaterThan(0).select(float(1.0), float(0.7));
+      const lam = mix(vec3(0.03, 0.2, 0.04), vec3(0.16, 0.62, 0.12), smoothstep(-0.1, 0.7, u).mul(float(1).sub(v.div(wv.max(0.01)).mul(0.55)))).mul(fold);
+      const leafCol = lam
+        .add(vec3(0.5, 0.95, 0.3).mul(midrib.mul(0.35)))
+        .add(vec3(0.35, 1.0, 0.4).mul(veins.add(midrib).mul(pl).mul(0.85)))
+        .add(vec3(0.3, 1.0, 0.45).mul(smoothstep(-0.045, 0.0, edgeD).mul(pl.mul(0.9).add(0.35))));
+      col = mix(col, leafCol, inside);
+    }
+    // the vine on top: a round stem carrying pulses of light along it
+    const vw = 0.04;
+    const vm = float(1).sub(smoothstep(vw * 0.8, vw, dv));
+    const round = float(1).sub(dv.div(vw).mul(dv.div(vw))).max(0);
+    const pv = pulseAt(x);
+    col = mix(col, vec3(0.04, 0.17, 0.04).add(vec3(0.2, 0.45, 0.1).mul(round)), vm);
+    glow = glow.add(vm.mul(round).mul(pv).mul(1.5)).add(exp(dv.mul(-26)).mul(pv).mul(0.3)).add(vm.mul(wave).mul(0.25));
+  });
+  // bioluminescent spores clinging to the face: dots that swell and fade on their own beats
+  const sq = q.mul(6.0).add(seed), sc = floor(sq), sid = sc.x.add(sc.y.mul(53)).add(seed * 19 + 300);
+  const sd = length(fract(sq).sub(vec2(hash(sid), hash(sid.add(7))).mul(0.6).add(0.2)));
+  const sbeat = pow(sin(T.mul(hash(sid.add(3)).mul(1.4).add(0.8)).add(hash(sid.add(5)).mul(30))).mul(0.5).add(0.5), 6).mul(smoothstep(0.5, 0.55, hash(sid.add(13))));
+  glow = glow.add(exp(sd.mul(sd).mul(-500)).mul(sbeat).mul(2.0)).add(exp(sd.mul(-14)).mul(sbeat).mul(0.15));
+  return col.add(vec3(0.3, 1.0, 0.35).mul(glow));
+}
+
+// ---------------------------------------------------------------- the cube
+// BoxGeometry groups: +X -X +Y -Y +Z -Z. Six faces, six elements: fire opposite ice, water over earth, electricity opposite nature.
+const FACES = [
+  { n: [1, 0, 0], a: [0, 0, -1], b: [0, 1, 0], el: 'fire' },
+  { n: [-1, 0, 0], a: [0, 0, 1], b: [0, 1, 0], el: 'ice' },
+  { n: [0, 1, 0], a: [1, 0, 0], b: [0, 0, -1], el: 'water' },
+  { n: [0, -1, 0], a: [1, 0, 0], b: [0, 0, 1], el: 'earth' },
+  { n: [0, 0, 1], a: [1, 0, 0], b: [0, 1, 0], el: 'elec' },
+  { n: [0, 0, -1], a: [-1, 0, 0], b: [0, 1, 0], el: 'nature' },
+];
+const RIM = { fire: 0.6, water: 0.6, elec: 0.6, ice: 0.32, earth: 0.22, nature: 0.28 };
+const TINT = { fire: [1.0, 0.42, 0.1], water: [0.12, 0.45, 1.0], elec: [0.62, 0.4, 1.0], ice: [0.42, 0.88, 1.0], earth: [1.0, 0.76, 0.3], nature: [0.3, 1.0, 0.35] };
+
+function faceMaterial(fi, back) {
+  const F = FACES[fi];
+  const m = new THREE.MeshBasicNodeMaterial({
+    transparent: true, depthWrite: false, side: back ? THREE.BackSide : THREE.FrontSide,
+  });
+  if (back) m.blending = THREE.AdditiveBlending;
+  else {
+    m.blending = THREE.CustomBlending; m.blendEquation = THREE.AddEquation;
+    m.blendSrc = THREE.OneFactor; m.blendDst = THREE.OneMinusSrcAlphaFactor;
+    m.blendSrcAlpha = THREE.OneFactor; m.blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
+    m.opacityNode = float(0.78);
+  }
+  m.colorNode = Fn(() => {
+    const a = vec3(...F.a), b = vec3(...F.b);
+    const q = vec2(dot(positionLocal, a), dot(positionLocal, b)).mul(2);
+    const T = uT.add(fi * 17.3);
+    let el;
+    // parallax: where the view ray would be at a depth inside the face (hologram volume)
+    const nW = normalize(modelWorldMatrix.mul(vec4(...F.n, 0)).xyz);
+    const aW = modelWorldMatrix.mul(vec4(...F.a, 0)).xyz, bW = modelWorldMatrix.mul(vec4(...F.b, 0)).xyz;
+    const V = normalize(cameraPosition.sub(positionWorld));
+    const par = vec2(dot(V, aW), dot(V, bW)).div(abs(dot(V, nW)).max(0.25)).negate();
+    if (F.el === 'fire') {
+      const up2 = vec2(dot(uUp, a), dot(uUp, b));
+      // a second, deeper and darker sheet of flame behind the first gives the face a body
+      el = fire(q, up2, T, fi * 3.7).add(fire(q.add(par.mul(0.45)), up2, T.mul(0.85), fi * 3.7 + 11.0).mul(vec3(0.55, 0.22, 0.12)));
+    } else if (F.el === 'water') el = water(q, T, fi * 2.1, par);
+    else if (F.el === 'ice') el = ice(q, T, fi * 1.3, par);
+    else if (F.el === 'earth') el = earth(q, T, fi * 1.7, par);
+    else if (F.el === 'nature') el = nature(q, T, fi * 2.9, par);
+    else el = electric(q, T, fi, par);
+    // hologram: fresnel rim, edge frame, scanlines, sweep band, mains flicker
+    // (the rim base is clamped: the dot of two unit vectors can round to 1.0000001, and pow of a negative is NaN)
+    const rim = pow(float(1).sub(abs(dot(nW, V))).max(0), 2.5);
+    const edge = max(abs(q.x), abs(q.y));
+    const frame = smoothstep(0.82, 1.0, edge).mul(0.35).add(smoothstep(0.965, 1.0, edge).mul(0.6));
+    const tint = vec3(...TINT[F.el]);
+    const scan = sin(positionWorld.y.mul(190).sub(uT.mul(7))).mul(0.5).add(0.5).mul(0.16).add(0.84);
+    const bandX = fract(positionWorld.y.mul(0.32).sub(uT.mul(0.17))).sub(0.5).mul(16);   // squared by hand: pow() of a negative base is undefined
+    const band = exp(bandX.mul(bandX).negate()).mul(0.35);
+    const body = el.mul(0.8).add(tint.mul(rim.mul(RIM[F.el]).add(frame).add(0.01)));
+    return body.mul(scan.add(band)).mul(uFlick).mul(back ? 0.16 : 1.0);
+  })();
+  return m;
+}
+
+const cube = new THREE.Group();
+scene.add(cube);
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const backMesh = new THREE.Mesh(boxGeo, FACES.map((_, i) => faceMaterial(i, true)));
+const frontMesh = new THREE.Mesh(boxGeo, FACES.map((_, i) => faceMaterial(i, false)));
+backMesh.renderOrder = 1; frontMesh.renderOrder = 2;
+cube.add(backMesh, frontMesh);
+
+// bright edges: fat lines
+// each cube edge is a pair of lines, each just inside one of the two faces it joins, in that face's element colour
+const edgePos = [], edgeCol = [];
+{
+  const E = 0.501, IN = 0.017;
+  for (let ax = 0; ax < 3; ax++) for (const s1 of [-1, 1]) for (const s2 of [-1, 1]) {
+    const o = [0, 1, 2].filter((x) => x !== ax);          // the edge runs along ax; it sits at o[0] = s1*E, o[1] = s2*E
+    for (const side of [0, 1]) {
+      const a = [0, 0, 0], b = [0, 0, 0];
+      a[ax] = -E; b[ax] = E;
+      a[o[0]] = b[o[0]] = s1 * E; a[o[1]] = b[o[1]] = s2 * E;
+      // side 0 lies on the face normal to o[0] (pull it in along o[1]); side 1 on the face normal to o[1]
+      const pull = side === 0 ? o[1] : o[0], sg = side === 0 ? s2 : s1;
+      a[pull] -= sg * IN; b[pull] -= sg * IN;
+      const faceAxis = side === 0 ? o[0] : o[1];
+      const el = FACES[faceAxis * 2 + ((side === 0 ? s1 : s2) > 0 ? 0 : 1)].el;
+      const c = TINT[el].map((v) => Math.pow(v, 1.6) * 1.05 + 0.04);
+      edgePos.push(...a, ...b); edgeCol.push(...c, ...c);
+    }
+  }
+}
+const edgeGeo = new LineSegmentsGeometry().setPositions(edgePos);
+edgeGeo.setColors(edgeCol);
+const edgeMat = new THREE.Line2NodeMaterial({ linewidth: 1.5, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+edgeMat.alphaToCoverage = false;
+edgeMat.vertexColors = true;
+edgeMat.colorNode = vec3(1.0).mul(uFlick);
+const edges = new LineSegments2(edgeGeo, edgeMat);
+edges.renderOrder = 3;
+cube.add(edges);
+
+
+// ---------------------------------------------------------------- the stage: floor + cyclorama, lit by the faces
+// Each face is a Lambertian emitter at its centre; its element shapes the light it throws:
+// fire = warm flicker with dancing flame shadows, water = caustic web projected through the face, electricity = cold strobes,
+// ice = pale light broken into crystal facets with twinkling glints, earth = a steady amber glow veined like its cracks,
+// nature = green light dappled through swaying leaves, pulsing like a heartbeat.
+const FLOOR_Y = -0.95;
+const uFC = [], uFN = [], uFA = [], uFB = [], uFL = [];
+for (let i = 0; i < 6; i++) { uFC.push(uniform(new THREE.Vector3())); uFN.push(uniform(new THREE.Vector3())); uFA.push(uniform(new THREE.Vector3())); uFB.push(uniform(new THREE.Vector3())); uFL.push(uniform(new THREE.Vector3())); }
+
+// light the faces throw into a point of the air (lobe + falloff, no pattern): fog and dust use it
+// (with ?elements=0 the faces cast nothing, so the graph is not built at all)
+const emitAt = (X) => {
+  if (!SWITCH.elements) return vec3(0);
+  let acc = vec3(0);
+  for (let i = 0; i < 6; i++) {
+    const D = X.sub(uFC[i]), d2 = dot(D, D), Ld = D.div(d2.sqrt().max(0.001));
+    const cosE = clamp(dot(uFN[i], Ld).add(0.3).div(1.3), 0, 1);
+    acc = acc.add(uFL[i].mul(cosE).div(d2.mul(0.4).add(0.8)));
+  }
+  return acc;
+};
+
+const castLight = (P, N, V, rough, sc) => {
+  if (!SWITCH.elements) return [vec3(0), vec3(0)];
+  let diff = vec3(0), spec = vec3(0);
+  for (let i = 0; i < 6; i++) {
+    const el = FACES[i].el;
+    const D = P.sub(uFC[i]);                       // face -> receiver
+    const d2 = dot(D, D), Ld = D.div(d2.sqrt().max(0.001));
+    const cosE = clamp(dot(uFN[i], Ld).add(0.3).div(1.3), 0, 1);   // emitter lobe, wrapped: the hologram glows round its edges
+    const cosR = max(dot(N, Ld.negate()), 0);
+    const att = float(1).div(d2.mul(0.4).add(0.8));
+    // face-projected coords: where on the face plane's extension the ray leaves
+    const pu = dot(Ld, uFA[i]).div(cosE.max(0.08)), pv = dot(Ld, uFB[i]).div(cosE.max(0.08));
+    const fw = fwidth(pu).add(fwidth(pv));
+    const keep = float(1).sub(smoothstep(0.08, 0.5, fw));   // fade fine pattern where it would alias
+    let pat;
+    if (el === 'fire') {
+      // flame shadows sweeping upward over the stage
+      const sh = fbm(vec3(sc.mul(0.9).add(vec2(pu, pv).mul(0.5)), uT.mul(1.3).add(i)), 3);
+      const tongue = fbm(vec3(pu.mul(1.2), pv.mul(0.8).sub(uT.mul(1.7)), uT.mul(0.5).add(i * 3)), 2);
+      pat = sh.mul(1.3).add(tongue.mul(keep).mul(0.9)).add(0.85).clamp(0.15, 1.9);
+    } else if (el === 'water') {
+      // pool caustics land in the receiver's own plane, warped by the face's tilt, larger with distance
+      const cs = sc.mul(float(1.5).div(d2.sqrt().mul(0.3).add(0.6))).add(vec2(pu, pv).mul(0.5)).add(i * 7.3);
+      const cw = cs.add(vec2(mx_noise_float(vec3(cs.mul(0.8), uT.mul(0.25).add(i))), mx_noise_float(vec3(cs.mul(0.8).add(5.1), uT.mul(0.25).sub(i)))).mul(0.4));
+      const ce1 = voro(cw.add(vec2(uT.mul(0.08), uT.mul(-0.05))), uT, 0.75);
+      const ce2 = voro(cw.mul(1.7).add(vec2(uT.mul(-0.06), uT.mul(0.09))).add(3.3), uT, 0.95);
+      const cl1 = float(1).sub(smoothstep(0.0, 0.11, ce1)), cl2 = float(1).sub(smoothstep(0.0, 0.08, ce2));
+      const web = cl1.mul(cl1).add(cl2.mul(cl2).mul(0.5)).add(cl1.mul(cl2).mul(1.5)).add(exp(ce1.mul(-8)).mul(0.2));
+      const fwc = fwidth(cs.x).add(fwidth(cs.y));
+      pat = mix(float(0.5), web.mul(2.2).add(0.05), float(1).sub(smoothstep(0.12, 0.45, fwc)));
+    } else if (el === 'ice') {
+      // light through a cut crystal: hard-edged polygonal shards of pale light (straight edges, unlike water's curved web),
+      // each shard its own brightness, a slow prismatic shift across them, and a few sharp glints that wink on and off
+      const g = sc.mul(0.8).add(vec2(pu, pv).mul(0.45)).add(i * 3.1);
+      let sid = float(0), edgeL = float(0);
+      for (let k = 0; k < 5; k++) {
+        const ang = k * 0.6283 * 1.7 + 0.4, nx = -Math.sin(ang), ny = Math.cos(ang);
+        const sd = dot(g, vec2(nx, ny)).sub(0.9 * Math.sin(k * 2.3 + 1.0));
+        sid = sid.add(step(0, sd).mul(Math.pow(2, k)));
+        edgeL = edgeL.add(exp(abs(sd).mul(-60)));
+      }
+      const shard = hash(sid.add(i * 31 + 7));
+      const shift = sin(shard.mul(12).add(uT.mul(0.5))).mul(0.5).add(0.5);
+      // (+8192 keeps the seed positive over the whole stage: a negative float seed saturates to 0 and the sparks in that region would all share one hash)
+      const g2 = g.mul(3.0), cell = floor(g2), gid = cell.x.add(cell.y.mul(57)).add(i * 101 + 77 + 8192);
+      const tw = pow(sin(uT.mul(hash(gid).mul(2.5).add(1.2)).add(hash(gid.add(3)).mul(30))).mul(0.5).add(0.5), 14);
+      const gd = fract(g2).sub(vec2(hash(gid.add(5)), hash(gid.add(7))).mul(0.6).add(0.2));
+      const spark = exp(dot(gd, gd).mul(-260)).mul(tw).mul(smoothstep(0.55, 0.6, hash(gid.add(11))));
+      pat = mix(float(0.6), shard.mul(shard).mul(1.5).add(shift.mul(0.35)).add(0.1).add(edgeL.mul(0.35)).add(spark.mul(6.0)), keep);
+    } else if (el === 'earth') {
+      const g = sc.mul(0.9).add(vec2(pu, pv).mul(0.4)).add(i * 5.7);
+      const cr = voro(g.add(vec2(mx_noise_float(vec3(g, 3.0)), mx_noise_float(vec3(g.add(4.4), 3.0))).mul(0.3)), uT, 0.0);
+      const flow = sin(mx_noise_float(vec3(g.mul(0.7), 9.0)).mul(7).sub(uT.mul(1.05))).mul(0.5).add(0.5);
+      pat = float(0.7).add(exp(cr.mul(-14)).mul(flow.mul(0.8).add(0.3)).mul(keep).mul(1.2));
+    } else if (el === 'nature') {
+      const g = sc.mul(1.3).add(vec2(pu, pv).mul(0.5)).add(i * 2.9);
+      const sway = vec2(sin(uT.mul(0.7)), cos(uT.mul(0.53))).mul(0.12);
+      const leafN = fbm(vec3(g.add(sway), uT.mul(0.05).add(i)), 3);
+      pat = mix(float(0.55), smoothstep(0.08, 0.2, leafN).mul(1.7).add(0.06), keep);
+    } else {
+      // cold strobe; the face's live arcs thrown across the stage like a gobo
+      const qg = vec2(pu, pv).mul(0.62);
+      let arcs = float(0);
+      for (let b = 0; b < BOLTS; b++) {
+        const AB = uBoltAB[b], S = uBoltS[b];
+        const D = AB.zw.sub(AB.xy), Ln = max(length(D), 0.01), dirb = D.div(Ln), rel = qg.sub(AB.xy);
+        const sb = dot(rel, dirb).div(Ln), sc2 = clamp(sb, 0, 1);
+        const db = rel.x.mul(dirb.y.negate()).add(rel.y.mul(dirb.x));
+        const disp = mx_noise_float(vec2(sc2.mul(Ln).mul(2.6), S.x)).mul(0.3).mul(sin(sc2.mul(PI)));
+        const ddb = abs(db.sub(disp)).add(abs(sb.sub(sc2)).mul(0.6));
+        arcs = arcs.add(exp(ddb.mul(-38)).mul(1.6).add(exp(ddb.mul(-7)).mul(0.35)).mul(S.y));
+      }
+      pat = mix(arcs.mul(0.35).add(0.15), arcs.mul(2.4).add(0.06), keep);
+    }
+    const E = uFL[i].mul(pat).mul(cosE).mul(att);
+    diff = diff.add(E.mul(cosR));
+    const H = normalize(Ld.negate().add(V));
+    const shin = float(1).div(rough.mul(rough).max(0.004));
+    spec = spec.add(E.mul(pow(max(dot(N, H), 0), shin)).mul(shin.mul(0.03).add(0.4)).mul(cosR.sqrt()));
+  }
+  return [diff, spec];
+};
+
+// one lathed cyclorama: flat stage, a cove, then the backdrop wall (one continuous surface)
+const COVE_R0 = 3.4, COVE = 1.4, CYC_R = COVE_R0 + COVE;
+const stageMat = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide });
+stageMat.colorNode = Fn(() => {
+  const P = positionWorld;
+  const r = length(vec2(P.x, P.z)).max(0.001);
+  const radial = vec3(P.x.div(r), 0, P.z.div(r));
+  const cc = radial.mul(COVE_R0).add(vec3(0, FLOOR_Y + COVE, 0));
+  const Ncove = normalize(cc.sub(P));
+  const N = r.lessThan(COVE_R0).select(vec3(0, 1, 0), P.y.lessThan(FLOOR_Y + COVE).select(Ncove, radial.negate()));
+  const V = normalize(cameraPosition.sub(P));
+  const wallness = smoothstep(COVE_R0 + 0.2, COVE_R0 + COVE, r);
+  // floor: dark lacquered stage plates with seams, scuffs and wetter patches
+  const g = vec2(P.x, P.z).mul(1.25);
+  const sd = min(float(0.5).sub(abs(fract(g.x).sub(0.5))), float(0.5).sub(abs(fract(g.y).sub(0.5))));
+  const seam = float(1).sub(smoothstep(0.0, 0.014, sd)).mul(float(1).sub(wallness));
+  const stain = fbm(vec3(P.x.mul(0.9), P.z.mul(0.9), P.y.mul(0.9).add(3.1)), 4);
+  const scuff = mx_noise_float(vec3(P.x.mul(6), P.z.mul(1.6), P.y.mul(3))).abs();
+  const albF = vec3(0.34, 0.35, 0.4).mul(stain.mul(0.5).add(0.85)).mul(scuff.mul(0.2).add(0.88)).mul(float(1).sub(seam.mul(0.6)));
+  // wall: soft vertical baffles
+  const az = P.x.negate().atan(P.z.negate());
+  const ang = az.mul(CYC_R);                                     // arc length round the wall; it wraps once, at +z behind the default camera
+  const rib = sin(az.mul(96)).mul(0.5).add(0.5).pow(6);
+  const grain = fbm(vec3(ang.mul(0.6), P.y.mul(3.0), 7.7), 3);
+  const albW = vec3(0.3, 0.31, 0.36).mul(grain.mul(0.4).add(0.9)).mul(rib.mul(0.22).add(0.84));
+  const alb = mix(albF, albW, wallness);
+  const rough = mix(stain.mul(0.5).add(0.3).clamp(0.12, 0.7).add(seam.mul(0.3)), float(0.65), wallness);
+  const amb = vec3(0.05, 0.055, 0.075).mul(float(1).sub(smoothstep(0.5, 9.0, r.add(P.y.sub(FLOOR_Y).mul(0.5)))).mul(0.6).add(0.4)).mul(mix(float(1), float(1.6), wallness));
+  const sc = mix(vec2(P.x, P.z), vec2(ang, P.y), wallness);
+  const [diff, spec] = castLight(P, N, V, rough, sc);
+  const surf = alb.mul(amb.add(diff)).add(spec.mul(mix(float(0.5), float(0.06), wallness)));
+  if (!SWITCH.atmo) return surf;                      // ?atmo=0: no haze march either
+  // the air between the eye and the stage: thin haze + a floor-hugging mist drifting in sheets, lit by the faces
+  const RD = P.sub(cameraPosition), len = length(RD), STEPS = 12;
+  const dt = len.div(STEPS);
+  const ign = fract(float(52.9829189).mul(fract(dot(screenCoordinate.xy, vec2(0.06711056, 0.00583715)))));
+  let scat = vec3(0), tau = float(0);
+  for (let k = 0; k < STEPS; k++) {
+    const X = cameraPosition.add(RD.mul(ign.add(k).div(STEPS)));
+    const hy = X.y.sub(FLOOR_Y).max(0);
+    const sheet = mx_noise_float(vec3(X.x.mul(0.55).add(uT.mul(0.07)), hy.mul(1.6), X.z.mul(0.55).sub(uT.mul(0.05))))
+      .add(mx_noise_float(vec3(X.x.mul(1.4).sub(uT.mul(0.11)), hy.mul(3.0).sub(uT.mul(0.04)), X.z.mul(1.4))).mul(0.5));
+    const mist = exp(hy.mul(-2.4)).mul(sheet.mul(0.9).add(0.55).max(0)).mul(0.32);
+    const dens = mist.add(0.014);
+    scat = scat.add(emitAt(X).add(vec3(0.012, 0.014, 0.022)).mul(dens).mul(dt));
+    tau = tau.add(dens.mul(dt));
+  }
+  return surf.mul(exp(tau.mul(-0.5))).add(scat.mul(0.42));
+})();
+const prof = [new THREE.Vector2(0.001, FLOOR_Y), new THREE.Vector2(COVE_R0, FLOOR_Y)];
+for (let k = 1; k <= 12; k++) { const a = -Math.PI / 2 + (k / 12) * Math.PI / 2; prof.push(new THREE.Vector2(COVE_R0 + COVE * Math.cos(a), FLOOR_Y + COVE + COVE * Math.sin(a))); }
+prof.push(new THREE.Vector2(COVE_R0 + COVE, FLOOR_Y + 10));
+const stage = new THREE.Mesh(new THREE.LatheGeometry(prof, 160), stageMat);
+scene.add(stage);
+
+
+// ---------------------------------------------------------------- the air: layers of drifting detail (all analytic in now(): ?t freezes them)
+// cube spin as a function of time, so an ember remembers where its face was when it left it
+const SPIN = [0.3, 0.5];
+const rotAt = (tb, v) => {
+  const a = tb.mul(SPIN[0]), b = tb.mul(SPIN[1]);
+  const w = vec3(cos(b).mul(v.x).add(sin(b).mul(v.z)), v.y, sin(b).negate().mul(v.x).add(cos(b).mul(v.z)));
+  return vec3(w.x, cos(a).mul(w.y).sub(sin(a).mul(w.z)), sin(a).mul(w.y).add(cos(a).mul(w.z)));
+};
+const airLayers = [];
+function airLayer(count, seed, build, blending = THREE.AdditiveBlending) {
+  const m = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending });
+  const id = float(instanceIndex);
+  const h = (k) => hash(id.add(k * 7919 + seed * 104729));
+  const o = build(id, h);
+  m.positionNode = o.pos;
+  if (o.vel) {
+    // streak along the screen-space velocity
+    const vv = cameraViewMatrix.mul(vec4(o.vel, 0)).xy;
+    m.rotationNode = atan(vv.y, vv.x);
+    m.scaleNode = vec2(o.size.add(length(vv).mul(o.streak)), o.size);
+  } else m.scaleNode = vec2(o.size, o.size);
+  const c = varying(o.color);
+  const r = length(uv().sub(0.5)).mul(2);
+  m.colorNode = c.mul(exp(r.mul(r).mul(-4.5)).sub(0.011).max(0));
+  const sp = new THREE.Sprite(m);
+  sp.count = count; sp.frustumCulled = false; sp.renderOrder = 0;
+  sp.visible = SWITCH.atmo;
+  scene.add(sp); airLayers.push(sp);
+  return sp;
+}
+
+// 1. embers rising off the fire faces: born on the face, thrown out, then carried up by the heat, cooling as they go
+airLayer(220, 1, (id, h) => {
+  const L = h(1).mul(1.0).add(1.3), ph = uT.add(h(2).mul(L)).div(L), cyc = floor(ph), a = fract(ph).mul(L), tb = uT.sub(a);
+  const hc = (k) => hash(id.add(cyc.mul(1013)).add(k * 7919 + 31));
+  const sgn = float(1);
+  const n0 = rotAt(tb, vec3(sgn, 0, 0));
+  const p0 = rotAt(tb, vec3(sgn.mul(0.5), hc(4).sub(0.5).mul(0.9), hc(5).sub(0.5).mul(0.9)));
+  const sw = vec3(mx_noise_float(vec3(id.mul(0.37), a.mul(0.7), 1.3)), 0, mx_noise_float(vec3(id.mul(0.37), a.mul(0.7), 7.9)));
+  const out = float(1).sub(exp(a.mul(-3.0))).mul(0.16);
+  const pos = p0.add(n0.mul(out)).add(vec3(0, a.mul(0.32).add(a.mul(a).mul(0.16)), 0)).add(sw.mul(a).mul(0.2));
+  const vel = n0.mul(exp(a.mul(-3.0)).mul(0.48)).add(vec3(0, a.mul(0.32).add(0.32), 0)).add(sw.mul(0.2));
+  const k = a.div(L);
+  const flick = sin(uT.mul(h(6).mul(14).add(9)).add(h(7).mul(40))).mul(0.35).add(0.65);
+  const fade = smoothstep(0.0, 0.08, k).mul(float(1).sub(smoothstep(0.55, 1.0, k)));
+  const col = mix(vec3(1.0, 0.72, 0.3).mul(3.2), vec3(0.9, 0.16, 0.02).mul(1.1), smoothstep(0.0, 0.7, k)).mul(flick).mul(fade);
+  return { pos, vel, size: h(8).mul(0.008).add(0.01), streak: float(0.07), color: col };
+});
+
+// 2. spray thrown off the water faces: droplets on ballistic arcs, glinting cold
+airLayer(240, 2, (id, h) => {
+  const L = h(1).mul(0.5).add(0.9), ph = uT.add(h(2).mul(L)).div(L), cyc = floor(ph), a = fract(ph).mul(L), tb = uT.sub(a);
+  const hc = (k) => hash(id.add(cyc.mul(1013)).add(k * 7919 + 77));
+  const sgn = float(1);
+  const n0 = rotAt(tb, vec3(0, sgn, 0));
+  const p0 = rotAt(tb, vec3(hc(4).sub(0.5).mul(0.9), sgn.mul(0.5), hc(5).sub(0.5).mul(0.9)));
+  const tang = rotAt(tb, vec3(hc(6).sub(0.5), 0, hc(7).sub(0.5))).mul(0.5);
+  const v0 = n0.mul(hc(8).mul(0.4).add(0.3)).add(tang).add(vec3(0, 0.45, 0));
+  const g = vec3(0, -1.5, 0);
+  const pos = p0.add(v0.mul(a)).add(g.mul(a.mul(a).mul(0.5)));
+  const vel = v0.add(g.mul(a));
+  const k = a.div(L);
+  const alive = smoothstep(FLOOR_Y, FLOOR_Y + 0.03, pos.y).mul(hc(9).greaterThan(0.35).select(float(1), float(0)));
+  const glint = pow(sin(uT.mul(23).add(h(10).mul(50))).mul(0.5).add(0.5), 6).mul(2.0).add(0.7);
+  const col = vec3(0.3, 0.75, 1.3).mul(2.2).mul(glint).mul(smoothstep(0.0, 0.05, k)).mul(float(1).sub(smoothstep(0.6, 1.0, k))).mul(alive);
+  return { pos, vel, size: h(11).mul(0.005).add(0.008), streak: float(0.05), color: col };
+});
+
+// 3. ionised motes caught in the field of the electric faces: they hop in 70 ms jumps and blink
+airLayer(240, 3, (id, h) => {
+  const sgn = float(1);
+  // the hop index wraps at 16384 (about 19 minutes) so its hash seed stays below 2^24: past that the f32 sum rounds,
+  // neighbouring motes share a seed and hop and blink in groups. Every hop re-rolls them anyway, so the wrap does not show.
+  const hop = floor(uT.mul(14).add(h(2).mul(14))), stp = hop.sub(floor(hop.div(16384)).mul(16384));
+  const hs = (k) => hash(id.add(stp.mul(613)).add(k * 7919 + 5));
+  const d = h(3).mul(h(3)).mul(0.26).add(0.025);
+  const loc = vec3(h(4).sub(0.5).mul(1.25), h(5).sub(0.5).mul(1.25), sgn.mul(d.add(0.5)))
+    .add(vec3(hs(1), hs(2), hs(3)).sub(0.5).mul(0.035));
+  const pos = rotAt(uT, loc);
+  const on = smoothstep(0.5, 0.6, hs(4));
+  const col = mix(vec3(0.55, 0.3, 1.5), vec3(1.0, 0.95, 1.6), hs(5).mul(hs(5))).mul(on.mul(3.2).add(0.25)).mul(float(1).sub(smoothstep(0.25, 0.4, d)).mul(0.7).add(0.3));
+  return { pos, size: h(6).mul(0.008).add(0.011), color: col };
+});
+
+// 5. diamond dust breathing off the ice face: tiny crystals drift out, hang, sink slowly and flash as they turn
+airLayer(260, 5, (id, h) => {
+  const L = h(1).mul(1.5).add(2.2), ph = uT.add(h(2).mul(L)).div(L), cyc = floor(ph), a = fract(ph).mul(L), tb = uT.sub(a);
+  const hc = (k) => hash(id.add(cyc.mul(1013)).add(k * 7919 + 211));
+  const n0 = rotAt(tb, vec3(-1, 0, 0));
+  const p0 = rotAt(tb, vec3(-0.5, hc(4).sub(0.5).mul(0.95), hc(5).sub(0.5).mul(0.95)));
+  const sw = vec3(mx_noise_float(vec3(id.mul(0.29), a.mul(0.4), 2.1)), mx_noise_float(vec3(id.mul(0.29), a.mul(0.4), 5.3)), mx_noise_float(vec3(id.mul(0.29), a.mul(0.4), 8.7)));
+  const out = float(1).sub(exp(a.mul(-1.6))).mul(0.26);
+  const pos = p0.add(n0.mul(out)).add(vec3(0, a.mul(-0.07), 0)).add(sw.mul(a).mul(0.07));
+  const k = a.div(L);
+  const tw = pow(sin(uT.mul(h(6).mul(6).add(4)).add(h(7).mul(40))).mul(0.5).add(0.5), 10).mul(3.2).add(0.22);
+  const fade = smoothstep(0.0, 0.1, k).mul(float(1).sub(smoothstep(0.6, 1.0, k)));
+  return { pos, size: h(8).mul(0.004).add(0.006), color: vec3(0.6, 0.86, 1.2).mul(tw).mul(fade).mul(1.3) };
+});
+
+// 6. grit shaken off the earth face: crumbs fall under gravity, the odd one still glowing like hot ore
+airLayer(200, 6, (id, h) => {
+  const L = h(1).mul(0.6).add(1.0), ph = uT.add(h(2).mul(L)).div(L), cyc = floor(ph), a = fract(ph).mul(L), tb = uT.sub(a);
+  const hc = (k) => hash(id.add(cyc.mul(1013)).add(k * 7919 + 401));
+  const n0 = rotAt(tb, vec3(0, -1, 0));
+  const p0 = rotAt(tb, vec3(hc(4).sub(0.5).mul(0.95), -0.5, hc(5).sub(0.5).mul(0.95)));
+  const v0 = n0.mul(hc(8).mul(0.15).add(0.05));
+  const g = vec3(0, -1.3, 0);
+  const pos = p0.add(v0.mul(a)).add(g.mul(a.mul(a).mul(0.5)));
+  const vel = v0.add(g.mul(a));
+  const k = a.div(L);
+  const alive = smoothstep(FLOOR_Y, FLOOR_Y + 0.03, pos.y).mul(hc(3).greaterThan(0.3).select(float(1), float(0)));
+  const hot = hc(9).greaterThan(0.62).select(float(1), float(0));
+  const col = mix(emitAt(pos).mul(0.45).add(vec3(0.05, 0.035, 0.02)), vec3(1.0, 0.56, 0.12).mul(2.4).mul(exp(k.mul(-2.0))), hot)
+    .mul(smoothstep(0.0, 0.05, k)).mul(alive);
+  return { pos, vel, size: h(11).mul(0.005).add(0.007), streak: float(0.035), color: col };
+});
+
+// 7. spores and seed-lights drifting off the nature face, rising in lazy spirals, pulsing green
+airLayer(200, 7, (id, h) => {
+  const L = h(1).mul(2.0).add(3.0), ph = uT.add(h(2).mul(L)).div(L), cyc = floor(ph), a = fract(ph).mul(L), tb = uT.sub(a);
+  const hc = (k) => hash(id.add(cyc.mul(1013)).add(k * 7919 + 613));
+  const n0 = rotAt(tb, vec3(0, 0, -1));
+  const p0 = rotAt(tb, vec3(hc(4).sub(0.5).mul(0.95), hc(5).sub(0.5).mul(0.95), -0.5));
+  const out = float(1).sub(exp(a.mul(-1.2))).mul(0.32);
+  const sp = h(3).mul(6.28);
+  const spiral = vec3(sin(a.mul(1.7).add(sp)), 0, cos(a.mul(1.7).add(sp))).mul(a.mul(0.05));
+  const pos = p0.add(n0.mul(out)).add(vec3(0, a.mul(0.09), 0)).add(spiral);
+  const k = a.div(L);
+  const pulse = pow(sin(uT.mul(h(6).mul(1.5).add(1.0)).add(h(7).mul(30))).mul(0.5).add(0.5), 4).mul(2.6).add(0.15);
+  const fade = smoothstep(0.0, 0.1, k).mul(float(1).sub(smoothstep(0.6, 1.0, k)));
+  return { pos, size: h(8).mul(0.006).add(0.008), color: vec3(0.35, 1.0, 0.3).mul(pulse).mul(fade) };
+});
+
+// 4. dust hanging in the whole volume, drifting slowly, catching whichever light reaches it
+airLayer(1700, 4, (id, h) => {
+  const r = h(1).sqrt().mul(3.2).add(0.15), th = h(2).mul(6.2832);
+  const base = vec3(cos(th).mul(r), h(3).pow(1.4).mul(3.0).add(FLOOR_Y + 0.05), sin(th).mul(r));
+  const drift = vec3(sin(uT.mul(h(4).mul(0.06).add(0.03)).add(h(5).mul(6.28))).mul(0.35),
+    sin(uT.mul(h(6).mul(0.05).add(0.02)).add(h(7).mul(6.28))).mul(0.2),
+    cos(uT.mul(h(8).mul(0.06).add(0.03)).add(h(9).mul(6.28))).mul(0.35));
+  const pos = base.add(drift);
+  const tw = sin(uT.mul(h(10).mul(2).add(0.5)).add(h(11).mul(30))).mul(0.3).add(0.7);
+  const col = emitAt(pos).mul(0.55).add(vec3(0.03, 0.034, 0.045)).mul(tw);
+  return { pos, size: h(12).mul(0.006).add(0.007), color: col };
+});
+
+// per-face light: element colour x its own motion (from now(); zero when ?elements=0)
+const flick = (t, s) => 0.72 + 0.16 * Math.sin(t * 11.3 + s) + 0.09 * Math.sin(t * 23.9 + 2.1 * s) + 0.12 * (rnd(Math.floor(t * 18) + s * 31) - 0.5) + 0.06 * Math.sin(t * 3.1 + s);
+function updateStageLights(t) {
+  for (let i = 0; i < 6; i++) {
+    const F = FACES[i];
+    uFN[i].value.set(...F.n).applyQuaternion(cube.quaternion);
+    uFC[i].value.copy(uFN[i].value).multiplyScalar(0.5);
+    uFA[i].value.set(...F.a).applyQuaternion(cube.quaternion);
+    uFB[i].value.set(...F.b).applyQuaternion(cube.quaternion);
+    let k = 0; const L = uFL[i].value;
+    if (!SWITCH.elements) { L.set(0, 0, 0); continue; }
+    if (F.el === 'fire') { k = flick(t, i) * 1.5; L.set(1.0, 0.34, 0.06).multiplyScalar(k); }
+    else if (F.el === 'water') { k = 1.0 + 0.12 * Math.sin(t * 1.7 + i); L.set(0.1, 0.52, 1.0).multiplyScalar(k); }
+    else if (F.el === 'ice') { k = 0.8 + 0.1 * Math.sin(t * 0.9 + i) + 0.6 * Math.pow(Math.max(0, Math.sin(t * 2.7 + 1.3)), 24); L.set(0.55, 0.86, 1.0).multiplyScalar(k); }
+    else if (F.el === 'earth') { k = 1.05 + 0.18 * Math.sin(t * 0.8 + i); L.set(1.0, 0.7, 0.24).multiplyScalar(k); }
+    else if (F.el === 'nature') { const ph = (t / 2.2) % 1; k = 0.35 + 1.2 * Math.exp(-ph * 7) + 0.7 * Math.exp(-Math.pow((ph - 0.2) * 14, 2)); L.set(0.22, 1.0, 0.3).multiplyScalar(k); }
+    else {
+      // the strobe follows the strongest live arc; reduced motion keeps a faint pulse instead of the hard flashes
+      let f = 0; for (let b = 0; b < BOLTS; b++) f = Math.max(f, uBoltS[b].value.y);
+      const fn = Math.min(f, CALM ? 0.3 : 1.4); k = 0.14 + 0.05 * Math.sin(t * 7.3 + i) + 3.4 * fn * fn * fn; L.set(0.36 + 0.1 * fn, 0.3 + 0.2 * fn, 1.0).multiplyScalar(k);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- per-frame state (all from now())
+const perim = (u) => { u = ((u % 4) + 4) % 4; const s = Math.floor(u), f = (u - s) * 2 - 1;
+  return [[f, -1], [1, f], [-f, 1], [-1, -f]][s].map((v) => v * 0.97); };
+const RATE = [8.7, 12.3, 6.1, 10.1];
+function updateBolts(T) {
+  for (let b = 0; b < BOLTS; b++) {
+    const x = T * RATE[b] + b * 0.37;
+    const e = Math.floor(x), life = x - e, sd = e * 7.13 + b * 101.7;
+    const u0 = rnd(sd) * 4, u1 = u0 + 1.2 + rnd(sd + 1) * 1.6;      // endpoints on different sides of the face
+    const [ax, ay] = perim(u0), [bx, by] = perim(u1);
+    const fires = rnd(sd + 2) > 0.45 ? 1 : 0;
+    const strike = fires * (0.6 + 0.4 * rnd(sd + 3)) * (0.25 + 0.75 * Math.exp(-life * 5)) * (life < 0.1 ? 1.4 : 1);
+    uBoltAB[b].value.set(ax, ay, bx, by);
+    uBoltS[b].value.set((e % 997) * 1.37 + b * 11.0, strike);
+  }
+}
+
+
+// ---------------------------------------------------------------- finish: bloom on the hot parts, one tone map, then a grade
+const pipe = new THREE.RenderPipeline(renderer);
+pipe.outputColorTransform = false;
+const scenePass = pass(scene, camera);
+const hdr = scenePass.getTextureNode('output');
+// two scales: a tight halo on edges/bolts/embers, a wide soft bloom on the face light; thresholds sit above the stage
+const glow = bloom(hdr, 0.5, 0.22, 0.8).add(bloom(hdr, 0.22, 0.8, 1.3));
+pipe.outputNode = Fn(() => {
+  let c = renderOutput(hdr.add(glow).toVec4().setW(1)).rgb;
+  // grade (display space): cool shadows, warm highlights, a touch of contrast and saturation
+  const l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = mix(vec3(l), c, 1.12);
+  c = c.add(vec3(-0.006, 0.0, 0.018).mul(float(1).sub(smoothstep(0.0, 0.35, l))));
+  c = c.mul(mix(vec3(1.0), vec3(1.04, 1.0, 0.95), smoothstep(0.45, 1.0, l)));
+  c = c.sub(0.5).mul(1.06).add(0.5).max(0);
+  // lens: vignette and a fine animated film grain (follows now())
+  const d = length(screenUV.sub(0.5).mul(vec2(1.25, 1.0)));
+  c = c.mul(float(1).sub(smoothstep(0.35, 0.95, d).mul(0.42)));
+  // the frame index wraps at 512 so the f32 seed stays below 2^24 (past that, neighbouring pixels share a seed and the grain goes blocky)
+  const frameNo = floor(uT.mul(24)), tick = frameNo.sub(floor(frameNo.div(512)).mul(512));
+  const g = hash(screenCoordinate.x.add(screenCoordinate.y.mul(3967)).add(tick.mul(7919)).max(0)).sub(0.5);
+  c = c.add(g.mul(0.018));
+  return vec4(c, 1);
+})();
+
+// pointer orbit: the starter view holds until the pointer actually drags
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 2.2; controls.maxDistance = 7.5;
+controls.minPolarAngle = 0.15; controls.maxPolarAngle = 1.62;
+controls.enablePan = false;
+let orbiting = false;
+controls.addEventListener('start', () => { orbiting = true; });
+
+// the studio is a closed room, but the zoom limit is a distance from the cube: from a side view the wall is crossed well before 7.5.
+// After each controls update, pull the eye back along its own line of sight until it is inside the wall (the cove curves in towards the floor, so keep a margin).
+const EYE_R = CYC_R - 0.3;
+function keepEyeInStudio() {
+  const r = Math.hypot(camera.position.x, camera.position.z);
+  if (r > EYE_R) camera.position.multiplyScalar(EYE_R / r);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));   // browser zoom / moving to another screen changes it
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+const _q = new THREE.Quaternion();
+renderer.setAnimationLoop(() => {
+  const t = now();
+  cube.rotation.set(t * 0.3, t * 0.5, 0);
+  cube.updateMatrixWorld();
+  uT.value = t;
+  uUp.value.set(0, 1, 0).applyQuaternion(_q.copy(cube.quaternion).invert());
+  const fl = rnd(Math.floor(t * 24));
+  uFlick.value = CALM ? 1 : (fl < 0.05 ? 0.72 : 0.95 + 0.05 * fl);   // reduced motion: steady mains, no flicker dips
+  updateBolts(t);
+  updateStageLights(t);
+  if (orbiting) { controls.update(); keepEyeInStudio(); }
+  pipe.render();
+});
+
+// ---------------------------------------------------------------- page wiring (single-file build)
+// The corner controls in the page are an optional htmx 4 layer: their hx-on:* attributes call togglePause() and toggleFullscreen() through __eholo.
+// They are revealed only once the scene is running AND htmx has loaded, so a blocked CDN never leaves dead buttons.
+// They stay invisible (and not clickable) until the pointer moves or a control takes keyboard focus, so the idle view is exactly the piece.
+window.__eholo.toggleFullscreen = () => { try { return Promise.resolve(document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); } catch { /* not supported */ } };
+{
+  const hud = document.getElementById('hud');
+  if (hud && window.htmx) {
+    if (FROZEN !== null) document.getElementById('hud-pause')?.remove();                              // ?t already holds the clock
+    if (!document.documentElement.requestFullscreen) document.getElementById('hud-full')?.remove();    // e.g. iPhone Safari
+    if (hud.querySelector('button')) {
+      hud.hidden = false;
+      const fs = document.getElementById('hud-full');   // the label follows the state, also when Esc leaves fullscreen
+      if (fs) document.addEventListener('fullscreenchange', () => { fs.textContent = document.fullscreenElement ? 'exit fullscreen' : 'fullscreen'; });
+      let idle = 0;
+      const sleep = () => { if (hud.matches(':hover')) idle = setTimeout(sleep, 600); else delete hud.dataset.on; };
+      const wake = () => { hud.dataset.on = ''; clearTimeout(idle); idle = setTimeout(sleep, 2600); };
+      window.addEventListener('pointermove', wake, { passive: true });
+      window.addEventListener('pointerdown', wake, { passive: true });
+    }
+  } else if (hud) console.warn('htmx 4 did not load (blocked, offline, or its integrity hash did not match): the corner controls stay hidden and the scene is unaffected.');
+}
+</script>
+</head>
+<body>
+<noscript><p class="note">This piece needs JavaScript. Turn it on, or open this page in a current Chrome, Edge, Safari or Firefox.</p></noscript>
+<p class="note" id="boot" role="status"></p>
+<script>
+// The page's own loading and could-not-load states; the scene module removes this note the moment it starts.
+// Plain script on purpose: it has to work when the CDN (and with it htmx and three.js) does not.
+(function () {
+  var note = document.getElementById('boot'), failed = false;
+  function show(text) { note.textContent = text; }
+  setTimeout(function () { if (!window.__eholo && !failed) show('Loading\u2026'); }, 700);
+  addEventListener('load', function () {
+    if (window.__eholo) return;
+    failed = true;
+    show('This piece could not load three.js from cdn.jsdelivr.net. Check your connection or any content blocker, then reload. It also needs a current Chrome, Edge, Safari or Firefox.');
+  });
+})();
+</script>
+<div class="hud" id="hud" role="group" aria-label="Viewer controls" hidden>
+  <button type="button" id="hud-pause" hx-on:click="this.textContent = __eholo.togglePause() ? 'play' : 'pause'">pause</button>
+  <button type="button" id="hud-full" hx-on:click="__eholo.toggleFullscreen()">fullscreen</button>
+</div>
+</body>
+</html>
