@@ -1,0 +1,1066 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Space</title>
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  html {
+    background: #111419;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(215, 212, 204, 0.22) transparent;
+  }
+  body {
+    background: #111419;
+    overflow-x: hidden;
+    overscroll-behavior: none;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(215, 212, 204, 0.22);
+    border-radius: 3px;
+  }
+  canvas {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    display: block;
+    pointer-events: none;
+  }
+  #scroll-track {
+    position: relative;
+    width: 100%;
+    height: 1900vh;
+    pointer-events: none;
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.webgpu.js",
+    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.webgpu.js",
+    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.tsl.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="scroll-track"></div>
+<script type="module">
+import * as THREE from 'three/webgpu';
+import {
+  Fn,
+  If,
+  float,
+  vec2,
+  vec3,
+  vec4,
+  uniform,
+  time,
+  deltaTime,
+  uv,
+  positionLocal,
+  positionWorld,
+  normalWorld,
+  cameraPosition,
+  screenUV,
+  pass,
+  instancedArray,
+  instanceIndex,
+  sin,
+  cos,
+  abs,
+  exp,
+  pow,
+  mix,
+  clamp,
+  smoothstep,
+  length,
+  dot,
+  normalize,
+  fract
+} from 'three/tsl';
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
+import { dof } from 'three/addons/tsl/display/DepthOfFieldNode.js';
+import { RectAreaLightTexturesLib } from 'three/addons/lights/RectAreaLightTexturesLib.js';
+
+THREE.RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
+
+const renderer = new THREE.WebGPURenderer({
+  antialias: true,
+  powerPreference: 'high-performance'
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.06;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x13171d);
+scene.fog = new THREE.FogExp2(0x181d24, 0.029);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.15, 190);
+camera.position.set(0, 1.85, 4);
+
+const uFocusZ = uniform(-7.0);
+const uScrollProgress = uniform(0.0);
+const uScrollSpeed = uniform(0.0);
+const uCameraPos = uniform(new THREE.Vector3(0, 1.85, 4));
+const uFocusDistance = uniform(11.5);
+const uFocalLength = uniform(14.0);
+const uBokehScale = uniform(2.6);
+
+const causticPattern = Fn(([p, t]) => {
+  const q1 = p.mul(0.85).add(vec2(t.mul(0.14), t.mul(-0.09)));
+  const q2 = p.mul(1.32).add(vec2(t.mul(-0.11), t.mul(0.16)));
+  const q3 = p.mul(0.55).add(vec2(t.mul(0.07), t.mul(0.08)));
+  const w1 = sin(q1.x.add(sin(q1.y.mul(1.25).add(t.mul(0.35)))));
+  const w2 = cos(q2.y.add(cos(q2.x.mul(1.15).sub(t.mul(0.28)))));
+  const w3 = sin(q3.x.add(q3.y).add(t.mul(0.22)));
+  const ridge = float(1.0).sub(abs(w1.add(w2).mul(0.5)));
+  const c = pow(clamp(ridge, 0.0, 1.0), 5.0).mul(0.75).add(pow(clamp(w3.mul(0.5).add(0.5), 0.0, 1.0), 4.0).mul(0.25));
+  return c;
+});
+
+const softNoise3 = Fn(([p]) => {
+  const a = sin(p.x.mul(1.7).add(p.z.mul(1.1))).mul(cos(p.y.mul(1.9).sub(p.z.mul(0.8))));
+  const b = sin(p.x.mul(3.1).sub(p.y.mul(2.3)).add(p.z.mul(2.7))).mul(0.5);
+  return a.add(b).mul(0.5).add(0.5);
+});
+
+const skyMat = new THREE.MeshBasicNodeMaterial({
+  side: THREE.BackSide,
+  depthWrite: false
+});
+skyMat.colorNode = Fn(() => {
+  const dir = normalize(positionWorld.sub(cameraPosition));
+  const h = clamp(dir.y, -1.0, 1.0);
+  const horizonBand = exp(abs(h.sub(0.02)).mul(-7.5));
+  const zenith = vec3(0.055, 0.068, 0.088);
+  const mid = vec3(0.14, 0.165, 0.195);
+  const mist = mix(vec3(0.32, 0.35, 0.38), vec3(0.38, 0.34, 0.31), uScrollProgress);
+  const lower = vec3(0.07, 0.082, 0.098);
+  const base = mix(lower, mix(mid, zenith, smoothstep(0.0, 0.72, h)), smoothstep(-0.25, 0.04, h));
+  const breath = sin(time.mul(0.18).add(dir.x.mul(1.8))).mul(0.025).add(0.975);
+  return mix(base, mist, horizonBand.mul(0.88)).mul(breath);
+})();
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(155, 36, 24), skyMat);
+scene.add(skyDome);
+
+const floorMat = new THREE.MeshStandardNodeMaterial({
+  roughness: 0.44,
+  metalness: 0.14
+});
+floorMat.colorNode = Fn(() => {
+  const wp = positionWorld;
+  const grain = softNoise3(wp.mul(0.45));
+  const base = mix(vec3(0.085, 0.095, 0.112), vec3(0.145, 0.15, 0.16), grain);
+  const radialFade = exp(wp.x.mul(wp.x).mul(-0.0045));
+  const c = causticPattern(wp.xz, time);
+  const prox = exp(abs(wp.z.sub(uFocusZ)).mul(-0.055));
+  const causticTint = mix(vec3(0.76, 0.82, 0.88), vec3(0.92, 0.84, 0.74), uScrollProgress);
+  return base.add(causticTint.mul(c).mul(prox).mul(radialFade).mul(0.24));
+})();
+floorMat.roughnessNode = Fn(() => {
+  const n = softNoise3(positionWorld.mul(0.35));
+  return mix(0.28, 0.62, n);
+})();
+floorMat.emissiveNode = Fn(() => {
+  const wp = positionWorld;
+  const c = causticPattern(wp.xz.mul(1.15), time.mul(0.85));
+  const radial = exp(wp.x.mul(wp.x).mul(-0.012));
+  const prox = exp(abs(wp.z.sub(uFocusZ)).mul(-0.048));
+  const warmCool = mix(vec3(0.62, 0.72, 0.82), vec3(0.85, 0.76, 0.65), sin(wp.z.mul(0.045)).mul(0.5).add(0.5));
+  return warmCool.mul(c).mul(radial).mul(prox).mul(0.16);
+})();
+const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(140, 260, 1, 1), floorMat);
+floorMesh.rotation.x = -Math.PI / 2;
+floorMesh.position.set(0, 0, -70);
+scene.add(floorMesh);
+
+const hemiLight = new THREE.HemisphereLight(0xa8b4c4, 0x262930, 0.42);
+scene.add(hemiLight);
+
+function createMemoryMaterial(baseHex, warmTintHex, chapterZ, roughnessVal = 0.68, emissiveBoost = 0.22) {
+  const mat = new THREE.MeshStandardNodeMaterial({
+    roughness: roughnessVal,
+    metalness: 0.05,
+    transparent: true,
+    depthWrite: true
+  });
+  const cBase = new THREE.Color(baseHex);
+  const cTint = new THREE.Color(warmTintHex);
+  const baseVec = vec3(cBase.r, cBase.g, cBase.b);
+  const tintVec = vec3(cTint.r, cTint.g, cTint.b);
+  const zTarget = float(chapterZ);
+
+  const proximityNode = Fn(() => {
+    const dz = abs(uFocusZ.sub(zTarget));
+    return smoothstep(23.0, 4.5, dz);
+  });
+
+  mat.colorNode = Fn(() => {
+    const p = proximityNode();
+    const n = softNoise3(positionWorld.mul(1.4).add(vec3(0.0, time.mul(0.08), 0.0)));
+    const up = clamp(normalWorld.y, 0.0, 1.0);
+    const c = causticPattern(positionWorld.xz.mul(1.6), time.mul(0.9));
+    return mix(baseVec, tintVec, n.mul(0.35)).add(tintVec.mul(c).mul(up).mul(0.18).mul(p));
+  })();
+
+  mat.emissiveNode = Fn(() => {
+    const p = proximityNode();
+    const viewDir = normalize(cameraPosition.sub(positionWorld));
+    const fresnel = pow(float(1.0).sub(clamp(abs(dot(normalWorld, viewDir)), 0.0, 1.0)), 2.8);
+    const n = softNoise3(positionWorld.mul(1.9).add(vec3(0.0, time.mul(0.15), 0.0)));
+    const edgeGlow = smoothstep(0.12, 0.55, p).mul(float(1.0).sub(smoothstep(0.55, 0.98, p))).mul(n);
+    const breath = sin(time.mul(0.45).add(zTarget.mul(0.2))).mul(0.15).add(0.85);
+    return tintVec.mul(fresnel.mul(emissiveBoost).add(edgeGlow.mul(0.42))).mul(p).mul(breath);
+  })();
+
+  mat.opacityNode = Fn(() => {
+    const p = proximityNode();
+    const n = softNoise3(positionWorld.mul(1.6).sub(vec3(0.0, time.mul(0.12), 0.0)));
+    const reveal = smoothstep(n.mul(0.55), n.mul(0.55).add(0.42), p);
+    return clamp(reveal.mul(0.94), 0.0, 0.94);
+  })();
+
+  return mat;
+}
+
+function createLuminousPlaneMaterial(colorHex, intensity = 1.0, fadePower = 2.0, chapterZ = null) {
+  const mat = new THREE.MeshBasicNodeMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending
+  });
+  const col = new THREE.Color(colorHex);
+  const colVec = vec3(col.r, col.g, col.b);
+
+  mat.colorNode = Fn(() => {
+    const st = uv();
+    const breath = sin(time.mul(0.32).add(st.y.mul(1.5))).mul(0.08).add(0.92);
+    const grad = mix(vec3(0.75, 0.82, 0.9), colVec, smoothstep(0.0, 1.0, st.y));
+    return grad.mul(intensity).mul(breath);
+  })();
+
+  mat.opacityNode = Fn(() => {
+    const st = uv();
+    const ex = sin(st.x.mul(Math.PI));
+    const ey = sin(st.y.mul(Math.PI));
+    const softEdge = pow(clamp(ex.mul(ey), 0.0, 1.0), fadePower);
+    const viewDir = normalize(cameraPosition.sub(positionWorld));
+    const facing = pow(clamp(abs(dot(normalWorld, viewDir)), 0.0, 1.0), 0.75);
+    const dist = abs(positionWorld.z.sub(cameraPosition.z));
+    const nearFade = smoothstep(1.2, 5.5, dist);
+    const farFade = smoothstep(75.0, 14.0, dist);
+    let prox = float(1.0);
+    if (chapterZ !== null) {
+      prox = smoothstep(38.0, 7.0, abs(uFocusZ.sub(float(chapterZ)))).mul(0.75).add(0.25);
+    }
+    return softEdge.mul(facing).mul(nearFade).mul(farFade).mul(prox).mul(0.42);
+  })();
+
+  return mat;
+}
+
+function createCurtainMaterial(colorHex, chapterZ) {
+  const mat = new THREE.MeshStandardNodeMaterial({
+    roughness: 0.85,
+    metalness: 0.0,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+  const col = new THREE.Color(colorHex);
+  const colVec = vec3(col.r, col.g, col.b);
+  const zTarget = float(chapterZ);
+
+  mat.positionNode = Fn(() => {
+    const pos = positionLocal.toVar();
+    const sway = sin(pos.y.mul(1.4).add(time.mul(0.55)).add(pos.x.mul(2.1))).mul(0.09);
+    const factor = smoothstep(1.8, -1.8, pos.y);
+    pos.z.addAssign(sway.mul(factor));
+    return pos;
+  })();
+
+  mat.colorNode = colVec;
+  mat.emissiveNode = Fn(() => {
+    const p = smoothstep(26.0, 5.0, abs(uFocusZ.sub(zTarget)));
+    return colVec.mul(0.28).mul(p);
+  })();
+  mat.opacityNode = Fn(() => {
+    const st = uv();
+    const p = smoothstep(25.0, 5.0, abs(uFocusZ.sub(zTarget)));
+    const edge = sin(st.x.mul(Math.PI)).mul(smoothstep(0.0, 0.22, st.y));
+    return clamp(edge.mul(p).mul(0.46), 0.0, 0.46);
+  })();
+
+  return mat;
+}
+
+const memoryGroups = [];
+
+function addAreaLight(color, intensity, w, h, pos, lookTarget) {
+  const light = new THREE.RectAreaLight(color, intensity, w, h);
+  light.position.copy(pos);
+  light.lookAt(lookTarget);
+  scene.add(light);
+  return light;
+}
+
+function buildArchitectureVoid() {
+  const planeConfigs = [
+    { x: -7.5, y: 4.5, z: -8, w: 6.5, h: 11, ry: 0.28, col: 0xcfd6de, int: 0.72 },
+    { x: 8.2, y: 5.0, z: -18, w: 7.2, h: 12, ry: -0.24, col: 0xdccbb8, int: 0.68 },
+    { x: -8.8, y: 4.8, z: -30, w: 8.0, h: 12, ry: 0.18, col: 0xbac8d6, int: 0.65 },
+    { x: 7.8, y: 4.2, z: -44, w: 6.8, h: 11, ry: -0.32, col: 0xdfd3c3, int: 0.7 },
+    { x: -7.6, y: 5.2, z: -56, w: 7.5, h: 13, ry: 0.25, col: 0xc2cdd8, int: 0.64 },
+    { x: 8.4, y: 4.6, z: -70, w: 8.2, h: 12, ry: -0.22, col: 0xd8c6b8, int: 0.72 },
+    { x: -8.2, y: 5.0, z: -86, w: 7.8, h: 13, ry: 0.2, col: 0xb6c5d4, int: 0.66 },
+    { x: 7.6, y: 4.8, z: -102, w: 7.4, h: 12, ry: -0.26, col: 0xded0be, int: 0.68 },
+    { x: -7.8, y: 5.5, z: -118, w: 8.5, h: 14, ry: 0.16, col: 0xc6d0da, int: 0.7 },
+    { x: 7.8, y: 5.5, z: -118, w: 8.5, h: 14, ry: -0.16, col: 0xdcccbd, int: 0.7 }
+  ];
+
+  for (const cfg of planeConfigs) {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(cfg.w, cfg.h),
+      createLuminousPlaneMaterial(cfg.col, cfg.int, 1.85, cfg.z)
+    );
+    m.position.set(cfg.x, cfg.y, cfg.z);
+    m.rotation.y = cfg.ry;
+    scene.add(m);
+  }
+
+  for (let i = 0; i < 8; i++) {
+    const z = -14 - i * 16.5;
+    const ceilingSlot = new THREE.Mesh(
+      new THREE.PlaneGeometry(5.5, 11.5),
+      createLuminousPlaneMaterial(i % 2 === 0 ? 0xd5dce4 : 0xe4d6c4, 0.62, 2.2, z)
+    );
+    ceilingSlot.rotation.x = Math.PI / 2;
+    ceilingSlot.position.set((i % 2 === 0 ? -1 : 1) * 0.8, 7.6, z);
+    scene.add(ceilingSlot);
+  }
+
+  for (let i = 0; i < 7; i++) {
+    const z = -20 - i * 18;
+    const fogVeil = new THREE.Mesh(
+      new THREE.PlaneGeometry(24, 11),
+      createLuminousPlaneMaterial(0x98a6b5, 0.26, 2.6, z)
+    );
+    fogVeil.position.set(0, 4.2, z);
+    scene.add(fogVeil);
+  }
+}
+
+function buildChapter1() {
+  const z0 = -12;
+  const group = new THREE.Group();
+  group.position.set(0, 0, z0);
+
+  const plaster = createMemoryMaterial(0xc8c6c2, 0xeae0d2, z0, 0.72, 0.22);
+  const darkWood = createMemoryMaterial(0x6d6964, 0xd8cab8, z0, 0.62, 0.18);
+
+  const leftJamb = new THREE.Mesh(new THREE.BoxGeometry(0.14, 3.8, 0.28), plaster);
+  leftJamb.position.set(-1.35, 1.9, 0);
+  group.add(leftJamb);
+
+  const rightJamb = new THREE.Mesh(new THREE.BoxGeometry(0.14, 3.8, 0.28), plaster);
+  rightJamb.position.set(1.35, 1.9, 0);
+  group.add(rightJamb);
+
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(2.84, 0.14, 0.28), plaster);
+  lintel.position.set(0, 3.82, 0);
+  group.add(lintel);
+
+  const doorGlow = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.55, 3.65),
+    createLuminousPlaneMaterial(0xe4d9c8, 0.78, 1.4, z0)
+  );
+  doorGlow.position.set(0, 1.9, -0.05);
+  scene.add(doorGlow);
+  doorGlow.position.z = z0 - 0.05;
+
+  const tableGroup = new THREE.Group();
+  tableGroup.position.set(2.35, 0, -1.6);
+  tableGroup.rotation.y = -0.35;
+
+  const top = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.05, 0.52), darkWood);
+  top.position.y = 0.86;
+  tableGroup.add(top);
+
+  const legOffsets = [[-0.5, -0.2], [0.5, -0.2], [-0.5, 0.2], [0.5, 0.2]];
+  for (const [lx, lz] of legOffsets) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.014, 0.85, 8), darkWood);
+    leg.position.set(lx, 0.425, lz);
+    tableGroup.add(leg);
+  }
+
+  const vasePts = [
+    new THREE.Vector2(0.0, 0.0),
+    new THREE.Vector2(0.08, 0.0),
+    new THREE.Vector2(0.11, 0.09),
+    new THREE.Vector2(0.125, 0.21),
+    new THREE.Vector2(0.075, 0.34),
+    new THREE.Vector2(0.055, 0.42),
+    new THREE.Vector2(0.068, 0.46)
+  ];
+  const vase = new THREE.Mesh(new THREE.LatheGeometry(vasePts, 20), plaster);
+  vase.position.set(-0.22, 0.885, 0.02);
+  tableGroup.add(vase);
+
+  const mirrorFrame = new THREE.Mesh(new THREE.BoxGeometry(0.92, 1.45, 0.04), darkWood);
+  mirrorFrame.position.set(0.22, 1.56, -0.18);
+  mirrorFrame.rotation.x = -0.12;
+  tableGroup.add(mirrorFrame);
+
+  group.add(tableGroup);
+  scene.add(group);
+  memoryGroups.push({ group, z: z0 });
+
+  addAreaLight(0xe8dfd2, 3.6, 2.8, 3.8, new THREE.Vector3(0, 2.1, z0 - 0.6), new THREE.Vector3(0.8, 1.1, z0 + 3.0));
+}
+
+function buildChapter2() {
+  const z0 = -34;
+  const group = new THREE.Group();
+  group.position.set(0, 0, z0);
+
+  const wood = createMemoryMaterial(0x9e9589, 0xe8d9c5, z0, 0.64, 0.24);
+  const ceramic = createMemoryMaterial(0xdad8d2, 0xf2e7d8, z0, 0.42, 0.3);
+
+  const chair = new THREE.Group();
+  chair.position.set(-1.55, 0, 0.6);
+  chair.rotation.y = 0.62;
+
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.04, 0.5), wood);
+  seat.position.y = 0.48;
+  chair.add(seat);
+
+  const cLegs = [[-0.22, -0.21], [0.22, -0.21], [-0.22, 0.21], [0.22, 0.21]];
+  for (const [lx, lz] of cLegs) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.012, 0.48, 8), wood);
+    leg.position.set(lx, 0.24, lz);
+    chair.add(leg);
+  }
+  for (const sx of [-0.22, 0.22]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.56, 8), wood);
+    post.position.set(sx, 0.76, -0.22);
+    post.rotation.x = -0.08;
+    chair.add(post);
+  }
+  for (const sy of [0.78, 0.96]) {
+    const slat = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.075, 0.022), wood);
+    slat.position.set(0, sy, -0.235);
+    slat.rotation.x = -0.08;
+    chair.add(slat);
+  }
+  group.add(chair);
+
+  const winFrame = new THREE.Group();
+  winFrame.position.set(2.4, 2.25, -1.2);
+  winFrame.rotation.y = -0.45;
+
+  const wTop = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.09, 0.16), ceramic);
+  wTop.position.y = 1.55;
+  winFrame.add(wTop);
+  const wBot = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.11, 0.26), ceramic);
+  wBot.position.y = -1.55;
+  winFrame.add(wBot);
+  const wL = new THREE.Mesh(new THREE.BoxGeometry(0.09, 3.1, 0.16), ceramic);
+  wL.position.x = -1.0;
+  winFrame.add(wL);
+  const wR = new THREE.Mesh(new THREE.BoxGeometry(0.09, 3.1, 0.16), ceramic);
+  wR.position.x = 1.0;
+  winFrame.add(wR);
+  const mullion = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.04, 0.06), ceramic);
+  mullion.position.y = 0.25;
+  winFrame.add(mullion);
+
+  const cupPts = [
+    new THREE.Vector2(0.0, 0.0),
+    new THREE.Vector2(0.045, 0.0),
+    new THREE.Vector2(0.062, 0.075),
+    new THREE.Vector2(0.068, 0.13)
+  ];
+  const cup = new THREE.Mesh(new THREE.LatheGeometry(cupPts, 16), ceramic);
+  cup.position.set(-0.35, -1.495, 0.04);
+  winFrame.add(cup);
+
+  group.add(winFrame);
+  scene.add(group);
+  memoryGroups.push({ group, z: z0 });
+
+  const winAperture = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.9, 2.95),
+    createLuminousPlaneMaterial(0xcfe0f0, 1.05, 1.35, z0)
+  );
+  winAperture.position.set(2.4, 2.25, z0 - 1.25);
+  winAperture.rotation.y = -0.45;
+  scene.add(winAperture);
+
+  addAreaLight(0xd2e2f2, 4.4, 2.0, 3.1, new THREE.Vector3(2.2, 2.25, z0 - 1.1), new THREE.Vector3(-1.5, 0.7, z0 + 0.6));
+}
+
+function buildChapter3() {
+  const z0 = -58;
+  const group = new THREE.Group();
+  group.position.set(0, 0, z0);
+
+  const deskMat = createMemoryMaterial(0x888178, 0xecd8be, z0, 0.58, 0.22);
+  const paperMat = createMemoryMaterial(0xdcd8ce, 0xf4e8d4, z0, 0.8, 0.28);
+  const brassMat = createMemoryMaterial(0xb7a48a, 0xf2dcb8, z0, 0.32, 0.35);
+
+  const desk = new THREE.Group();
+  desk.position.set(1.35, 0, 0.4);
+  desk.rotation.y = -0.32;
+
+  const surface = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.055, 0.82), deskMat);
+  surface.position.y = 0.78;
+  desk.add(surface);
+
+  const dLegs = [[-0.78, -0.34], [0.78, -0.34], [-0.78, 0.34], [0.78, 0.34]];
+  for (const [lx, lz] of dLegs) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.76, 0.04), deskMat);
+    leg.position.set(lx, 0.38, lz);
+    desk.add(leg);
+  }
+
+  const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.025, 16), brassMat);
+  lampBase.position.set(0.55, 0.82, -0.18);
+  desk.add(lampBase);
+
+  const lampStem = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.46, 8), brassMat);
+  lampStem.position.set(0.55, 1.04, -0.18);
+  lampStem.rotation.z = 0.18;
+  desk.add(lampStem);
+
+  const lampShade = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.14, 0.16, 18, 1, true), paperMat);
+  lampShade.position.set(0.46, 1.24, -0.18);
+  lampShade.rotation.z = 0.25;
+  desk.add(lampShade);
+
+  for (let i = 0; i < 4; i++) {
+    const book = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.032, 0.19), paperMat);
+    book.position.set(-0.42 + i * 0.015, 0.825 + i * 0.034, -0.05 + i * 0.01);
+    book.rotation.y = 0.12 * i - 0.1;
+    desk.add(book);
+  }
+
+  const carafePts = [
+    new THREE.Vector2(0.0, 0.0),
+    new THREE.Vector2(0.06, 0.0),
+    new THREE.Vector2(0.075, 0.1),
+    new THREE.Vector2(0.035, 0.24),
+    new THREE.Vector2(0.042, 0.31)
+  ];
+  const carafe = new THREE.Mesh(new THREE.LatheGeometry(carafePts, 18), paperMat);
+  carafe.position.set(-0.04, 0.81, -0.16);
+  desk.add(carafe);
+
+  group.add(desk);
+
+  const partition = new THREE.Mesh(new THREE.BoxGeometry(0.12, 4.4, 3.2), deskMat);
+  partition.position.set(-3.1, 2.2, -0.8);
+  group.add(partition);
+
+  scene.add(group);
+  memoryGroups.push({ group, z: z0 });
+
+  addAreaLight(0xecd6b8, 3.8, 1.8, 1.8, new THREE.Vector3(1.6, 2.6, z0 + 0.2), new THREE.Vector3(1.2, 0.8, z0 + 0.4));
+}
+
+function buildChapter4() {
+  const z0 = -84;
+  const group = new THREE.Group();
+  group.position.set(0, 0, z0);
+
+  const linen = createMemoryMaterial(0xc8c7c4, 0xe8dfd4, z0, 0.88, 0.22);
+  const frameMat = createMemoryMaterial(0x736f6a, 0xd4c8b8, z0, 0.65, 0.18);
+  const orbMat = createMemoryMaterial(0xf0e4d0, 0xfff0d8, z0, 0.25, 0.72);
+
+  const bed = new THREE.Group();
+  bed.position.set(-1.35, 0, -0.4);
+  bed.rotation.y = 0.18;
+
+  const base = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.22, 2.45), frameMat);
+  base.position.y = 0.22;
+  bed.add(base);
+
+  const mattress = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.26, 2.34), linen);
+  mattress.position.y = 0.46;
+  bed.add(mattress);
+
+  const headboard = new THREE.Mesh(new THREE.BoxGeometry(2.22, 1.12, 0.08), frameMat);
+  headboard.position.set(0, 0.76, -1.2);
+  bed.add(headboard);
+
+  for (const px of [-0.46, 0.46]) {
+    const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.14, 0.44), linen);
+    pillow.position.set(px, 0.64, -0.86);
+    pillow.rotation.x = 0.16;
+    bed.add(pillow);
+  }
+
+  const nightstand = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.54, 0.48), frameMat);
+  nightstand.position.set(1.52, 0.27, -0.92);
+  bed.add(nightstand);
+
+  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 16), orbMat);
+  orb.position.set(1.52, 0.65, -0.92);
+  bed.add(orb);
+
+  group.add(bed);
+  scene.add(group);
+  memoryGroups.push({ group, z: z0 });
+
+  for (const cx of [1.8, 3.1]) {
+    const curtain = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.4, 4.4, 10, 22),
+      createCurtainMaterial(0xd0d6de, z0)
+    );
+    curtain.position.set(cx, 2.45, z0 - 1.4);
+    curtain.rotation.y = -0.35;
+    scene.add(curtain);
+  }
+
+  addAreaLight(0xe6d5c3, 3.2, 2.6, 2.2, new THREE.Vector3(-0.6, 2.8, z0 - 1.0), new THREE.Vector3(-1.3, 0.5, z0 - 0.3));
+}
+
+function buildChapter5() {
+  const z0 = -110;
+  const group = new THREE.Group();
+  group.position.set(0, 0, z0);
+
+  const stone = createMemoryMaterial(0xb4b8be, 0xdce4ec, z0, 0.72, 0.24);
+  const pianoMat = createMemoryMaterial(0x55585f, 0xcfd6e0, z0, 0.36, 0.22);
+
+  const stairs = new THREE.Group();
+  stairs.position.set(-2.3, 0, 0.8);
+  stairs.rotation.y = 0.28;
+  for (let i = 0; i < 7; i++) {
+    const tread = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.08, 0.38), stone);
+    tread.position.set(0, 0.28 + i * 0.31, -i * 0.42);
+    stairs.add(tread);
+  }
+  const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 3.6, 8), stone);
+  rail.position.set(0.72, 1.95, -1.25);
+  rail.rotation.x = -0.92;
+  stairs.add(rail);
+  group.add(stairs);
+
+  const piano = new THREE.Group();
+  piano.position.set(1.95, 0, -0.8);
+  piano.rotation.y = -0.58;
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.52, 1.24, 0.42), pianoMat);
+  body.position.set(0, 0.62, -0.12);
+  piano.add(body);
+
+  const keybed = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.09, 0.32), pianoMat);
+  keybed.position.set(0, 0.74, 0.2);
+  piano.add(keybed);
+
+  const keys = new THREE.Mesh(new THREE.BoxGeometry(1.32, 0.03, 0.16), stone);
+  keys.position.set(0, 0.79, 0.22);
+  piano.add(keys);
+
+  const bench = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.06, 0.36), pianoMat);
+  bench.position.set(0, 0.48, 0.78);
+  piano.add(bench);
+
+  for (const [bx, bz] of [[-0.36, -0.14], [0.36, -0.14], [-0.36, 0.14], [0.36, 0.14]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.46, 0.04), pianoMat);
+    leg.position.set(bx, 0.23, 0.78 + bz);
+    piano.add(leg);
+  }
+
+  group.add(piano);
+  scene.add(group);
+  memoryGroups.push({ group, z: z0 });
+
+  addAreaLight(0xc9d8e8, 3.9, 3.4, 3.6, new THREE.Vector3(0.2, 3.4, z0 - 0.6), new THREE.Vector3(0, 0.6, z0 + 0.5));
+}
+
+function buildSanctuary() {
+  const z0 = -138;
+  const portal = new THREE.Mesh(
+    new THREE.PlaneGeometry(11.5, 7.2),
+    createLuminousPlaneMaterial(0xeae1d3, 1.18, 1.55, z0)
+  );
+  portal.position.set(0, 3.6, z0);
+  scene.add(portal);
+
+  const innerField = new THREE.Mesh(
+    new THREE.PlaneGeometry(5.8, 3.8),
+    createLuminousPlaneMaterial(0xd4e2f0, 1.35, 1.35, z0)
+  );
+  innerField.position.set(0, 3.4, z0 + 0.25);
+  scene.add(innerField);
+
+  addAreaLight(0xeae2d6, 5.2, 7.5, 4.8, new THREE.Vector3(0, 3.5, z0 + 0.6), new THREE.Vector3(0, 1.6, z0 + 18));
+}
+
+buildArchitectureVoid();
+buildChapter1();
+buildChapter2();
+buildChapter3();
+buildChapter4();
+buildChapter5();
+buildSanctuary();
+
+function sampleMemoryParticles(totalCount) {
+  const homePos = new Float32Array(totalCount * 3);
+  const initPos = new Float32Array(totalCount * 3);
+  const initVel = new Float32Array(totalCount * 3);
+  const seeds = new Float32Array(totalCount * 4);
+
+  const triangles = [];
+  let totalArea = 0;
+
+  const vA = new THREE.Vector3();
+  const vB = new THREE.Vector3();
+  const vC = new THREE.Vector3();
+  const ab = new THREE.Vector3();
+  const ac = new THREE.Vector3();
+  const cross = new THREE.Vector3();
+
+  for (const entry of memoryGroups) {
+    entry.group.updateMatrixWorld(true);
+    entry.group.traverse((obj) => {
+      if (!obj.isMesh || !obj.geometry) return;
+      const geom = obj.geometry;
+      const posAttr = geom.attributes.position;
+      if (!posAttr) return;
+      const idx = geom.index;
+      const matW = obj.matrixWorld;
+      const triCount = idx ? idx.count / 3 : posAttr.count / 3;
+
+      for (let i = 0; i < triCount; i++) {
+        const i0 = idx ? idx.getX(i * 3) : i * 3;
+        const i1 = idx ? idx.getX(i * 3 + 1) : i * 3 + 1;
+        const i2 = idx ? idx.getX(i * 3 + 2) : i * 3 + 2;
+
+        vA.fromBufferAttribute(posAttr, i0).applyMatrix4(matW);
+        vB.fromBufferAttribute(posAttr, i1).applyMatrix4(matW);
+        vC.fromBufferAttribute(posAttr, i2).applyMatrix4(matW);
+
+        ab.subVectors(vB, vA);
+        ac.subVectors(vC, vA);
+        cross.crossVectors(ab, ac);
+        const area = cross.length() * 0.5;
+        if (area > 0.00001) {
+          totalArea += area;
+          triangles.push({
+            cumArea: totalArea,
+            ax: vA.x, ay: vA.y, az: vA.z,
+            bx: vB.x, by: vB.y, bz: vB.z,
+            cx: vC.x, cy: vC.y, cz: vC.z,
+            czChapter: entry.z
+          });
+        }
+      }
+    });
+  }
+
+  const memoryCount = Math.floor(totalCount * 0.72);
+
+  for (let i = 0; i < totalCount; i++) {
+    const i3 = i * 3;
+    const i4 = i * 4;
+
+    if (i < memoryCount && triangles.length > 0) {
+      const rArea = Math.random() * totalArea;
+      let lo = 0;
+      let hi = triangles.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (triangles[mid].cumArea < rArea) lo = mid + 1;
+        else hi = mid;
+      }
+      const tri = triangles[lo];
+      let r1 = Math.random();
+      let r2 = Math.random();
+      if (r1 + r2 > 1) {
+        r1 = 1 - r1;
+        r2 = 1 - r2;
+      }
+      const r0 = 1 - r1 - r2;
+
+      const jitter = (Math.random() - 0.5) * 0.035;
+      const hx = tri.ax * r0 + tri.bx * r1 + tri.cx * r2 + jitter;
+      const hy = tri.ay * r0 + tri.by * r1 + tri.cy * r2 + jitter;
+      const hz = tri.az * r0 + tri.bz * r1 + tri.cz * r2 + jitter;
+
+      homePos[i3] = hx;
+      homePos[i3 + 1] = hy;
+      homePos[i3 + 2] = hz;
+
+      initPos[i3] = hx + (Math.random() - 0.5) * 3.8;
+      initPos[i3 + 1] = hy + Math.random() * 2.6;
+      initPos[i3 + 2] = hz + (Math.random() - 0.5) * 3.8;
+
+      seeds[i4] = Math.random() * Math.PI * 2;
+      seeds[i4 + 1] = 0.45 + Math.random() * 0.85;
+      seeds[i4 + 2] = tri.czChapter;
+      seeds[i4 + 3] = 0.0;
+    } else {
+      const ax = (Math.random() - 0.5) * 18.0;
+      const ay = 0.2 + Math.random() * 6.8;
+      const az = 2.0 - Math.random() * 144.0;
+
+      homePos[i3] = ax;
+      homePos[i3 + 1] = ay;
+      homePos[i3 + 2] = az;
+
+      initPos[i3] = ax;
+      initPos[i3 + 1] = ay;
+      initPos[i3 + 2] = az;
+
+      seeds[i4] = Math.random() * Math.PI * 2;
+      seeds[i4 + 1] = 0.5 + Math.random() * 1.1;
+      seeds[i4 + 2] = az;
+      seeds[i4 + 3] = 1.0;
+    }
+
+    initVel[i3] = 0;
+    initVel[i3 + 1] = 0;
+    initVel[i3 + 2] = 0;
+  }
+
+  return { homePos, initPos, initVel, seeds };
+}
+
+const PARTICLE_COUNT = 36000;
+const pData = sampleMemoryParticles(PARTICLE_COUNT);
+
+const homeBuffer = instancedArray(pData.homePos, 'vec3');
+const posBuffer = instancedArray(pData.initPos, 'vec3');
+const velBuffer = instancedArray(pData.initVel, 'vec3');
+const seedBuffer = instancedArray(pData.seeds, 'vec4');
+
+const computeParticles = Fn(() => {
+  const pos = posBuffer.element(instanceIndex);
+  const vel = velBuffer.element(instanceIndex);
+  const home = homeBuffer.element(instanceIndex);
+  const seed = seedBuffer.element(instanceIndex);
+
+  const phase = seed.x;
+  const chapterZ = seed.z;
+  const kind = seed.w;
+
+  const dt = min(deltaTime, float(0.033));
+  const dz = abs(uFocusZ.sub(chapterZ));
+  const materialize = smoothstep(26.0, 5.5, dz);
+  const dissolve = float(1.0).sub(materialize);
+
+  const swirlX = sin(time.mul(0.32).add(phase).add(pos.y.mul(0.85))).mul(0.28);
+  const swirlY = cos(time.mul(0.24).add(phase.mul(1.3)).add(pos.x.mul(0.7))).mul(0.18).add(0.14);
+  const swirlZ = cos(time.mul(0.29).add(phase.mul(0.7)).add(pos.y.mul(0.65))).mul(0.28);
+  const driftForce = vec3(swirlX, swirlY, swirlZ);
+
+  If(kind.lessThan(0.5), () => {
+    const breathOffset = vec3(
+      sin(time.mul(0.6).add(phase)).mul(0.018),
+      cos(time.mul(0.5).add(phase.mul(1.2))).mul(0.018),
+      sin(time.mul(0.45).add(phase.mul(0.8))).mul(0.018)
+    );
+    const target = home.add(breathOffset);
+    const toHome = target.sub(pos);
+    const springStrength = mix(0.22, 3.6, materialize);
+    const scatter = driftForce.mul(dissolve.mul(2.1).add(uScrollSpeed.mul(0.95)));
+
+    vel.addAssign(toHome.mul(springStrength).add(scatter).mul(dt));
+    vel.mulAssign(mix(0.965, 0.87, materialize));
+    pos.addAssign(vel.mul(dt));
+
+    const distFromHome = length(pos.sub(home));
+    If(distFromHome.greaterThan(6.5), () => {
+      pos.assign(home.add(vec3(swirlX, swirlY, swirlZ).mul(2.4)));
+      vel.mulAssign(0.2);
+    });
+  }).Else(() => {
+    const ambientTarget = home.add(vec3(
+      sin(time.mul(0.22).add(phase)).mul(1.2),
+      cos(time.mul(0.18).add(phase.mul(1.4))).mul(0.7),
+      sin(time.mul(0.16).add(phase.mul(0.9))).mul(1.2)
+    ));
+    const pull = ambientTarget.sub(pos).mul(0.45);
+    vel.addAssign(pull.add(driftForce.mul(0.35)).mul(dt));
+    vel.mulAssign(0.94);
+    pos.addAssign(vel.mul(dt));
+  });
+})().compute(PARTICLE_COUNT);
+
+const particleMat = new THREE.SpriteNodeMaterial({
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
+});
+
+const posAttr = posBuffer.toAttribute();
+const homeAttr = homeBuffer.toAttribute();
+const seedAttr = seedBuffer.toAttribute();
+
+particleMat.positionNode = posAttr;
+
+particleMat.scaleNode = Fn(() => {
+  const dz = abs(uFocusZ.sub(seedAttr.z));
+  const prox = smoothstep(28.0, 5.0, dz);
+  const kind = seedAttr.w;
+  const baseSize = mix(float(0.042), float(0.068), kind).mul(seedAttr.y);
+  const pulse = sin(time.mul(0.9).add(seedAttr.x)).mul(0.16).add(0.92);
+  return baseSize.mul(mix(1.35, 0.82, prox)).mul(pulse);
+})();
+
+particleMat.colorNode = Fn(() => {
+  const dz = abs(uFocusZ.sub(seedAttr.z));
+  const prox = smoothstep(26.0, 4.5, dz);
+  const cool = vec3(0.68, 0.77, 0.88);
+  const warm = vec3(0.95, 0.88, 0.78);
+  const tone = mix(cool, warm, sin(seedAttr.z.mul(0.07).add(seedAttr.x.mul(0.25))).mul(0.5).add(0.5));
+  return tone.mul(mix(0.62, 1.25, prox));
+})();
+
+particleMat.opacityNode = Fn(() => {
+  const d = length(uv().sub(0.5)).mul(2.0);
+  const softDisc = exp(d.mul(d).mul(-4.2)).mul(smoothstep(1.0, 0.15, d));
+  const camDist = length(posAttr.sub(uCameraPos));
+  const nearFade = smoothstep(0.8, 3.8, camDist);
+  const farFade = smoothstep(54.0, 12.0, camDist);
+  const dz = abs(uFocusZ.sub(seedAttr.z));
+  const prox = smoothstep(30.0, 6.0, dz);
+  const baseAlpha = mix(mix(0.14, 0.58, prox), float(0.24), seedAttr.w);
+  const twinkle = sin(time.mul(1.1).add(seedAttr.x)).mul(0.15).add(0.85);
+  return softDisc.mul(nearFade).mul(farFade).mul(baseAlpha).mul(twinkle);
+})();
+
+const particles = new THREE.Sprite(particleMat);
+particles.count = PARTICLE_COUNT;
+particles.frustumCulled = false;
+scene.add(particles);
+
+const renderPipeline = new THREE.RenderPipeline(renderer);
+const scenePass = pass(scene, camera);
+const scenePassColor = scenePass.getTextureNode('output');
+const scenePassViewZ = scenePass.getViewZNode();
+
+const dofPass = dof(scenePassColor, scenePassViewZ, uFocusDistance, uFocalLength, uBokehScale);
+const bloomPass = bloom(dofPass);
+bloomPass.strength.value = 0.34;
+bloomPass.radius.value = 0.68;
+bloomPass.threshold.value = 0.56;
+
+const filmComposite = Fn(() => {
+  const col = dofPass.add(bloomPass);
+  const uvScreen = screenUV;
+  const centered = uvScreen.sub(0.5);
+  const vig = smoothstep(0.98, 0.28, length(centered));
+  const grainSeed = uvScreen.mul(vec2(1280.0, 720.0)).add(vec2(time.mul(37.1), time.mul(19.7)));
+  const n = fract(sin(dot(grainSeed, vec2(12.9898, 78.233))).mul(43758.5453)).sub(0.5);
+  const graded = col.rgb.mul(mix(0.76, 1.0, vig)).add(vec3(n.mul(0.024)));
+  return vec4(graded, float(1.0));
+})();
+
+renderPipeline.outputNode = filmComposite;
+
+let targetScroll = 0;
+let smoothScroll = 0;
+let pointerX = 0;
+let pointerY = 0;
+let smoothPtrX = 0;
+let smoothPtrY = 0;
+let lastTime = performance.now();
+
+function updateScrollTarget() {
+  const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+  targetScroll = Math.min(1, Math.max(0, window.scrollY / maxScroll));
+}
+
+window.addEventListener('scroll', updateScrollTarget, { passive: true });
+window.addEventListener('pointermove', (e) => {
+  pointerX = (e.clientX / window.innerWidth) * 2 - 1;
+  pointerY = (e.clientY / window.innerHeight) * 2 - 1;
+}, { passive: true });
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+updateScrollTarget();
+
+await renderer.init();
+
+const isWebGPU = Boolean(renderer.backend && renderer.backend.isWebGPUBackend);
+
+if (!isWebGPU) {
+  particleMat.positionNode = Fn(() => {
+    const dz = abs(uFocusZ.sub(seedAttr.z));
+    const materialize = smoothstep(26.0, 5.5, dz);
+    const dissolve = float(1.0).sub(materialize);
+    const drift = vec3(
+      sin(time.mul(0.35).add(seedAttr.x)).mul(1.8),
+      cos(time.mul(0.28).add(seedAttr.x.mul(1.3))).mul(1.2).add(0.6),
+      cos(time.mul(0.31).add(seedAttr.x.mul(0.8))).mul(1.8)
+    ).mul(dissolve.mul(1.6).add(seedAttr.w.mul(0.8)));
+    return homeAttr.add(drift);
+  })();
+}
+
+renderer.setAnimationLoop(() => {
+  const now = performance.now();
+  const dt = Math.min((now - lastTime) * 0.001, 0.05);
+  lastTime = now;
+  const elapsed = now * 0.001;
+
+  const prevScroll = smoothScroll;
+  smoothScroll += (targetScroll - smoothScroll) * Math.min(1, dt * 3.8);
+  const speed = Math.min(3.0, Math.abs(smoothScroll - prevScroll) / Math.max(dt, 0.001) * 28.0);
+
+  smoothPtrX += (pointerX - smoothPtrX) * Math.min(1, dt * 2.2);
+  smoothPtrY += (pointerY - smoothPtrY) * Math.min(1, dt * 2.2);
+
+  const camZ = 4.0 - smoothScroll * 130.0;
+  const swayX = Math.sin(elapsed * 0.21) * 0.14 + smoothPtrX * 0.48;
+  const swayY = 1.85 + Math.cos(elapsed * 0.17) * 0.06 - smoothPtrY * 0.24;
+
+  camera.position.set(swayX, swayY, camZ);
+  camera.lookAt(swayX * 0.35, 1.55 - smoothPtrY * 0.12, camZ - 14.0);
+
+  skyDome.position.copy(camera.position);
+
+  uScrollProgress.value = smoothScroll;
+  uScrollSpeed.value = speed;
+  uFocusZ.value = camZ - 11.5;
+  uCameraPos.value.copy(camera.position);
+  uFocusDistance.value = 11.5 + speed * 1.4;
+  uBokehScale.value = 2.5 + speed * 0.45;
+
+  if (isWebGPU) {
+    renderer.compute(computeParticles);
+  }
+
+  renderPipeline.render();
+});
+</script>
+</body>
+</html>
+```
